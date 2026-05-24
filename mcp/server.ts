@@ -268,7 +268,7 @@ server.tool(
 
 server.tool(
   "create_project",
-  "Add a new project to OpenFindability's local store. After creation, data will be fetched live by get_gsc_stats / get_umami_stats. Call list_gsc_properties first to get the exact gscProperty URL. Returns the created project object. gscProperty format: 'sc-domain:example.com' for domain properties or 'https://example.com/' for URL-prefix properties.",
+  "Add a new project to OpenFindability's local store and create its folder structure (project/<slug>/reports/, context/, notes/). After creation, data will be fetched live by get_gsc_stats / get_umami_stats. Call list_gsc_properties first to get the exact gscProperty URL. Returns the created project object. gscProperty format: 'sc-domain:example.com' for domain properties or 'https://example.com/' for URL-prefix properties.",
   {
     name: z.string().describe("Display name of the project"),
     slug: z.string().describe("URL-safe slug, e.g. my-project"),
@@ -303,6 +303,11 @@ server.tool(
 
     data.projects.push(project);
     await writeStoredData(data);
+
+    const projectDir = join(projectRoot, "project", slug);
+    await mkdir(join(projectDir, "reports"), { recursive: true });
+    await mkdir(join(projectDir, "context"), { recursive: true });
+    await mkdir(join(projectDir, "notes"), { recursive: true });
 
     return {
       content: [{
