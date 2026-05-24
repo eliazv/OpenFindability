@@ -75,7 +75,8 @@ Private files are intentionally ignored:
 
 - `.env`
 - `data/openfindability.json`
-- `docs/`
+- `private-notes/`
+- `project-reports/`
 - `secrets/`
 - `sensibili/`
 

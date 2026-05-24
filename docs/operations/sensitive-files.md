@@ -8,6 +8,7 @@ Use these local-only folders:
 
 ```txt
 private-notes/
+project-reports/
 secrets/
 sensibili/
 ```
@@ -15,6 +16,8 @@ sensibili/
 They are ignored by `.gitignore`.
 
 `private-notes/` is treated as a private scratch folder. Do not put public project documentation there.
+
+`project-reports/` stores per-project inspection reports and may contain private metrics. It is ignored by git.
 
 Public documentation belongs in:
 
