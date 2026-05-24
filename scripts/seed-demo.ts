@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { createDemoData } from "@/lib/demo";
 import { buildOpportunities } from "@/lib/insights";
 import { writeData } from "@/lib/store";

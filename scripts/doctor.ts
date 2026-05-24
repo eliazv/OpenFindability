@@ -1,10 +1,11 @@
+import "dotenv/config";
 import { getDoctorReport } from "@/lib/doctor";
 
 async function main() {
   const report = await getDoctorReport();
 
   for (const check of report.checks) {
-    const mark = check.status ? "OK" : "MISS";
+    const mark = check.status ? "OK" : check.required ? "MISS" : "WARN";
     console.log(`${mark}  ${check.name}: ${check.detail}`);
   }
 

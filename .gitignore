@@ -3,6 +3,15 @@ node_modules/
 data/*.json
 !.gitkeep
 .env
+.env.*
+.env*
+!.env.example
 .env*.local
 *.log
 tsconfig.tsbuildinfo
+*.service-account.json
+*service-account*.json
+vitaromagna-*.json
+docs/
+secrets/
+sensibili/

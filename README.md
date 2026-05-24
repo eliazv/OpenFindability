@@ -43,9 +43,10 @@ pnpm build
 Copy `.env.example` to `.env` and fill the values you need.
 
 For Google Search Console, use a Google service account with access to the Search Console property.
+Put the JSON file under `secrets/google/`.
 
 ```txt
-GOOGLE_SERVICE_ACCOUNT_FILE=./secrets/google-service-account.json
+GOOGLE_SERVICE_ACCOUNT_FILE=./secrets/google/search-console-service-account.json
 ```
 
 or:
@@ -69,6 +70,16 @@ Then edit the projects inside `data/openfindability.json` or seed demo data and 
   "umamiWebsiteId": "your-website-id"
 }
 ```
+
+Private files are intentionally ignored:
+
+- `.env`
+- `data/openfindability.json`
+- `docs/`
+- `secrets/`
+- `sensibili/`
+
+See `handbook/sensitive-files.md` for the local file layout.
 
 ## Sync behavior
 

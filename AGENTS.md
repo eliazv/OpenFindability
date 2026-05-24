@@ -19,8 +19,10 @@ Do not introduce a monorepo, SaaS billing, auth, queues, cron scheduling or MCP 
 - `app/`: Next.js App Router pages and route handlers.
 - `lib/`: store, connectors, sync logic, insights and shared types.
 - `scripts/`: CLI-like commands for local development.
-- `docs/`: planning and architecture notes.
+- `handbook/`: public planning and architecture notes.
+- `docs/`: private scratch folder, ignored by git.
 - `data/`: local runtime data, ignored except `.gitkeep`.
+- `secrets/`: local credentials, ignored by git.
 
 ## Commands
 
@@ -43,5 +45,7 @@ pnpm build
 - Write connector results to `connectorRuns`.
 - Keep page-level GSC metrics separate from query-level metrics.
 - Do not commit secrets or real project metrics.
+- Do not put public documentation in `docs/`; use `handbook/`.
+- Service account JSON files belong in `secrets/google/`.
 - Update `.env.example` when adding env vars.
 - Prefer small server-side functions in `lib/`.

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { syncProjects } from "@/lib/sync";
 import type { SourceType } from "@/lib/types";
 

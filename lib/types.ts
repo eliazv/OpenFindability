@@ -61,7 +61,10 @@ export type OpportunityType =
   | "striking_distance_query"
   | "declining_page"
   | "growing_page"
-  | "analytics_spike";
+  | "analytics_spike"
+  | "page_two_query"
+  | "zero_click_query"
+  | "query_cannibalization";
 
 export type Opportunity = {
   id: string;
