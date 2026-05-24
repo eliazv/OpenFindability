@@ -1,0 +1,30 @@
+{
+  "name": "openfindability",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "doctor": "tsx scripts/doctor.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "sync": "tsx scripts/sync.ts",
+    "sync:gsc": "tsx scripts/sync.ts gsc",
+    "sync:umami": "tsx scripts/sync.ts umami"
+  },
+  "dependencies": {
+    "googleapis": "^166.0.0",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.0.0"
+  }
+}

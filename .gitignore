@@ -1,0 +1,8 @@
+.next/
+node_modules/
+data/*.json
+!.gitkeep
+.env
+.env*.local
+*.log
+tsconfig.tsbuildinfo
