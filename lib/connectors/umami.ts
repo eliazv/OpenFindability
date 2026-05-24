@@ -17,7 +17,7 @@ export async function syncUmamiProject(project: Project, date: string): Promise<
   }
 
   const apiKey = process.env.UMAMI_API_KEY;
-  const baseUrl = process.env.UMAMI_BASE_URL ?? "https://cloud.umami.is";
+  const baseUrl = process.env.UMAMI_BASE_URL ?? "https://api.umami.is/v1";
 
   if (!apiKey) {
     return skipped(project.id, "UMAMI_API_KEY is not configured.");
@@ -25,7 +25,7 @@ export async function syncUmamiProject(project: Project, date: string): Promise<
 
   const startAt = new Date(`${date}T00:00:00.000Z`).getTime();
   const endAt = new Date(`${date}T23:59:59.999Z`).getTime();
-  const url = new URL(`/api/websites/${project.umamiWebsiteId}/stats`, baseUrl);
+  const url = buildUmamiUrl(baseUrl, `/websites/${project.umamiWebsiteId}/stats`);
   url.searchParams.set("startAt", String(startAt));
   url.searchParams.set("endAt", String(endAt));
 
@@ -79,4 +79,10 @@ function skipped(projectId: string, message: string) {
     },
     snapshots: [],
   };
+}
+
+function buildUmamiUrl(baseUrl: string, path: string) {
+  const normalized = baseUrl.replace(/\/$/, "");
+  const prefix = normalized.endsWith("/v1") ? "" : "/api";
+  return new URL(`${normalized}${prefix}${path}`);
 }

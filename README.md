@@ -58,7 +58,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON={...}
 For Umami:
 
 ```txt
-UMAMI_BASE_URL=https://cloud.umami.is
+UMAMI_BASE_URL=https://api.umami.is/v1
 UMAMI_API_KEY=...
 ```
 

@@ -92,14 +92,14 @@ export async function syncGscProject(project: Project, startDate: string, endDat
 }
 
 async function getGoogleAuth() {
-  const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  const file = process.env.GOOGLE_SERVICE_ACCOUNT_FILE;
+  const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
+  const file = process.env.GOOGLE_SERVICE_ACCOUNT_FILE?.trim();
 
   if (!json && !file) {
     return null;
   }
 
-  const credentials = JSON.parse(json ?? (await readFile(file as string, "utf8")));
+  const credentials = JSON.parse(json || (await readFile(file as string, "utf8")));
 
   return new google.auth.GoogleAuth({
     credentials,
