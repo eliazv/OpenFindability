@@ -79,7 +79,7 @@ Private files are intentionally ignored:
 - `secrets/`
 - `sensibili/`
 
-See `handbook/sensitive-files.md` for the local file layout.
+See `docs/operations/sensitive-files.md` for the local file layout.
 
 ## Sync behavior
 

@@ -7,19 +7,19 @@ This repository keeps private files out of git.
 Use these local-only folders:
 
 ```txt
-docs/
+private-notes/
 secrets/
 sensibili/
 ```
 
 They are ignored by `.gitignore`.
 
-`docs/` is treated as a private scratch folder. Do not put public project documentation there.
+`private-notes/` is treated as a private scratch folder. Do not put public project documentation there.
 
 Public documentation belongs in:
 
 ```txt
-handbook/
+docs/
 README.md
 AGENTS.md
 CLAUDE.md

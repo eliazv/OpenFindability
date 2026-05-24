@@ -266,8 +266,11 @@ openfindability/
     connectors/
     db/
   scripts/
-  handbook/
-  docs/        # appunti privati locali, ignorati da git
+  docs/
+    guide/
+    operations/
+    projects/
+  private-notes/  # appunti privati locali, ignorati da git
   data/
 ```
 
@@ -519,15 +522,15 @@ File consigliati:
 ```txt
 AGENTS.md
 CLAUDE.md
-handbook/ai-agents.md
-handbook/architecture.md
-handbook/data-model.md
-handbook/connectors.md
-handbook/development.md
-handbook/tasks/add-connector.md
-handbook/tasks/add-dashboard-widget.md
-handbook/tasks/debug-sync.md
-handbook/tasks/add-opportunity-rule.md
+docs/ai-agents.md
+docs/architecture.md
+docs/data-model.md
+docs/connectors.md
+docs/development.md
+docs/tasks/add-connector.md
+docs/tasks/add-dashboard-widget.md
+docs/tasks/debug-sync.md
+docs/tasks/add-opportunity-rule.md
 ```
 
 `AGENTS.md` deve spiegare:

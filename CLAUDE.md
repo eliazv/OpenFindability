@@ -25,8 +25,9 @@ Important implementation notes:
 
 - Data lives in `data/openfindability.json`.
 - Runtime data is ignored by git.
-- Private scratch notes live in `docs/` and are ignored by git.
-- Public docs live in `handbook/`.
+- Public docs live in `docs/`.
+- Project analysis reports live in `docs/projects/<project-slug>/`.
+- Private scratch notes live in `private-notes/` and are ignored by git.
 - Service account JSON files live in `secrets/google/`.
 - GSC backfill defaults to 30 days.
 - Umami sync imports yesterday.
