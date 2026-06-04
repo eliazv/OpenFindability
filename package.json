@@ -12,7 +12,8 @@
     "seed:demo": "tsx scripts/seed-demo.ts",
     "sync": "tsx scripts/sync.ts",
     "sync:gsc": "tsx scripts/sync.ts gsc",
-    "sync:umami": "tsx scripts/sync.ts umami"
+    "sync:umami": "tsx scripts/sync.ts umami",
+    "sync:play-console": "tsx scripts/sync.ts play_console"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

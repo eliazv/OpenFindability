@@ -30,6 +30,12 @@ export async function getDoctorReport() {
       detail: "UMAMI_API_KEY",
     },
     {
+      name: "Play Console projects",
+      status: data.projects.some((p) => Boolean(p.playConsolePackageName)),
+      required: false,
+      detail: `${data.projects.filter((p) => p.playConsolePackageName).length} configured`,
+    },
+    {
       name: "Connector runs",
       status: data.connectorRuns.length > 0,
       required: false,

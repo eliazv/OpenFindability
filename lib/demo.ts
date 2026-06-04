@@ -121,5 +121,6 @@ export function createDemoData(): AppData {
     pageMetrics,
     opportunities: [],
     connectorRuns: [],
+    appReviews: [],
   };
 }

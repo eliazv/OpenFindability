@@ -4,7 +4,7 @@ import type { SourceType } from "@/lib/types";
 
 async function main() {
   const arg = process.argv[2];
-  const source = arg === "gsc" || arg === "umami" ? (arg as SourceType) : undefined;
+  const source = arg === "gsc" || arg === "umami" || arg === "play_console" ? (arg as SourceType) : undefined;
   const results = await syncProjects({ source });
 
   for (const result of results) {

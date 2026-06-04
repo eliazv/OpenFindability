@@ -9,6 +9,7 @@ const emptyData: AppData = {
   pageMetrics: [],
   opportunities: [],
   connectorRuns: [],
+  appReviews: [],
 };
 
 export function getDataFilePath(): string {

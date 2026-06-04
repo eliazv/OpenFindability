@@ -3,6 +3,7 @@ import { buildOpportunities } from "@/lib/insights";
 import { createId } from "@/lib/id";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
+import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { readData, writeData } from "@/lib/store";
 import type { ConnectorRun, SourceType, SyncOptions, SyncResult } from "@/lib/types";
 
@@ -39,6 +40,24 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
         const result = failed("umami", project.id, error);
         results.push(result);
         data.connectorRuns.push(toRun("umami", project.id, startedAt, result));
+      }
+    }
+
+    if (!source || source === "play_console") {
+      try {
+        const existingReviewIds = new Set(
+          data.appReviews.filter((r) => r.projectId === project.id).map((r) => r.reviewId),
+        );
+        const synced = await syncPlayConsoleProject(project, daysAgo(backfillDays));
+        const newReviews = synced.reviews.filter((r) => !existingReviewIds.has(r.reviewId));
+        data.appReviews.push(...newReviews);
+        data.metricSnapshots.push(...synced.snapshots);
+        results.push(synced.result);
+        data.connectorRuns.push(toRun("play_console", project.id, startedAt, synced.result));
+      } catch (error) {
+        const result = failed("play_console", project.id, error);
+        results.push(result);
+        data.connectorRuns.push(toRun("play_console", project.id, startedAt, result));
       }
     }
   }

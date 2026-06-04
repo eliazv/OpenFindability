@@ -8,6 +8,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
+import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { buildOpportunities } from "@/lib/insights";
 import { createId } from "@/lib/id";
 import type { AppData, Project, ProjectType } from "@/lib/types";
@@ -44,6 +45,7 @@ async function readStoredData(): Promise<AppData> {
     pageMetrics: [],
     opportunities: [],
     connectorRuns: [],
+    appReviews: [],
   };
   try {
     const raw = await readFile(dataPath, "utf8");
@@ -107,6 +109,7 @@ server.tool(
       url: p.websiteUrl,
       gsc: !!p.gscProperty,
       umami: !!p.umamiWebsiteId,
+      playConsole: !!p.playConsolePackageName,
     }));
     return { content: [{ type: "text", text: JSON.stringify(list, null, 2) }] };
   },
@@ -276,10 +279,11 @@ server.tool(
     websiteUrl: z.string().optional().describe("Website URL, e.g. https://example.com"),
     gscProperty: z.string().optional().describe("GSC property URL (e.g. sc-domain:example.com or https://example.com/)"),
     umamiWebsiteId: z.string().optional().describe("Umami website UUID"),
+    playConsolePackageName: z.string().optional().describe("Android package name, e.g. com.example.app"),
     category: z.string().optional().describe("Optional category label"),
     notes: z.string().optional().describe("Optional notes"),
   },
-  async ({ name, slug, type, websiteUrl, gscProperty, umamiWebsiteId, category, notes }) => {
+  async ({ name, slug, type, websiteUrl, gscProperty, umamiWebsiteId, playConsolePackageName, category, notes }) => {
     const data = await readStoredData();
 
     if (data.projects.some((p) => p.slug === slug)) {
@@ -295,6 +299,7 @@ server.tool(
       websiteUrl,
       gscProperty,
       umamiWebsiteId,
+      playConsolePackageName,
       category,
       notes,
       createdAt: now,
@@ -328,6 +333,7 @@ server.tool(
     websiteUrl: z.string().optional(),
     gscProperty: z.string().optional().describe("Set to empty string to remove"),
     umamiWebsiteId: z.string().optional().describe("Set to empty string to remove"),
+    playConsolePackageName: z.string().optional().describe("Android package name. Set to empty string to remove."),
     category: z.string().optional(),
     notes: z.string().optional(),
   },
@@ -346,6 +352,7 @@ server.tool(
       ...(fields.websiteUrl !== undefined && { websiteUrl: fields.websiteUrl || undefined }),
       ...(fields.gscProperty !== undefined && { gscProperty: fields.gscProperty || undefined }),
       ...(fields.umamiWebsiteId !== undefined && { umamiWebsiteId: fields.umamiWebsiteId || undefined }),
+      ...(fields.playConsolePackageName !== undefined && { playConsolePackageName: fields.playConsolePackageName || undefined }),
       ...(fields.category !== undefined && { category: fields.category || undefined }),
       ...(fields.notes !== undefined && { notes: fields.notes || undefined }),
       updatedAt: new Date().toISOString(),
@@ -382,6 +389,7 @@ server.tool(
       queries: data.searchQueries.filter((x) => x.projectId === id).length,
       pages: data.pageMetrics.filter((x) => x.projectId === id).length,
       opportunities: data.opportunities.filter((x) => x.projectId === id).length,
+      reviews: data.appReviews.filter((x) => x.projectId === id).length,
     };
 
     data.projects = data.projects.filter((p) => p.id !== id);
@@ -389,6 +397,7 @@ server.tool(
     data.searchQueries = data.searchQueries.filter((x) => x.projectId !== id);
     data.pageMetrics = data.pageMetrics.filter((x) => x.projectId !== id);
     data.opportunities = data.opportunities.filter((x) => x.projectId !== id);
+    data.appReviews = data.appReviews.filter((x) => x.projectId !== id);
 
     await writeStoredData(data);
 
@@ -398,6 +407,66 @@ server.tool(
         text: `Project "${project.name}" deleted along with: ${JSON.stringify(counts)}.`,
       }],
     };
+  },
+);
+
+server.tool(
+  "get_play_console_reviews",
+  "Fetch LIVE Play Console reviews for a project (calls Google Play Developer API in real time). Returns: { summary: { totalReviews, avgRating, ratingDistribution }, reviews: [{ date, rating, text, language, appVersionName, thumbsUp }] } sorted newest first. Use 'days' to control how far back to fetch (default 30).",
+  {
+    slug: z.string().describe("Project slug (use list_projects to see options)"),
+    days: z.number().int().min(1).max(365).default(30).describe("Number of days to look back (default 30)"),
+    limit: z.number().int().min(1).max(200).default(50).describe("Max reviews to return (default 50)"),
+    minRating: z.number().int().min(1).max(5).optional().describe("Filter reviews with rating >= this value"),
+  },
+  async ({ slug, days, limit, minRating }) => {
+    const projects = await readProjects();
+    const project = findProject(projects, slug);
+    if (!project) {
+      return { content: [{ type: "text", text: `Project "${slug}" not found. Use list_projects to see options.` }] };
+    }
+    if (!project.playConsolePackageName) {
+      return { content: [{ type: "text", text: `Project "${slug}" has no Play Console package name configured.` }] };
+    }
+
+    const startDate = daysAgo(days);
+    const { result, reviews } = await syncPlayConsoleProject(project, startDate);
+
+    if (result.status === "skipped" || result.status === "failed") {
+      return { content: [{ type: "text", text: `Play Console sync failed: ${result.message}` }] };
+    }
+
+    let filtered = reviews.sort((a, b) => b.date.localeCompare(a.date));
+    if (minRating !== undefined) {
+      filtered = filtered.filter((r) => r.rating >= minRating);
+    }
+
+    const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const r of reviews) dist[r.rating] = (dist[r.rating] ?? 0) + 1;
+    const avgRating = reviews.length > 0
+      ? parseFloat((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(2))
+      : 0;
+
+    const output = {
+      project: project.name,
+      packageName: project.playConsolePackageName,
+      period: { startDate, days },
+      summary: {
+        totalReviews: reviews.length,
+        avgRating,
+        ratingDistribution: dist,
+      },
+      reviews: filtered.slice(0, limit).map((r) => ({
+        date: r.date,
+        rating: r.rating,
+        text: r.text,
+        language: r.language,
+        appVersionName: r.appVersionName,
+        thumbsUp: r.thumbsUp,
+      })),
+    };
+
+    return { content: [{ type: "text", text: JSON.stringify(output, null, 2) }] };
   },
 );
 
@@ -454,6 +523,28 @@ server.tool(
       }
     } else {
       summary.umami = null;
+    }
+
+    if (project.playConsolePackageName) {
+      const { result, reviews } = await syncPlayConsoleProject(project, daysAgo(days));
+      if (result.status === "success") {
+        const avgRating = reviews.length > 0
+          ? parseFloat((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(2))
+          : 0;
+        summary.playConsole = {
+          period: { startDate, endDate },
+          totalReviews: reviews.length,
+          avgRating,
+          recentReviews: reviews
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .slice(0, 5)
+            .map((r) => ({ date: r.date, rating: r.rating, text: r.text?.slice(0, 200) })),
+        };
+      } else {
+        summary.playConsole = { error: result.message };
+      }
+    } else {
+      summary.playConsole = null;
     }
 
     const opps = data.opportunities.filter((o) => o.projectId === project.id && o.status === "open");

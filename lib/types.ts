@@ -1,4 +1,4 @@
-export type SourceType = "gsc" | "umami";
+export type SourceType = "gsc" | "umami" | "play_console";
 
 export type ProjectType = "web" | "app" | "web_app";
 
@@ -11,6 +11,7 @@ export type Project = {
   websiteUrl?: string;
   gscProperty?: string;
   umamiWebsiteId?: string;
+  playConsolePackageName?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -27,6 +28,8 @@ export type MetricSnapshot = {
   avgPosition?: number;
   visitors?: number;
   pageviews?: number;
+  avgRating?: number;
+  totalReviews?: number;
   rawJson?: unknown;
   createdAt: string;
 };
@@ -42,6 +45,20 @@ export type SearchQueryMetric = {
   ctr: number;
   avgPosition: number;
   rawJson?: unknown;
+};
+
+export type AppReview = {
+  id: string;
+  projectId: string;
+  reviewId: string;
+  date: string;
+  rating: number;
+  text?: string;
+  language?: string;
+  appVersionName?: string;
+  thumbsUp: number;
+  rawJson?: unknown;
+  createdAt: string;
 };
 
 export type PageMetric = {
@@ -97,6 +114,7 @@ export type AppData = {
   pageMetrics: PageMetric[];
   opportunities: Opportunity[];
   connectorRuns: ConnectorRun[];
+  appReviews: AppReview[];
 };
 
 export type SyncOptions = {
@@ -113,5 +131,6 @@ export type SyncResult = {
     snapshots: number;
     queries: number;
     pages: number;
+    reviews?: number;
   };
 };
