@@ -1,4 +1,4 @@
-export type SourceType = "gsc" | "umami" | "play_console";
+export type SourceType = "gsc" | "umami" | "play_console" | "aso";
 
 export type ProjectType = "web" | "app" | "web_app";
 
@@ -12,6 +12,9 @@ export type Project = {
   gscProperty?: string;
   umamiWebsiteId?: string;
   playConsolePackageName?: string;
+  appStoreTrackId?: number;
+  asoKeywords?: string[];
+  asoCountries?: string[];
   notes?: string;
   createdAt: string;
   updatedAt: string;

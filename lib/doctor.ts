@@ -1,5 +1,8 @@
 import { access } from "node:fs/promises";
 import { getDataFilePath, readData } from "@/lib/store";
+import type { AppData } from "@/lib/types";
+
+const STALE_AFTER_DAYS = 3;
 
 export async function getDoctorReport() {
   const data = await readData();
@@ -41,12 +44,59 @@ export async function getDoctorReport() {
       required: false,
       detail: `${data.connectorRuns.length} recorded`,
     },
+    {
+      name: "Data freshness",
+      status: getStaleProjects(data, STALE_AFTER_DAYS).length === 0,
+      required: false,
+      detail: describeFreshness(data, STALE_AFTER_DAYS),
+    },
   ];
 
   return {
     ok: checks.every((check) => check.status || !check.required),
     checks,
   };
+}
+
+function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string; source: string; ageDays: number | null }[] {
+  const stale: { slug: string; source: string; ageDays: number | null }[] = [];
+
+  for (const project of data.projects) {
+    const sources: ("gsc" | "umami")[] = [];
+    if (project.gscProperty) sources.push("gsc");
+    if (project.umamiWebsiteId) sources.push("umami");
+
+    for (const source of sources) {
+      const lastRun = data.connectorRuns
+        .filter((run) => run.projectId === project.id && run.source === source && run.status === "success")
+        .sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime())[0];
+
+      if (!lastRun) {
+        stale.push({ slug: project.slug, source, ageDays: null });
+        continue;
+      }
+
+      const ageDays = (Date.now() - new Date(lastRun.finishedAt).getTime()) / 86_400_000;
+      if (ageDays > staleAfterDays) {
+        stale.push({ slug: project.slug, source, ageDays });
+      }
+    }
+  }
+
+  return stale;
+}
+
+function describeFreshness(data: AppData, staleAfterDays: number): string {
+  const stale = getStaleProjects(data, staleAfterDays);
+  if (stale.length === 0) {
+    return `all configured sources synced within ${staleAfterDays} days`;
+  }
+
+  return stale
+    .map(({ slug, source, ageDays }) =>
+      ageDays === null ? `${slug}/${source}: never synced` : `${slug}/${source}: ${ageDays.toFixed(1)}d old`,
+    )
+    .join("; ");
 }
 
 async function exists(filePath: string): Promise<boolean> {

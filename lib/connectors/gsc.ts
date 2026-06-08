@@ -91,6 +91,26 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   };
 }
 
+export type GscSite = {
+  siteUrl: string;
+  permissionLevel?: string | null;
+};
+
+export async function listGscSites(): Promise<GscSite[]> {
+  const auth = await getGoogleAuth();
+  if (!auth) {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE is not configured.");
+  }
+
+  const searchconsole = google.searchconsole({ version: "v1", auth });
+  const response = await searchconsole.sites.list({});
+
+  return (response.data.siteEntry ?? []).map((entry) => ({
+    siteUrl: entry.siteUrl ?? "",
+    permissionLevel: entry.permissionLevel,
+  }));
+}
+
 async function getGoogleAuth() {
   const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
   const file = process.env.GOOGLE_SERVICE_ACCOUNT_FILE?.trim();
