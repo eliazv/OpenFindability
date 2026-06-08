@@ -10,6 +10,7 @@ const emptyData: AppData = {
   opportunities: [],
   connectorRuns: [],
   appReviews: [],
+  appKeywords: [],
 };
 
 export function getDataFilePath(): string {

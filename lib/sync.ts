@@ -4,6 +4,7 @@ import { createId } from "@/lib/id";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
+import { syncAsoProject } from "@/lib/connectors/aso";
 import { readData, writeData } from "@/lib/store";
 import type { ConnectorRun, SourceType, SyncOptions, SyncResult } from "@/lib/types";
 
@@ -40,6 +41,21 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
         const result = failed("umami", project.id, error);
         results.push(result);
         data.connectorRuns.push(toRun("umami", project.id, startedAt, result));
+      }
+    }
+
+    // ASO is opt-in only: it is rate-limited (2s/call) and cached per day upstream,
+    // so it must not run as part of a general `pnpm run sync`.
+    if (source === "aso") {
+      try {
+        const synced = await syncAsoProject(project);
+        data.appKeywords.push(...synced.keywords);
+        results.push(synced.result);
+        data.connectorRuns.push(toRun("aso", project.id, startedAt, synced.result));
+      } catch (error) {
+        const result = failed("aso", project.id, error);
+        results.push(result);
+        data.connectorRuns.push(toRun("aso", project.id, startedAt, result));
       }
     }
 

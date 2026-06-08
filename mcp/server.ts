@@ -46,6 +46,7 @@ async function readStoredData(): Promise<AppData> {
     opportunities: [],
     connectorRuns: [],
     appReviews: [],
+    appKeywords: [],
   };
   try {
     const raw = await readFile(dataPath, "utf8");

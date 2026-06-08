@@ -4,13 +4,16 @@ import type { SourceType } from "@/lib/types";
 
 async function main() {
   const arg = process.argv[2];
-  const source = arg === "gsc" || arg === "umami" || arg === "play_console" ? (arg as SourceType) : undefined;
+  const validSources: SourceType[] = ["gsc", "umami", "play_console", "aso"];
+  const source = validSources.includes(arg as SourceType) ? (arg as SourceType) : undefined;
   const results = await syncProjects({ source });
 
   for (const result of results) {
-    console.log(
-      `${result.status.toUpperCase()} ${result.source} ${result.projectId}: ${result.message} (${result.inserted.snapshots} snapshots, ${result.inserted.queries} queries, ${result.inserted.pages} pages)`,
-    );
+    const inserted = result.inserted;
+    const parts = [`${inserted.snapshots} snapshots`, `${inserted.queries} queries`, `${inserted.pages} pages`];
+    if (inserted.keywords !== undefined) parts.push(`${inserted.keywords} keywords`);
+    if (inserted.reviews !== undefined) parts.push(`${inserted.reviews} reviews`);
+    console.log(`${result.status.toUpperCase()} ${result.source} ${result.projectId}: ${result.message} (${parts.join(", ")})`);
   }
 
   const failed = results.some((result) => result.status === "failed");

@@ -50,6 +50,17 @@ export async function getDoctorReport() {
       required: false,
       detail: describeFreshness(data, STALE_AFTER_DAYS),
     },
+    {
+      name: "ASO projects",
+      status: data.projects.some((p) => Boolean(p.asoKeywords?.length)),
+      required: false,
+      detail: `${data.projects.filter((p) => p.asoKeywords?.length).length} configured with asoKeywords`,
+    },
+    {
+      name: "RespectASO instance",
+      ...(await checkRespectAso(data)),
+      required: false,
+    },
   ];
 
   return {
@@ -97,6 +108,24 @@ function describeFreshness(data: AppData, staleAfterDays: number): string {
       ageDays === null ? `${slug}/${source}: never synced` : `${slug}/${source}: ${ageDays.toFixed(1)}d old`,
     )
     .join("; ");
+}
+
+async function checkRespectAso(data: AppData): Promise<{ status: boolean; detail: string }> {
+  const hasAsoProjects = data.projects.some((p) => Boolean(p.asoKeywords?.length));
+  if (!hasAsoProjects) {
+    return { status: true, detail: "skipped — no project has asoKeywords configured" };
+  }
+
+  const baseUrl = process.env.RESPECT_ASO_BASE_URL ?? "http://localhost";
+  try {
+    const response = await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) {
+      return { status: false, detail: `${baseUrl} responded with ${response.status} — check \`docker compose up -d\`` };
+    }
+    return { status: true, detail: `reachable at ${baseUrl}` };
+  } catch {
+    return { status: false, detail: `not reachable at ${baseUrl} — start it with \`docker compose up -d\`` };
+  }
 }
 
 async function exists(filePath: string): Promise<boolean> {

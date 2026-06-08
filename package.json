@@ -14,6 +14,7 @@
     "sync:gsc": "tsx scripts/sync.ts gsc",
     "sync:umami": "tsx scripts/sync.ts umami",
     "sync:play-console": "tsx scripts/sync.ts play_console",
+    "sync:aso": "tsx scripts/sync.ts aso",
     "gsc:sites": "tsx scripts/gsc-sites.ts",
     "project:add": "tsx scripts/add-project.ts",
     "report": "tsx scripts/report.ts"

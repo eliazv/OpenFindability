@@ -50,6 +50,31 @@ export type SearchQueryMetric = {
   rawJson?: unknown;
 };
 
+export type AsoClassification =
+  | "sweet_spot"
+  | "good_target"
+  | "hidden_gem"
+  | "high_competition"
+  | "moderate"
+  | "low_volume"
+  | "avoid";
+
+export type AppKeywordMetric = {
+  id: string;
+  projectId: string;
+  date: string;
+  keyword: string;
+  country: string;
+  popularityScore: number;
+  difficultyScore: number;
+  opportunityScore: number;
+  difficultyLabel?: string;
+  classification?: AsoClassification | string;
+  appRank?: number | null;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
 export type AppReview = {
   id: string;
   projectId: string;
@@ -118,6 +143,7 @@ export type AppData = {
   opportunities: Opportunity[];
   connectorRuns: ConnectorRun[];
   appReviews: AppReview[];
+  appKeywords: AppKeywordMetric[];
 };
 
 export type SyncOptions = {
@@ -135,5 +161,6 @@ export type SyncResult = {
     queries: number;
     pages: number;
     reviews?: number;
+    keywords?: number;
   };
 };
