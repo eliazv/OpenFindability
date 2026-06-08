@@ -17,6 +17,7 @@ pnpm seed:demo
 pnpm dev
 pnpm run doctor
 pnpm run sync
+pnpm run sync:aso
 pnpm typecheck
 pnpm build
 ```
@@ -34,3 +35,4 @@ Important implementation notes:
 - Keep `rawJson` on imported records.
 - Store connector run logs.
 - Do not add SaaS-specific code yet.
+- ASO data comes from a local RespectASO instance (not SaaS); see `docs/guide/aso-workflow.md`. Configure `asoKeywords`/`asoCountries`/`appStoreTrackId` per project.
