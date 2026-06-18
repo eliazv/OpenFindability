@@ -57,6 +57,14 @@ export async function getDoctorReport() {
       detail: `${data.projects.filter((p) => p.asoKeywords?.length).length} configured with asoKeywords`,
     },
     {
+      name: "ASO cache",
+      status: (data.asoKeywordSnapshots?.length ?? 0) > 0,
+      required: false,
+      detail: `${data.asoKeywordSnapshots?.length ?? 0} keyword snapshots; ${
+        data.asoAppRankSnapshots?.length ?? 0
+      } app-rank snapshots`,
+    },
+    {
       name: "RespectASO instance",
       ...(await checkRespectAso(data)),
       required: false,

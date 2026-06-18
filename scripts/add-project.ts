@@ -14,6 +14,10 @@ type Args = {
   gsc?: string;
   umami?: string;
   playConsole?: string;
+  appStoreTrackId?: string;
+  respectAsoAppId?: string;
+  asoKeywords?: string;
+  asoCountries?: string;
   notes?: string;
 };
 
@@ -36,6 +40,10 @@ function parseArgs(argv: string[]): Args {
       case "gsc": args.gsc = value; break;
       case "umami": args.umami = value; break;
       case "play-console": args.playConsole = value; break;
+      case "app-store-track-id": args.appStoreTrackId = value; break;
+      case "respect-aso-app-id": args.respectAsoAppId = value; break;
+      case "aso-keywords": args.asoKeywords = value; break;
+      case "aso-countries": args.asoCountries = value; break;
       case "notes": args.notes = value; break;
       default:
         throw new Error(`Unknown argument --${key}`);
@@ -60,7 +68,8 @@ async function main() {
     throw new Error(
       "Usage: pnpm run project:add -- --name \"Project Name\" [--slug slug] [--type web|app|web_app] " +
         "[--category Category] [--url https://example.com/] [--gsc sc-domain:example.com] " +
-        "[--umami <websiteId>] [--play-console com.example.app] [--notes \"...\"]",
+        "[--umami <websiteId>] [--play-console com.example.app] [--app-store-track-id 123] " +
+        "[--respect-aso-app-id 3] [--aso-keywords \"one,two\"] [--aso-countries it,us] [--notes \"...\"]",
     );
   }
 
@@ -82,6 +91,10 @@ async function main() {
     gscProperty: args.gsc,
     umamiWebsiteId: args.umami,
     playConsolePackageName: args.playConsole,
+    appStoreTrackId: args.appStoreTrackId ? Number(args.appStoreTrackId) : undefined,
+    respectAsoAppId: args.respectAsoAppId ? Number(args.respectAsoAppId) : undefined,
+    asoKeywords: splitCsv(args.asoKeywords),
+    asoCountries: splitCsv(args.asoCountries),
     notes: args.notes,
     createdAt: now,
     updatedAt: now,
@@ -104,9 +117,17 @@ async function main() {
   console.log(`Created folders: project/${slug}/{reports,context,notes}`);
   console.log(`Total projects: ${data.projects.length}`);
 
-  if (!project.gscProperty && !project.umamiWebsiteId && !project.playConsolePackageName) {
-    console.log("Note: no data source configured yet (gsc/umami/play-console). Add one before running `pnpm run sync`.");
+  if (!project.gscProperty && !project.umamiWebsiteId && !project.playConsolePackageName && !project.asoKeywords?.length) {
+    console.log("Note: no data source configured yet (gsc/umami/play-console/aso). Add one before running `pnpm run sync`.");
   }
+}
+
+function splitCsv(value?: string): string[] | undefined {
+  const items = value
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items && items.length > 0 ? items : undefined;
 }
 
 main().catch((error) => {

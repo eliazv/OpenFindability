@@ -2,7 +2,7 @@ import { createId } from "@/lib/id";
 import { nowIso } from "@/lib/dates";
 import type { AppKeywordMetric, Project, SyncResult } from "@/lib/types";
 
-type AsoKeywordResult = {
+export type AsoKeywordResult = {
   keyword: string;
   country: string;
   popularity_score?: number;
@@ -13,7 +13,7 @@ type AsoKeywordResult = {
   app_rank?: number | null;
 };
 
-type AsoSearchResponse = {
+export type AsoSearchResponse = {
   results_by_country?: Record<string, AsoKeywordResult[]>;
 };
 
@@ -45,7 +45,14 @@ export async function syncAsoProject(project: Project): Promise<{
   const date = new Date().toISOString().slice(0, 10);
   const createdAt = nowIso();
 
-  const response = await searchKeywords(session, baseUrl, project.asoKeywords, countries, project.appStoreTrackId);
+  const appId = project.respectAsoAppId ?? project.appStoreTrackId;
+  const response = await searchRespectAsoKeywords({
+    baseUrl,
+    session,
+    keywords: project.asoKeywords,
+    countries,
+    appId,
+  });
 
   const keywords: AppKeywordMetric[] = [];
   for (const [country, rows] of Object.entries(response.results_by_country ?? {})) {
@@ -85,12 +92,13 @@ type AsoSession = {
   csrfToken: string;
 };
 
-async function createAsoSession(baseUrl: string): Promise<AsoSession> {
+export async function createAsoSession(baseUrl = process.env.RESPECT_ASO_BASE_URL ?? DEFAULT_BASE_URL): Promise<AsoSession> {
   const response = await fetch(`${baseUrl}/`);
   if (!response.ok) {
     throw new Error(`GET / failed: ${response.status}`);
   }
 
+  const html = await response.text();
   const setCookie = response.headers.get("set-cookie") ?? "";
   const cookie = setCookie
     .split(/,(?=[^ ;]+=)/)
@@ -98,38 +106,63 @@ async function createAsoSession(baseUrl: string): Promise<AsoSession> {
     .filter(Boolean)
     .join("; ");
 
-  const csrfMatch = cookie.match(/csrftoken=([^;\s]+)/);
+  const csrfMatch =
+    html.match(/name=["']csrfmiddlewaretoken["']\s+value=["']([^"']+)["']/) ??
+    cookie.match(/csrftoken=([^;\s]+)/);
   if (!csrfMatch) {
-    throw new Error("Could not read csrftoken cookie from RespectASO response.");
+    throw new Error("Could not read CSRF token from RespectASO response.");
   }
 
   return { cookie, csrfToken: csrfMatch[1] };
 }
 
-async function searchKeywords(
+export async function searchRespectAsoKeywords(options: {
+  baseUrl?: string;
+  session?: AsoSession;
+  keywords: string[];
+  countries: string[];
+  appId?: number;
+  batchSize?: number;
+}): Promise<AsoSearchResponse> {
+  const baseUrl = options.baseUrl ?? process.env.RESPECT_ASO_BASE_URL ?? DEFAULT_BASE_URL;
+  const session = options.session ?? (await createAsoSession(baseUrl));
+  const countries = options.countries.slice(0, 5);
+  const batchSize = options.batchSize ?? 20;
+  const resultsByCountry: Record<string, AsoKeywordResult[]> = {};
+
+  const keywords = [...new Set(options.keywords.map((keyword) => keyword.trim()).filter(Boolean))];
+  for (let index = 0; index < keywords.length; index += batchSize) {
+    const batch = keywords.slice(index, index + batchSize);
+    const response = await searchKeywordBatch(session, baseUrl, batch, countries, options.appId);
+    for (const [country, rows] of Object.entries(response.results_by_country ?? {})) {
+      resultsByCountry[country] = [...(resultsByCountry[country] ?? []), ...rows];
+    }
+  }
+
+  return { results_by_country: resultsByCountry };
+}
+
+async function searchKeywordBatch(
   session: AsoSession,
   baseUrl: string,
   keywords: string[],
   countries: string[],
   appId?: number,
 ): Promise<AsoSearchResponse> {
-  const body = new URLSearchParams({
-    keywords: keywords.slice(0, 20).join(","),
-    countries: countries.slice(0, 5).join(","),
-  });
-  if (appId) {
-    body.set("app_id", String(appId));
-  }
+  const body = new FormData();
+  body.set("csrfmiddlewaretoken", session.csrfToken);
+  body.set("keywords", keywords.join(","));
+  body.set("countries", countries.join(","));
+  if (appId) body.set("app_id", String(appId));
 
   const response = await fetch(`${baseUrl}/search/`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
       "X-CSRFToken": session.csrfToken,
       Referer: `${baseUrl}/`,
       Cookie: session.cookie,
     },
-    body: body.toString(),
+    body,
   });
 
   if (!response.ok) {

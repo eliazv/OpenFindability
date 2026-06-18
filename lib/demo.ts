@@ -123,5 +123,7 @@ export function createDemoData(): AppData {
     connectorRuns: [],
     appReviews: [],
     appKeywords: [],
+    asoKeywordSnapshots: [],
+    asoAppRankSnapshots: [],
   };
 }

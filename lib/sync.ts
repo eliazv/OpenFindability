@@ -5,6 +5,7 @@ import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { syncAsoProject } from "@/lib/connectors/aso";
+import { upsertAsoCacheRows } from "@/lib/aso-cache";
 import { readData, writeData } from "@/lib/store";
 import type { ConnectorRun, SourceType, SyncOptions, SyncResult } from "@/lib/types";
 
@@ -50,6 +51,10 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
       try {
         const synced = await syncAsoProject(project);
         data.appKeywords.push(...synced.keywords);
+        upsertAsoCacheRows(data, synced.keywords, {
+          projectId: project.id,
+          appId: project.respectAsoAppId ?? project.appStoreTrackId,
+        });
         results.push(synced.result);
         data.connectorRuns.push(toRun("aso", project.id, startedAt, synced.result));
       } catch (error) {

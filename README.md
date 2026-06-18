@@ -22,6 +22,85 @@ pnpm dev
 
 Open `http://localhost:3000`.
 
+## Guided setup
+
+Use this order for a clean local setup:
+
+```bash
+pnpm install
+cp .env.example .env
+pnpm run doctor
+pnpm dev
+```
+
+Then configure only the connectors you need.
+
+### 1. Add credentials
+
+Google Search Console and Play Console use a Google service account JSON file. Put it under `secrets/google/` and point `.env` to it:
+
+```env
+GOOGLE_SERVICE_ACCOUNT_FILE=./secrets/google/search-console-service-account.json
+```
+
+Umami only needs the API base URL and API key:
+
+```env
+UMAMI_BASE_URL=https://api.umami.is/v1
+UMAMI_API_KEY=...
+```
+
+RespectASO is optional and local:
+
+```env
+RESPECT_ASO_BASE_URL=http://localhost
+```
+
+### 2. Add a project
+
+```bash
+pnpm run project:add -- \
+  --name "Example Site" \
+  --slug example-site \
+  --type web \
+  --url https://example.com/ \
+  --gsc sc-domain:example.com
+```
+
+For an app with ASO research:
+
+```bash
+pnpm run project:add -- \
+  --name "Example App" \
+  --slug example-app \
+  --type app \
+  --app-store-track-id 1234567890 \
+  --respect-aso-app-id 3 \
+  --aso-countries it \
+  --aso-keywords "main keyword,secondary keyword"
+```
+
+### 3. Sync or research
+
+```bash
+pnpm run sync:gsc       # import Search Console data
+pnpm run sync:aso       # import configured RespectASO keywords
+pnpm run report -- example-app all
+```
+
+For store listing research that combines RespectASO with GSC query language:
+
+```bash
+pnpm run research:aso -- \
+  --slug example-app \
+  --gsc-slug example-site \
+  --url-contains example.com/app \
+  --query-contains "main keyword" \
+  --keywords "main keyword,secondary keyword,online,offline"
+```
+
+Research reports are written to `project/<slug>/reports/`, which is ignored by git. ASO keyword observations are also cached in `data/openfindability.json`, so later research can reuse recent `keyword + country` results across projects. Use `--refresh` to force a new RespectASO lookup.
+
 ## MCP server — use from any Claude Code project
 
 OpenFindability exposes an MCP server so Claude Code can query your analytics live from any repo.

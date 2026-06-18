@@ -17,6 +17,7 @@
     "sync:aso": "tsx scripts/sync.ts aso",
     "gsc:sites": "tsx scripts/gsc-sites.ts",
     "project:add": "tsx scripts/add-project.ts",
+    "research:aso": "tsx scripts/aso-research.ts",
     "report": "tsx scripts/report.ts"
   },
   "dependencies": {

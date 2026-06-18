@@ -13,6 +13,7 @@ export type Project = {
   umamiWebsiteId?: string;
   playConsolePackageName?: string;
   appStoreTrackId?: number;
+  respectAsoAppId?: number;
   asoKeywords?: string[];
   asoCountries?: string[];
   notes?: string;
@@ -72,6 +73,37 @@ export type AppKeywordMetric = {
   classification?: AsoClassification | string;
   appRank?: number | null;
   rawJson?: unknown;
+  createdAt: string;
+};
+
+export type AsoKeywordSnapshot = {
+  id: string;
+  date: string;
+  keyword: string;
+  country: string;
+  source: "respectaso";
+  popularityScore: number;
+  difficultyScore: number;
+  opportunityScore: number;
+  difficultyLabel?: string;
+  classification?: AsoClassification | string;
+  competitorCount?: number;
+  rawJson?: unknown;
+  observedAt: string;
+  createdAt: string;
+};
+
+export type AsoAppRankSnapshot = {
+  id: string;
+  date: string;
+  keyword: string;
+  country: string;
+  source: "respectaso";
+  projectId?: string;
+  appId?: number;
+  appRank: number | null;
+  rawJson?: unknown;
+  observedAt: string;
   createdAt: string;
 };
 
@@ -144,6 +176,8 @@ export type AppData = {
   connectorRuns: ConnectorRun[];
   appReviews: AppReview[];
   appKeywords: AppKeywordMetric[];
+  asoKeywordSnapshots: AsoKeywordSnapshot[];
+  asoAppRankSnapshots: AsoAppRankSnapshot[];
 };
 
 export type SyncOptions = {

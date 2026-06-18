@@ -11,6 +11,8 @@ const emptyData: AppData = {
   connectorRuns: [],
   appReviews: [],
   appKeywords: [],
+  asoKeywordSnapshots: [],
+  asoAppRankSnapshots: [],
 };
 
 export function getDataFilePath(): string {
