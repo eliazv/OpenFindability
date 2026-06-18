@@ -57,3 +57,5 @@ pnpm build
 - Update `.env.example` when adding env vars.
 - Prefer small server-side functions in `lib/`.
 - Update `AGENTS.md` and `CLAUDE.md` whenever changing project workflow, commands, storage shape or conventions.
+- Document every new feature in `CLAUDE.md` (and here if it affects rules/structure) in the same change that introduces it.
+- ASO report Trend section: `buildAsoReportMarkdown` (`lib/report.ts`) compares the two most recent `appKeywords` snapshot dates per project, showing rank/opportunity/popularity delta; only rendered when 2+ dates exist.

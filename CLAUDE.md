@@ -43,4 +43,6 @@ Important implementation notes:
 - ASO keyword metrics are cached in `asoKeywordSnapshots` for reuse across projects.
 - App-specific ASO ranks are cached separately in `asoAppRankSnapshots`.
 - `pnpm run research:aso` writes reports to `project/<slug>/reports/` and can reuse cache unless `--refresh` is passed.
+- The ASO report (`buildAsoReportMarkdown` in `lib/report.ts`) includes a Trend section comparing the two most recent `appKeywords` snapshot dates per project (rank/opportunity/popularity delta), shown only when at least two dates exist.
 - When changing commands, workflow, storage shape or folder conventions, update both `AGENTS.md` and `CLAUDE.md`.
+- Every new feature must be documented here (and in `AGENTS.md` if it affects rules/structure) in the same change that introduces it.

@@ -145,6 +145,38 @@ function formatKeywordRow(row: AppKeywordMetric): string {
   );
 }
 
+function formatTrendRows(previous: AppKeywordMetric[], latest: AppKeywordMetric[]): string[] {
+  const previousByKey = new Map(previous.map((row) => [`${row.country.toLowerCase()}:${row.keyword.toLowerCase()}`, row]));
+  const lines: string[] = [];
+
+  for (const row of [...latest].sort((a, b) => b.opportunityScore - a.opportunityScore)) {
+    const before = previousByKey.get(`${row.country.toLowerCase()}:${row.keyword.toLowerCase()}`);
+    if (!before) continue;
+
+    const rankDelta = formatDelta(before.appRank ?? null, row.appRank ?? null, { lowerIsBetter: true });
+    const oppDelta = formatDelta(before.opportunityScore, row.opportunityScore, { lowerIsBetter: false });
+    const popDelta = formatDelta(before.popularityScore, row.popularityScore, { lowerIsBetter: false });
+    const rank = row.appRank == null ? "-" : `#${row.appRank}`;
+
+    lines.push(
+      `${row.keyword.padEnd(30)} | ${row.country.toUpperCase()} | ` +
+        `rank: ${rank} (${rankDelta}) | opp: ${row.opportunityScore} (${oppDelta}) | pop: ${row.popularityScore} (${popDelta})`,
+    );
+  }
+
+  if (lines.length === 0) lines.push("No keywords found in both snapshots.");
+  return lines;
+}
+
+function formatDelta(before: number | null, after: number | null, options: { lowerIsBetter: boolean }): string {
+  if (before == null || after == null) return "n/a";
+  const diff = after - before;
+  if (diff === 0) return "=";
+  const improved = options.lowerIsBetter ? diff < 0 : diff > 0;
+  const arrow = improved ? "up" : "down";
+  return `${arrow} ${diff > 0 ? "+" : ""}${diff}`;
+}
+
 export function buildAsoReportMarkdown(data: AppData, project: Project): string {
   const keywords = data.appKeywords
     .filter((row) => row.projectId === project.id)
@@ -197,6 +229,20 @@ export function buildAsoReportMarkdown(data: AppData, project: Project): string 
   }
   lines.push("```");
   lines.push("");
+
+  const previousDate = dates[dates.length - 2];
+  if (previousDate) {
+    const previous = keywords.filter((row) => row.date === previousDate);
+    lines.push(`## Trend (${previousDate} -> ${latestDate})`);
+    lines.push("");
+    lines.push("```txt");
+    for (const row of formatTrendRows(previous, latest)) {
+      lines.push(row);
+    }
+    lines.push("```");
+    lines.push("");
+  }
+
   lines.push("## Breakdown by classification");
   lines.push("");
   lines.push("```txt");
