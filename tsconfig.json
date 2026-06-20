@@ -32,6 +32,8 @@
     "next-env.d.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
     "lib/**/*.ts",
     "scripts/**/*.ts",
     "mcp/**/*.ts",

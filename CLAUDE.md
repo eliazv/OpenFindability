@@ -46,3 +46,4 @@ Important implementation notes:
 - The ASO report (`buildAsoReportMarkdown` in `lib/report.ts`) includes a Trend section comparing the two most recent `appKeywords` snapshot dates per project (rank/opportunity/popularity delta), shown only when at least two dates exist.
 - When changing commands, workflow, storage shape or folder conventions, update both `AGENTS.md` and `CLAUDE.md`.
 - Every new feature must be documented here (and in `AGENTS.md` if it affects rules/structure) in the same change that introduces it.
+- UI uses Tailwind v4 + a small set of shadcn/ui primitives (`components/ui/`: button, card, badge, table, separator), styled to match the same design tokens used in the Wiloo project (`components.json`, `lib/utils.ts` cn helper). Add new shadcn primitives the same way (copy + adapt import paths) instead of hand-rolling CSS classes.

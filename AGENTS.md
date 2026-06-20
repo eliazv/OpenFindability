@@ -18,6 +18,7 @@ Do not introduce a monorepo, SaaS billing, auth, queues, cron scheduling or MCP 
 ## Structure
 
 - `app/`: Next.js App Router pages and route handlers.
+- `components/ui/`: shadcn/ui primitives (Tailwind v4, `cn` helper in `lib/utils.ts`), ported from the Wiloo project's design system.
 - `lib/`: store, connectors, sync logic, insights and shared types.
 - `scripts/`: CLI-like commands for local development.
 - `docs/`: public project documentation.
