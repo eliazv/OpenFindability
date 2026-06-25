@@ -87,10 +87,14 @@ AdMob's daily network report is a true daily total, safe to sum across dates and
 
 The home page shows a "Monetizzazione" section with two cards:
 
-- **AdMob**: revenue yesterday and this month (true sums).
-- **RevenueCat**: MRR, active subscribers and revenue over the last 28 days (latest snapshot only, summed across projects).
+- **AdMob**: revenue yesterday and this month (true sums), a trend badge comparing this month to the previous calendar month, and an area chart (`components/charts/admob-revenue-chart.tsx`) of daily revenue summed across projects over the last 30 days (`getAdmobRevenueTrend` in `lib/insights.ts`).
+- **RevenueCat**: MRR, active subscribers and revenue over the last 28 days (latest snapshot only, summed across projects), a trend badge comparing MRR at the start vs. end of the last 30 days, and an area chart (`components/charts/revenuecat-mrr-chart.tsx`) of MRR summed across projects over the last 30 days (`getRevenueCatMrrTrend` in `lib/insights.ts`).
 
-Both cards show a setup hint instead of numbers until at least one snapshot exists for that source.
+Both cards show a setup hint instead of numbers until at least one snapshot exists for that source. The charts use the shared `components/ui/chart.tsx` primitive (Recharts, ported from shadcn/Kiranism) and only render once there are at least two distinct dates of data.
+
+The "Progetti" table also includes per-project "Ricavi Ads" and "MRR" columns, reusing the same `summarizeProject` fields as the cards.
+
+All of this is still computed server-side from `data/openfindability.json` by plain functions in `lib/insights.ts` — the charts/tables are a presentation layer only. Nothing here changes how the data is synced, stored or scripted: `pnpm run sync*`, `pnpm run doctor` and the JSON store remain the source of truth and stay fully usable from the CLI/AI side without the web UI.
 
 ## Notes
 

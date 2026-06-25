@@ -129,18 +129,70 @@ export function summarizeMonetization(data: AppData) {
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toISOString().slice(0, 10);
   const monthPrefix = now.toISOString().slice(0, 7);
+  const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const previousMonthPrefix = previousMonthDate.toISOString().slice(0, 7);
 
   const latestRevenueCatByProject = groupLatestByProject(revenuecat);
 
   return {
     adRevenueYesterday: sum(admob.filter((metric) => metric.date === yesterdayStr), "revenue"),
     adRevenueMonth: sum(admob.filter((metric) => metric.date.startsWith(monthPrefix)), "revenue"),
+    adRevenuePreviousMonth: sum(admob.filter((metric) => metric.date.startsWith(previousMonthPrefix)), "revenue"),
     adCurrency: admob.find((metric) => metric.currency)?.currency,
     mrr: sum(latestRevenueCatByProject, "mrr"),
     activeSubscribers: sum(latestRevenueCatByProject, "activeSubscribers"),
     subscriptionRevenue28Days: sum(latestRevenueCatByProject, "revenue"),
     subscriptionCurrency: latestRevenueCatByProject.find((metric) => metric.currency)?.currency,
   };
+}
+
+// Daily trend points for charts, summed across projects. AdMob's `revenue` is a true daily
+// total (safe to sum). RevenueCat's `mrr`/`activeSubscribers` are point-in-time gauges synced
+// once per day per project, so summing them across projects on the same date is also safe; only
+// RevenueCat's rolling `revenue` field must never be summed this way.
+export type TrendPoint = { date: string; value: number };
+
+export function getAdmobRevenueTrend(data: AppData, days = 30): TrendPoint[] {
+  const admob = data.metricSnapshots.filter((metric) => metric.source === "admob" && metric.date >= cutoffDate(days));
+  return sumByDate(groupLatestByProjectAndDate(admob), "revenue");
+}
+
+export function getRevenueCatMrrTrend(data: AppData, days = 30): TrendPoint[] {
+  const revenuecat = data.metricSnapshots.filter(
+    (metric) => metric.source === "revenuecat" && metric.date >= cutoffDate(days),
+  );
+  return sumByDate(groupLatestByProjectAndDate(revenuecat), "mrr");
+}
+
+function cutoffDate(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+// Re-running a sync the same day can push duplicate (projectId, date) snapshots since
+// lib/sync.ts does not dedupe on insert; keep only the most recently created one per pair
+// before aggregating, so trend charts don't double-count.
+function groupLatestByProjectAndDate(snapshots: MetricSnapshot[]): MetricSnapshot[] {
+  const byKey = new Map<string, MetricSnapshot>();
+  for (const snapshot of snapshots) {
+    const key = `${snapshot.projectId}::${snapshot.date}`;
+    const existing = byKey.get(key);
+    if (!existing || snapshot.createdAt > existing.createdAt) {
+      byKey.set(key, snapshot);
+    }
+  }
+  return [...byKey.values()];
+}
+
+function sumByDate(snapshots: MetricSnapshot[], key: keyof MetricSnapshot): TrendPoint[] {
+  const byDate = new Map<string, number>();
+  for (const snapshot of snapshots) {
+    byDate.set(snapshot.date, (byDate.get(snapshot.date) ?? 0) + Number(snapshot[key] ?? 0));
+  }
+  return [...byDate.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([date, value]) => ({ date, value: Math.round(value * 100) / 100 }));
 }
 
 function sum<T extends Record<string, unknown>>(items: T[], key: keyof T): number {

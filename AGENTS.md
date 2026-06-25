@@ -19,7 +19,8 @@ Do not introduce a monorepo, SaaS billing, auth, queues, cron scheduling or MCP 
 ## Structure
 
 - `app/`: Next.js App Router pages and route handlers.
-- `components/ui/`: shadcn/ui primitives (Tailwind v4, `cn` helper in `lib/utils.ts`), ported from the Wiloo project's design system.
+- `components/ui/`: shadcn/ui primitives (Tailwind v4, `cn` helper in `lib/utils.ts`), ported from the Wiloo project's design system (which itself already used Kiranism's `next-shadcn-dashboard-starter` patterns, including `chart.tsx`).
+- `components/charts/`: dashboard chart components (Recharts via `components/ui/chart.tsx`), e.g. `admob-revenue-chart.tsx`, `revenuecat-mrr-chart.tsx`. Client components (`"use client"`); data is computed server-side in `lib/insights.ts` and passed in as props.
 - `lib/`: store, connectors, sync logic, insights and shared types.
 - `scripts/`: CLI-like commands for local development.
 - `docs/`: public project documentation.
@@ -66,3 +67,5 @@ pnpm build
 - Update `AGENTS.md` and `CLAUDE.md` whenever changing project workflow, commands, storage shape or conventions.
 - Document every new feature in `CLAUDE.md` (and here if it affects rules/structure) in the same change that introduces it.
 - ASO report Trend section: `buildAsoReportMarkdown` (`lib/report.ts`) compares the two most recent `appKeywords` snapshot dates per project, showing rank/opportunity/popularity delta; only rendered when 2+ dates exist.
+- Dashboard charts (`components/charts/`, `components/ui/chart.tsx`) are a presentation layer only — they read the same `lib/insights.ts` aggregates as everything else. Never move data fetching/aggregation into a client component; keep it in server-side functions so the data stays scriptable/queryable outside the web UI (CLI, `pnpm run report`, AI agents reading `lib/` directly).
+- `lib/insights.ts`'s `getAdmobRevenueTrend`/`getRevenueCatMrrTrend` dedupe `metricSnapshots` by `(projectId, date)` (keeping the latest `createdAt`) before summing across projects, since `lib/sync.ts` does not dedupe snapshots on insert.

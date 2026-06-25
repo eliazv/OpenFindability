@@ -34,6 +34,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "recharts": "^2.15.4",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.4.3"
   },

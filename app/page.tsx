@@ -1,10 +1,18 @@
-import { buildOpportunities, summarizeMonetization, summarizeProject } from "@/lib/insights";
+import {
+  buildOpportunities,
+  getAdmobRevenueTrend,
+  getRevenueCatMrrTrend,
+  summarizeMonetization,
+  summarizeProject,
+} from "@/lib/insights";
 import { readData, writeData } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AdmobRevenueChart } from "@/components/charts/admob-revenue-chart";
+import { RevenueCatMrrChart } from "@/components/charts/revenuecat-mrr-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +47,13 @@ export default async function HomePage() {
   const monetization = summarizeMonetization(data);
   const hasAdmobData = data.metricSnapshots.some((metric) => metric.source === "admob");
   const hasRevenueCatData = data.metricSnapshots.some((metric) => metric.source === "revenuecat");
+  const admobRevenueTrend = getAdmobRevenueTrend(data);
+  const revenueCatMrrTrend = getRevenueCatMrrTrend(data);
+  const adRevenueTrendPercent = trendPercent(monetization.adRevenuePreviousMonth, monetization.adRevenueMonth);
+  const mrrTrendPercent = trendPercent(
+    revenueCatMrrTrend.at(0)?.value,
+    revenueCatMrrTrend.at(-1)?.value,
+  );
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -86,8 +101,13 @@ export default async function HomePage() {
 
       <section className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle>AdMob</CardTitle>
+            {hasAdmobData && adRevenueTrendPercent !== undefined && (
+              <Badge variant={adRevenueTrendPercent >= 0 ? "success" : "destructive"}>
+                {formatTrend(adRevenueTrendPercent)} vs mese scorso
+              </Badge>
+            )}
           </CardHeader>
           <CardContent>
             {!hasAdmobData ? (
@@ -97,27 +117,37 @@ export default async function HomePage() {
                 <span className="font-mono text-xs">pnpm run sync:admob</span>.
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-sm text-muted-foreground">Ieri</span>
-                  <strong className="block text-2xl font-extrabold">
-                    {formatCurrency(monetization.adRevenueYesterday, monetization.adCurrency)}
-                  </strong>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-sm text-muted-foreground">Ieri</span>
+                    <strong className="block text-2xl font-extrabold">
+                      {formatCurrency(monetization.adRevenueYesterday, monetization.adCurrency)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Questo mese</span>
+                    <strong className="block text-2xl font-extrabold">
+                      {formatCurrency(monetization.adRevenueMonth, monetization.adCurrency)}
+                    </strong>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Questo mese</span>
-                  <strong className="block text-2xl font-extrabold">
-                    {formatCurrency(monetization.adRevenueMonth, monetization.adCurrency)}
-                  </strong>
-                </div>
+                {admobRevenueTrend.length > 1 && (
+                  <AdmobRevenueChart data={admobRevenueTrend} currency={monetization.adCurrency} />
+                )}
               </div>
             )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle>RevenueCat</CardTitle>
+            {hasRevenueCatData && mrrTrendPercent !== undefined && (
+              <Badge variant={mrrTrendPercent >= 0 ? "success" : "destructive"}>
+                {formatTrend(mrrTrendPercent)} MRR (30gg)
+              </Badge>
+            )}
           </CardHeader>
           <CardContent>
             {!hasRevenueCatData ? (
@@ -128,25 +158,30 @@ export default async function HomePage() {
                 <span className="font-mono text-xs">pnpm run sync:revenuecat</span>.
               </p>
             ) : (
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <span className="text-sm text-muted-foreground">MRR</span>
-                  <strong className="block text-2xl font-extrabold">
-                    {formatCurrency(monetization.mrr, monetization.subscriptionCurrency)}
-                  </strong>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <span className="text-sm text-muted-foreground">MRR</span>
+                    <strong className="block text-2xl font-extrabold">
+                      {formatCurrency(monetization.mrr, monetization.subscriptionCurrency)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Abbonati attivi</span>
+                    <strong className="block text-2xl font-extrabold">
+                      {monetization.activeSubscribers.toLocaleString("it-IT")}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Ricavi ultimi 28 giorni</span>
+                    <strong className="block text-2xl font-extrabold">
+                      {formatCurrency(monetization.subscriptionRevenue28Days, monetization.subscriptionCurrency)}
+                    </strong>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Abbonati attivi</span>
-                  <strong className="block text-2xl font-extrabold">
-                    {monetization.activeSubscribers.toLocaleString("it-IT")}
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Ricavi ultimi 28 giorni</span>
-                  <strong className="block text-2xl font-extrabold">
-                    {formatCurrency(monetization.subscriptionRevenue28Days, monetization.subscriptionCurrency)}
-                  </strong>
-                </div>
+                {revenueCatMrrTrend.length > 1 && (
+                  <RevenueCatMrrChart data={revenueCatMrrTrend} currency={monetization.subscriptionCurrency} />
+                )}
               </div>
             )}
           </CardContent>
@@ -223,6 +258,8 @@ export default async function HomePage() {
                   <TableHead>Click</TableHead>
                   <TableHead>Impression</TableHead>
                   <TableHead>Visitatori</TableHead>
+                  <TableHead>Ricavi Ads</TableHead>
+                  <TableHead>MRR</TableHead>
                   <TableHead>Opportunita&apos;</TableHead>
                 </TableRow>
               </TableHeader>
@@ -239,6 +276,8 @@ export default async function HomePage() {
                       <TableCell>{summary.clicks.toLocaleString("it-IT")}</TableCell>
                       <TableCell>{summary.impressions.toLocaleString("it-IT")}</TableCell>
                       <TableCell>{summary.visitors.toLocaleString("it-IT")}</TableCell>
+                      <TableCell>{formatCurrency(summary.adRevenue, summary.adCurrency)}</TableCell>
+                      <TableCell>{formatCurrency(summary.mrr ?? 0, summary.subscriptionCurrency)}</TableCell>
                       <TableCell>{summary.opportunities}</TableCell>
                     </TableRow>
                   );
@@ -261,4 +300,16 @@ function formatCurrency(amount: number, currency?: string) {
   } catch {
     return `${amount.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
   }
+}
+
+function trendPercent(previous: number | undefined, current: number | undefined) {
+  if (previous === undefined || current === undefined || previous <= 0) {
+    return undefined;
+  }
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
+function formatTrend(percent: number) {
+  const sign = percent >= 0 ? "+" : "";
+  return `${sign}${percent.toLocaleString("it-IT")}%`;
 }
