@@ -13,6 +13,6 @@ tsconfig.tsbuildinfo
 *service-account*.json
 vitaromagna-*.json
 private-notes/
-project/
+/project/
 secrets/
 sensibili/

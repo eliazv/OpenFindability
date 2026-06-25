@@ -20,7 +20,9 @@ Do not introduce a monorepo, SaaS billing, auth, queues, cron scheduling or MCP 
 
 - `app/`: Next.js App Router pages and route handlers.
 - `components/ui/`: shadcn/ui primitives (Tailwind v4, `cn` helper in `lib/utils.ts`), ported from the Wiloo project's design system (which itself already used Kiranism's `next-shadcn-dashboard-starter` patterns, including `chart.tsx`).
-- `components/charts/`: dashboard chart components (Recharts via `components/ui/chart.tsx`), e.g. `admob-revenue-chart.tsx`, `revenuecat-mrr-chart.tsx`. Client components (`"use client"`); data is computed server-side in `lib/insights.ts` and passed in as props.
+- `components/charts/`: dashboard chart components (Recharts via `components/ui/chart.tsx`), e.g. `admob-revenue-chart.tsx`, `revenuecat-mrr-chart.tsx`, `metric-trend-chart.tsx` (generic GSC/Umami trend chart). Client components (`"use client"`); data is computed server-side in `lib/insights.ts` and passed in as props.
+- `app/project/[slug]/page.tsx`: per-project dashboard, a grid of cards (one per data source) that reads the same `lib/insights.ts`/`lib/report.ts` aggregates as the homepage, scoped to one project.
+- `components/app-sidebar.tsx` + `components/ui/sidebar.tsx`: project navigation sidebar (Kiranism/shadcn `Sidebar` primitive), listing all projects with links to their per-project dashboard.
 - `lib/`: store, connectors, sync logic, insights and shared types.
 - `scripts/`: CLI-like commands for local development.
 - `docs/`: public project documentation.
@@ -71,3 +73,4 @@ pnpm build
 - `lib/insights.ts`'s `getAdmobRevenueTrend`/`getRevenueCatMrrTrend` dedupe `metricSnapshots` by `(projectId, date)` (keeping the latest `createdAt`) before summing across projects, as a safety net for any data synced before the dedupe-on-insert fix below.
 - `lib/sync.ts` upserts on insert (`upsertByKey`/`upsertSnapshots`/`upsertQueries`/`upsertPages`): re-running `pnpm run sync` the same day replaces existing `metricSnapshots`/`searchQueries`/`pageMetrics` rows sharing the same key instead of appending duplicates. `appReviews` keeps its own `reviewId` dedupe; `appKeywords` (ASO) stays append-only.
 - Monetization report: `buildMonetizationReportMarkdown` (`lib/report.ts`), written by `pnpm run report -- <slug> monetization` (or `all`) to `project/<slug>/reports/<date>-monetization-data.md`. Mirrors the GSC/ASO report pattern; skipped when the project has neither `admobAppId` nor `revenueCatProjectId` configured.
+- Per-project dashboard (`app/project/[slug]/page.tsx`): each card (GSC, Umami, AdMob, RevenueCat, top pages/queries, ASO keywords, Play Store/reviews, opportunities, sync log) is rendered only when that project actually has data for that source — hidden entirely otherwise (no "not configured" placeholder, unlike the homepage's Monetizzazione cards). The sidebar (`components/app-sidebar.tsx`) lists every project and links to its dashboard; both are presentation only, reading the same `lib/insights.ts`/`lib/report.ts` server-side aggregates.

@@ -1,5 +1,5 @@
 import { createId } from "@/lib/id";
-import type { AppData, MetricSnapshot, Opportunity } from "@/lib/types";
+import type { AppData, MetricSnapshot, Opportunity, SourceType } from "@/lib/types";
 
 export function buildOpportunities(data: AppData): Opportunity[] {
   const detectedAt = new Date().toISOString();
@@ -162,6 +162,22 @@ export function getRevenueCatMrrTrend(data: AppData, days = 30): TrendPoint[] {
     (metric) => metric.source === "revenuecat" && metric.date >= cutoffDate(days),
   );
   return sumByDate(groupLatestByProjectAndDate(revenuecat), "mrr");
+}
+
+// Single-project version of the trend helpers above, for the per-project dashboard. Since the
+// filtered set only ever contains one projectId, groupLatestByProjectAndDate/sumByDate just
+// dedupe re-synced same-day rows and return one point per date instead of summing across projects.
+export function getProjectMetricTrend(
+  data: AppData,
+  projectId: string,
+  source: SourceType,
+  key: keyof MetricSnapshot,
+  days = 30,
+): TrendPoint[] {
+  const snapshots = data.metricSnapshots.filter(
+    (metric) => metric.projectId === projectId && metric.source === source && metric.date >= cutoffDate(days),
+  );
+  return sumByDate(groupLatestByProjectAndDate(snapshots), key);
 }
 
 function cutoffDate(days: number): string {

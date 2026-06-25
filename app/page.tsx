@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import {
   buildOpportunities,
   getAdmobRevenueTrend,
@@ -56,7 +58,7 @@ export default async function HomePage() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <header className="mb-8 flex flex-col items-start justify-between gap-6 sm:flex-row">
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primary">OpenFindability v0.1</p>
@@ -269,7 +271,9 @@ export default async function HomePage() {
                   return (
                     <TableRow key={project.id}>
                       <TableCell>
-                        <strong>{project.name}</strong>
+                        <Link href={`/project/${project.slug}`} className="hover:underline">
+                          <strong>{project.name}</strong>
+                        </Link>
                         <div className="text-sm text-muted-foreground">{project.websiteUrl}</div>
                       </TableCell>
                       <TableCell>{project.type}</TableCell>
@@ -287,7 +291,7 @@ export default async function HomePage() {
           </CardContent>
         </Card>
       </section>
-    </main>
+    </div>
   );
 }
 
