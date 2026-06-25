@@ -96,8 +96,17 @@ The "Progetti" table also includes per-project "Ricavi Ads" and "MRR" columns, r
 
 All of this is still computed server-side from `data/openfindability.json` by plain functions in `lib/insights.ts` — the charts/tables are a presentation layer only. Nothing here changes how the data is synced, stored or scripted: `pnpm run sync*`, `pnpm run doctor` and the JSON store remain the source of truth and stay fully usable from the CLI/AI side without the web UI.
 
+## Report
+
+```bash
+pnpm run report -- <project-slug> monetization
+```
+
+Writes `project/<slug>/reports/<date>-monetization-data.md` (`buildMonetizationReportMarkdown` in `lib/report.ts`): AdMob revenue for the last sync day, this month and the previous month (true daily sums) plus a daily table for the last 30 synced days; RevenueCat's latest MRR, active subscribers, active trials and new customers, plus its rolling 28-day revenue and an MRR trend table for the last 30 synced days. Skipped (with a log message) if the project has neither `admobAppId` nor `revenueCatProjectId` configured. Also included when running `pnpm run report -- <slug> all`.
+
 ## Notes
 
 - Both connectors are part of the default `pnpm run sync` (like GSC/Umami/Play Console), since each is a single cheap API call per project — unlike ASO, which stays strictly opt-in (`pnpm run sync:aso`) due to rate limits.
 - `pnpm run doctor` checks that `REVENUECAT_API_KEY` and the full AdMob credential set are configured, and flags stale syncs per project/source.
 - RevenueCat's Charts time-series API (which would give true daily revenue instead of a rolling window) is not implemented yet — flagged as a known v0.1 limitation rather than guessed at.
+- `lib/sync.ts` upserts `metricSnapshots` by `(projectId, source, date)` on every sync, so re-running `pnpm run sync:revenuecat`/`pnpm run sync:admob` (or the default `pnpm run sync`) the same day replaces that day's row instead of duplicating it — safe for the monthly/trend sums above.

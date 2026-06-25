@@ -9,7 +9,31 @@ import { syncRevenueCatProject } from "@/lib/connectors/revenuecat";
 import { syncAdmobProject } from "@/lib/connectors/admob";
 import { upsertAsoCacheRows } from "@/lib/aso-cache";
 import { readData, writeData } from "@/lib/store";
-import type { ConnectorRun, SourceType, SyncOptions, SyncResult } from "@/lib/types";
+import type { ConnectorRun, MetricSnapshot, PageMetric, SearchQueryMetric, SourceType, SyncOptions, SyncResult } from "@/lib/types";
+
+// Re-running a sync the same day must not pile up duplicate rows for the same
+// (project, date[, source]) key, since reports/insights sum these by date.
+function upsertByKey<T>(existing: T[], incoming: T[], keyOf: (item: T) => string): T[] {
+  if (incoming.length === 0) return existing;
+  const keys = new Set(incoming.map(keyOf));
+  return [...existing.filter((item) => !keys.has(keyOf(item))), ...incoming];
+}
+
+function upsertSnapshots(existing: MetricSnapshot[], incoming: MetricSnapshot[]): MetricSnapshot[] {
+  return upsertByKey(existing, incoming, (snapshot) => `${snapshot.projectId}::${snapshot.source}::${snapshot.date}`);
+}
+
+function upsertQueries(existing: SearchQueryMetric[], incoming: SearchQueryMetric[]): SearchQueryMetric[] {
+  return upsertByKey(
+    existing,
+    incoming,
+    (row) => `${row.projectId}::${row.date}::${row.query}::${row.page ?? ""}`,
+  );
+}
+
+function upsertPages(existing: PageMetric[], incoming: PageMetric[]): PageMetric[] {
+  return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.date}::${row.page}`);
+}
 
 export async function syncProjects(options: SyncOptions = {}): Promise<SyncResult[]> {
   const source = options.source;
@@ -22,9 +46,9 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
     if (!source || source === "gsc") {
       try {
         const synced = await syncGscProject(project, daysAgo(backfillDays), daysAgo(2));
-        data.metricSnapshots.push(...synced.snapshots);
-        data.searchQueries.push(...synced.queries);
-        data.pageMetrics.push(...synced.pages);
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
+        data.searchQueries = upsertQueries(data.searchQueries, synced.queries);
+        data.pageMetrics = upsertPages(data.pageMetrics, synced.pages);
         results.push(synced.result);
         data.connectorRuns.push(toRun("gsc", project.id, startedAt, synced.result));
       } catch (error) {
@@ -37,7 +61,7 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
     if (!source || source === "umami") {
       try {
         const synced = await syncUmamiProject(project, daysAgo(1));
-        data.metricSnapshots.push(...synced.snapshots);
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
         results.push(synced.result);
         data.connectorRuns.push(toRun("umami", project.id, startedAt, synced.result));
       } catch (error) {
@@ -74,7 +98,7 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
         const synced = await syncPlayConsoleProject(project, daysAgo(backfillDays));
         const newReviews = synced.reviews.filter((r) => !existingReviewIds.has(r.reviewId));
         data.appReviews.push(...newReviews);
-        data.metricSnapshots.push(...synced.snapshots);
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
         results.push(synced.result);
         data.connectorRuns.push(toRun("play_console", project.id, startedAt, synced.result));
       } catch (error) {
@@ -87,7 +111,7 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
     if (!source || source === "revenuecat") {
       try {
         const synced = await syncRevenueCatProject(project, daysAgo(0));
-        data.metricSnapshots.push(...synced.snapshots);
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
         results.push(synced.result);
         data.connectorRuns.push(toRun("revenuecat", project.id, startedAt, synced.result));
       } catch (error) {
@@ -100,7 +124,7 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
     if (!source || source === "admob") {
       try {
         const synced = await syncAdmobProject(project, daysAgo(1));
-        data.metricSnapshots.push(...synced.snapshots);
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
         results.push(synced.result);
         data.connectorRuns.push(toRun("admob", project.id, startedAt, synced.result));
       } catch (error) {

@@ -1,4 +1,4 @@
-import type { AppData, AppKeywordMetric, PageMetric, Project, SearchQueryMetric } from "@/lib/types";
+import type { AppData, AppKeywordMetric, MetricSnapshot, PageMetric, Project, SearchQueryMetric } from "@/lib/types";
 
 export type AggregatedRow = {
   key: string;
@@ -263,6 +263,120 @@ export function buildAsoReportMarkdown(data: AppData, project: Project): string 
   lines.push("  moderate         average on both dimensions");
   lines.push("  low_volume       few searches -> only relevant for very niche apps");
   lines.push("  avoid            not worth targeting");
+  lines.push("```");
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+function formatMoney(amount: number, currency?: string): string {
+  if (!currency) {
+    return amount.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  try {
+    return amount.toLocaleString("it-IT", { style: "currency", currency });
+  } catch {
+    return `${amount.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  }
+}
+
+function sumRevenue(rows: MetricSnapshot[]): number {
+  return rows.reduce((total, row) => total + (row.revenue ?? 0), 0);
+}
+
+export function buildMonetizationReportMarkdown(data: AppData, project: Project): string {
+  const admob = data.metricSnapshots
+    .filter((row) => row.projectId === project.id && row.source === "admob")
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+  const revenuecat = data.metricSnapshots
+    .filter((row) => row.projectId === project.id && row.source === "revenuecat")
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  const today = new Date().toISOString().slice(0, 10);
+  const lines: string[] = [];
+  lines.push(`# ${project.name} - Monetization report - ${today}`);
+  lines.push("");
+  lines.push("## Scope");
+  lines.push("");
+  lines.push("```txt");
+  lines.push(`AdMob app id: ${project.admobAppId ?? "(not configured)"}`);
+  lines.push(`RevenueCat project id: ${project.revenueCatProjectId ?? "(not configured)"}`);
+  lines.push("```");
+  lines.push("");
+
+  if (admob.length === 0 && revenuecat.length === 0) {
+    lines.push("No monetization data found for this project yet.");
+    lines.push("");
+    lines.push("```txt");
+    lines.push("Configure admobAppId/revenueCatProjectId on the project, set the");
+    lines.push("ADMOB_*/REVENUECAT_API_KEY env vars in .env, then run `pnpm run sync`.");
+    lines.push("```");
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  if (admob.length > 0) {
+    const currency = admob.find((row) => row.currency)?.currency;
+    const now = new Date();
+    const monthPrefix = now.toISOString().slice(0, 7);
+    const previousMonthPrefix = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7);
+    const monthTotal = sumRevenue(admob.filter((row) => row.date.startsWith(monthPrefix)));
+    const previousMonthTotal = sumRevenue(admob.filter((row) => row.date.startsWith(previousMonthPrefix)));
+    const latest = admob[admob.length - 1];
+
+    lines.push("## AdMob");
+    lines.push("");
+    lines.push("```txt");
+    lines.push(`Last sync date:        ${latest.date}`);
+    lines.push(`Revenue (that day):    ${formatMoney(latest.revenue ?? 0, currency)}`);
+    lines.push(`Revenue (this month):  ${formatMoney(monthTotal, currency)}`);
+    lines.push(`Revenue (prev. month): ${formatMoney(previousMonthTotal, currency)}`);
+    lines.push("```");
+    lines.push("");
+    lines.push(`## AdMob daily revenue (last ${Math.min(admob.length, 30)} days)`);
+    lines.push("");
+    lines.push("```txt");
+    for (const row of admob.slice(-30)) {
+      lines.push(
+        `${row.date} | revenue: ${formatMoney(row.revenue ?? 0, currency)} | impressions: ${(row.impressions ?? 0).toLocaleString("it-IT")} | clicks: ${row.clicks ?? 0}`,
+      );
+    }
+    lines.push("```");
+    lines.push("");
+  }
+
+  if (revenuecat.length > 0) {
+    const currency = revenuecat.find((row) => row.currency)?.currency;
+    const latest = revenuecat[revenuecat.length - 1];
+
+    lines.push("## RevenueCat");
+    lines.push("");
+    lines.push("```txt");
+    lines.push(`Last sync date:            ${latest.date}`);
+    lines.push(`MRR:                       ${formatMoney(latest.mrr ?? 0, currency)}`);
+    lines.push(`Active subscribers:        ${latest.activeSubscribers ?? 0}`);
+    lines.push(`Active trials:             ${latest.activeTrials ?? 0}`);
+    lines.push(`New customers (latest):    ${latest.newCustomers ?? 0}`);
+    lines.push(`Revenue (rolling 28 days): ${formatMoney(latest.revenue ?? 0, currency)}`);
+    lines.push("```");
+    lines.push("");
+    lines.push(`## RevenueCat MRR trend (last ${Math.min(revenuecat.length, 30)} days)`);
+    lines.push("");
+    lines.push("```txt");
+    for (const row of revenuecat.slice(-30)) {
+      lines.push(`${row.date} | mrr: ${formatMoney(row.mrr ?? 0, currency)} | active subs: ${row.activeSubscribers ?? 0}`);
+    }
+    lines.push("```");
+    lines.push("");
+  }
+
+  lines.push("## Notes");
+  lines.push("");
+  lines.push("```txt");
+  lines.push("This is a raw data dump generated by `pnpm run report`.");
+  lines.push("RevenueCat's 'revenue (rolling 28 days)' is a rolling window, not a daily");
+  lines.push("total -- never sum it across the dates listed above. AdMob's daily revenue");
+  lines.push("is a true daily total and safe to sum, as done for the monthly totals.");
   lines.push("```");
   lines.push("");
 

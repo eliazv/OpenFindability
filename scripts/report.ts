@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildAsoReportMarkdown, buildGscReportMarkdown } from "@/lib/report";
+import { buildAsoReportMarkdown, buildGscReportMarkdown, buildMonetizationReportMarkdown } from "@/lib/report";
 import { readData } from "@/lib/store";
 import type { AppData, Project, SourceType } from "@/lib/types";
 
@@ -27,7 +27,7 @@ async function main() {
   const args = process.argv.slice(2).filter((token) => token !== "--");
   const slug = args[0];
   if (!slug) {
-    throw new Error("Usage: pnpm run report -- <project-slug> [gsc|aso|all]");
+    throw new Error("Usage: pnpm run report -- <project-slug> [gsc|aso|monetization|all]");
   }
   const section = args[1] ?? "all";
 
@@ -58,6 +58,19 @@ async function main() {
       const fileName = `${today}-aso-data.md`;
       await writeFile(path.join(reportsDir, fileName), markdown, "utf8");
       console.log(`Wrote ASO data report to project/${slug}/reports/${fileName}`);
+    }
+  }
+
+  if (section === "monetization" || section === "all") {
+    if (!project.admobAppId && !project.revenueCatProjectId) {
+      console.log(`Skipping monetization report for "${slug}": no admobAppId/revenueCatProjectId configured on the project.`);
+    } else {
+      if (project.admobAppId) warnIfStale(data, project, "admob", "AdMob");
+      if (project.revenueCatProjectId) warnIfStale(data, project, "revenuecat", "RevenueCat");
+      const markdown = buildMonetizationReportMarkdown(data, project);
+      const fileName = `${today}-monetization-data.md`;
+      await writeFile(path.join(reportsDir, fileName), markdown, "utf8");
+      console.log(`Wrote monetization data report to project/${slug}/reports/${fileName}`);
     }
   }
 }
