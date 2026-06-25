@@ -1,5 +1,5 @@
 import { createId } from "@/lib/id";
-import type { AppData, Opportunity } from "@/lib/types";
+import type { AppData, MetricSnapshot, Opportunity } from "@/lib/types";
 
 export function buildOpportunities(data: AppData): Opportunity[] {
   const detectedAt = new Date().toISOString();
@@ -96,6 +96,9 @@ export function summarizeProject(data: AppData, projectId: string) {
   const snapshots = data.metricSnapshots.filter((metric) => metric.projectId === projectId);
   const gsc = snapshots.filter((metric) => metric.source === "gsc");
   const umami = snapshots.filter((metric) => metric.source === "umami");
+  const admob = snapshots.filter((metric) => metric.source === "admob");
+  const revenuecat = snapshots.filter((metric) => metric.source === "revenuecat");
+  const latestRevenueCat = latestByDate(revenuecat);
   const opportunities = data.opportunities.filter((opportunity) => opportunity.projectId === projectId);
 
   return {
@@ -103,13 +106,63 @@ export function summarizeProject(data: AppData, projectId: string) {
     impressions: sum(gsc, "impressions"),
     visitors: sum(umami, "visitors"),
     pageviews: sum(umami, "pageviews"),
+    adRevenue: sum(admob, "revenue"),
+    adCurrency: admob.find((metric) => metric.currency)?.currency,
+    mrr: latestRevenueCat?.mrr,
+    activeSubscribers: latestRevenueCat?.activeSubscribers,
+    subscriptionRevenue28Days: latestRevenueCat?.revenue,
+    subscriptionCurrency: latestRevenueCat?.currency,
     opportunities: opportunities.length,
     highPriority: opportunities.filter((opportunity) => opportunity.severity === "high").length,
   };
 }
 
+// RevenueCat's `revenue` field is a rolling 28-day window, not a true daily total: summing it
+// across snapshots would double-count, so monetization totals use only the latest snapshot per
+// project. AdMob's `revenue` is a true daily total and is safe to sum across dates/projects.
+export function summarizeMonetization(data: AppData) {
+  const admob = data.metricSnapshots.filter((metric) => metric.source === "admob");
+  const revenuecat = data.metricSnapshots.filter((metric) => metric.source === "revenuecat");
+
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const monthPrefix = now.toISOString().slice(0, 7);
+
+  const latestRevenueCatByProject = groupLatestByProject(revenuecat);
+
+  return {
+    adRevenueYesterday: sum(admob.filter((metric) => metric.date === yesterdayStr), "revenue"),
+    adRevenueMonth: sum(admob.filter((metric) => metric.date.startsWith(monthPrefix)), "revenue"),
+    adCurrency: admob.find((metric) => metric.currency)?.currency,
+    mrr: sum(latestRevenueCatByProject, "mrr"),
+    activeSubscribers: sum(latestRevenueCatByProject, "activeSubscribers"),
+    subscriptionRevenue28Days: sum(latestRevenueCatByProject, "revenue"),
+    subscriptionCurrency: latestRevenueCatByProject.find((metric) => metric.currency)?.currency,
+  };
+}
+
 function sum<T extends Record<string, unknown>>(items: T[], key: keyof T): number {
   return items.reduce((total, item) => total + Number(item[key] ?? 0), 0);
+}
+
+function latestByDate(snapshots: MetricSnapshot[]): MetricSnapshot | undefined {
+  return snapshots.reduce<MetricSnapshot | undefined>(
+    (latest, current) => (!latest || current.date > latest.date ? current : latest),
+    undefined,
+  );
+}
+
+function groupLatestByProject(snapshots: MetricSnapshot[]): MetricSnapshot[] {
+  const byProject = new Map<string, MetricSnapshot>();
+  for (const snapshot of snapshots) {
+    const existing = byProject.get(snapshot.projectId);
+    if (!existing || snapshot.date > existing.date) {
+      byProject.set(snapshot.projectId, snapshot);
+    }
+  }
+  return [...byProject.values()];
 }
 
 function expectedCtrForPosition(position: number) {

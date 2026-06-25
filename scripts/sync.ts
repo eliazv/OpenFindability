@@ -4,7 +4,7 @@ import type { SourceType } from "@/lib/types";
 
 async function main() {
   const arg = process.argv[2];
-  const validSources: SourceType[] = ["gsc", "umami", "play_console", "aso"];
+  const validSources: SourceType[] = ["gsc", "umami", "play_console", "aso", "revenuecat", "admob"];
   const source = validSources.includes(arg as SourceType) ? (arg as SourceType) : undefined;
   const results = await syncProjects({ source });
 

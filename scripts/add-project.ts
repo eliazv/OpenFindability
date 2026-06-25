@@ -18,6 +18,8 @@ type Args = {
   respectAsoAppId?: string;
   asoKeywords?: string;
   asoCountries?: string;
+  revenueCatProjectId?: string;
+  admobAppId?: string;
   notes?: string;
 };
 
@@ -44,6 +46,8 @@ function parseArgs(argv: string[]): Args {
       case "respect-aso-app-id": args.respectAsoAppId = value; break;
       case "aso-keywords": args.asoKeywords = value; break;
       case "aso-countries": args.asoCountries = value; break;
+      case "revenuecat-project-id": args.revenueCatProjectId = value; break;
+      case "admob-app-id": args.admobAppId = value; break;
       case "notes": args.notes = value; break;
       default:
         throw new Error(`Unknown argument --${key}`);
@@ -69,7 +73,8 @@ async function main() {
       "Usage: pnpm run project:add -- --name \"Project Name\" [--slug slug] [--type web|app|web_app] " +
         "[--category Category] [--url https://example.com/] [--gsc sc-domain:example.com] " +
         "[--umami <websiteId>] [--play-console com.example.app] [--app-store-track-id 123] " +
-        "[--respect-aso-app-id 3] [--aso-keywords \"one,two\"] [--aso-countries it,us] [--notes \"...\"]",
+        "[--respect-aso-app-id 3] [--aso-keywords \"one,two\"] [--aso-countries it,us] " +
+        "[--revenuecat-project-id proj_xxx] [--admob-app-id ca-app-pub-xxx~yyy] [--notes \"...\"]",
     );
   }
 
@@ -95,6 +100,8 @@ async function main() {
     respectAsoAppId: args.respectAsoAppId ? Number(args.respectAsoAppId) : undefined,
     asoKeywords: splitCsv(args.asoKeywords),
     asoCountries: splitCsv(args.asoCountries),
+    revenueCatProjectId: args.revenueCatProjectId,
+    admobAppId: args.admobAppId,
     notes: args.notes,
     createdAt: now,
     updatedAt: now,
@@ -117,8 +124,17 @@ async function main() {
   console.log(`Created folders: project/${slug}/{reports,context,notes}`);
   console.log(`Total projects: ${data.projects.length}`);
 
-  if (!project.gscProperty && !project.umamiWebsiteId && !project.playConsolePackageName && !project.asoKeywords?.length) {
-    console.log("Note: no data source configured yet (gsc/umami/play-console/aso). Add one before running `pnpm run sync`.");
+  if (
+    !project.gscProperty &&
+    !project.umamiWebsiteId &&
+    !project.playConsolePackageName &&
+    !project.asoKeywords?.length &&
+    !project.revenueCatProjectId &&
+    !project.admobAppId
+  ) {
+    console.log(
+      "Note: no data source configured yet (gsc/umami/play-console/aso/revenuecat/admob). Add one before running `pnpm run sync`.",
+    );
   }
 }
 

@@ -5,7 +5,8 @@ import type { SourceType } from "@/lib/types";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const sourceParam = url.searchParams.get("source");
-  const source = sourceParam === "gsc" || sourceParam === "umami" ? (sourceParam as SourceType) : undefined;
+  const validSources: SourceType[] = ["gsc", "umami", "play_console", "revenuecat", "admob"];
+  const source = validSources.includes(sourceParam as SourceType) ? (sourceParam as SourceType) : undefined;
   const results = await syncProjects({ source });
   return NextResponse.json({ results });
 }

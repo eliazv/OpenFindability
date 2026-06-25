@@ -15,6 +15,8 @@ export function createDemoData(): AppData {
       websiteUrl: "https://example.com",
       gscProperty: "sc-domain:example.com",
       umamiWebsiteId: "demo-vitaromagna",
+      revenueCatProjectId: "demo_proj_vitaromagna",
+      admobAppId: "ca-app-pub-demo~111",
       notes: "Progetto demo per opportunita' SEO locali.",
       createdAt,
       updatedAt: createdAt,
@@ -28,6 +30,8 @@ export function createDemoData(): AppData {
       websiteUrl: "https://openfindability.local",
       gscProperty: "https://openfindability.local/",
       umamiWebsiteId: "demo-openfindability",
+      revenueCatProjectId: "demo_proj_openfindability",
+      admobAppId: "ca-app-pub-demo~222",
       notes: "Dashboard demo del prodotto.",
       createdAt,
       updatedAt: createdAt,
@@ -66,6 +70,35 @@ export function createDemoData(): AppData {
         date,
         visitors,
         pageviews: Math.round(visitors * 1.8),
+        rawJson: { demo: true },
+        createdAt,
+      });
+
+      metricSnapshots.push({
+        id: createId("metric"),
+        projectId: project.id,
+        source: "admob",
+        date,
+        revenue: Math.round((1.1 + growth * 0.04 + Math.sin(dateIndex / 5) * 0.3) * 100) / 100,
+        impressions: 750 + growth * 7,
+        clicks: 11 + Math.round(growth * 0.25),
+        adRequests: 1100 + growth * 9,
+        currency: "EUR",
+        rawJson: { demo: true },
+        createdAt,
+      });
+
+      metricSnapshots.push({
+        id: createId("metric"),
+        projectId: project.id,
+        source: "revenuecat",
+        date,
+        revenue: Math.round((35 + growth * 1.3) * 100) / 100,
+        mrr: Math.round((12 + growth * 0.5) * 100) / 100,
+        activeSubscribers: 6 + Math.round(growth * 0.18),
+        activeTrials: 2 + (dateIndex % 3),
+        newCustomers: dateIndex % 4,
+        currency: "EUR",
         rawJson: { demo: true },
         createdAt,
       });

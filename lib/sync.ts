@@ -5,6 +5,8 @@ import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { syncAsoProject } from "@/lib/connectors/aso";
+import { syncRevenueCatProject } from "@/lib/connectors/revenuecat";
+import { syncAdmobProject } from "@/lib/connectors/admob";
 import { upsertAsoCacheRows } from "@/lib/aso-cache";
 import { readData, writeData } from "@/lib/store";
 import type { ConnectorRun, SourceType, SyncOptions, SyncResult } from "@/lib/types";
@@ -79,6 +81,32 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
         const result = failed("play_console", project.id, error);
         results.push(result);
         data.connectorRuns.push(toRun("play_console", project.id, startedAt, result));
+      }
+    }
+
+    if (!source || source === "revenuecat") {
+      try {
+        const synced = await syncRevenueCatProject(project, daysAgo(0));
+        data.metricSnapshots.push(...synced.snapshots);
+        results.push(synced.result);
+        data.connectorRuns.push(toRun("revenuecat", project.id, startedAt, synced.result));
+      } catch (error) {
+        const result = failed("revenuecat", project.id, error);
+        results.push(result);
+        data.connectorRuns.push(toRun("revenuecat", project.id, startedAt, result));
+      }
+    }
+
+    if (!source || source === "admob") {
+      try {
+        const synced = await syncAdmobProject(project, daysAgo(1));
+        data.metricSnapshots.push(...synced.snapshots);
+        results.push(synced.result);
+        data.connectorRuns.push(toRun("admob", project.id, startedAt, synced.result));
+      } catch (error) {
+        const result = failed("admob", project.id, error);
+        results.push(result);
+        data.connectorRuns.push(toRun("admob", project.id, startedAt, result));
       }
     }
   }

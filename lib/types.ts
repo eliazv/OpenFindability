@@ -1,4 +1,4 @@
-export type SourceType = "gsc" | "umami" | "play_console" | "aso";
+export type SourceType = "gsc" | "umami" | "play_console" | "aso" | "revenuecat" | "admob";
 
 export type ProjectType = "web" | "app" | "web_app";
 
@@ -16,6 +16,8 @@ export type Project = {
   respectAsoAppId?: number;
   asoKeywords?: string[];
   asoCountries?: string[];
+  revenueCatProjectId?: string;
+  admobAppId?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -34,6 +36,13 @@ export type MetricSnapshot = {
   pageviews?: number;
   avgRating?: number;
   totalReviews?: number;
+  revenue?: number;
+  mrr?: number;
+  activeSubscribers?: number;
+  activeTrials?: number;
+  newCustomers?: number;
+  adRequests?: number;
+  currency?: string;
   rawJson?: unknown;
   createdAt: string;
 };

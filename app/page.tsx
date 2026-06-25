@@ -1,4 +1,4 @@
-import { buildOpportunities, summarizeProject } from "@/lib/insights";
+import { buildOpportunities, summarizeMonetization, summarizeProject } from "@/lib/insights";
 import { readData, writeData } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,10 @@ export default async function HomePage() {
 
   const topOpportunities = data.opportunities.slice(0, 8);
   const lastRuns = data.connectorRuns.slice(-6).reverse();
+
+  const monetization = summarizeMonetization(data);
+  const hasAdmobData = data.metricSnapshots.some((metric) => metric.source === "admob");
+  const hasRevenueCatData = data.metricSnapshots.some((metric) => metric.source === "revenuecat");
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -76,6 +80,75 @@ export default async function HomePage() {
           <CardContent className="grid gap-1.5">
             <span className="text-sm text-muted-foreground">Visitatori Umami</span>
             <strong className="text-3xl font-extrabold">{totals.visitors.toLocaleString("it-IT")}</strong>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>AdMob</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!hasAdmobData ? (
+              <p className="text-sm text-muted-foreground">
+                Nessun dato AdMob ancora. Configura <span className="font-mono text-xs">admobAppId</span> sul progetto
+                e le variabili <span className="font-mono text-xs">ADMOB_*</span> nel <span className="font-mono text-xs">.env</span>, poi esegui{" "}
+                <span className="font-mono text-xs">pnpm run sync:admob</span>.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-sm text-muted-foreground">Ieri</span>
+                  <strong className="block text-2xl font-extrabold">
+                    {formatCurrency(monetization.adRevenueYesterday, monetization.adCurrency)}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Questo mese</span>
+                  <strong className="block text-2xl font-extrabold">
+                    {formatCurrency(monetization.adRevenueMonth, monetization.adCurrency)}
+                  </strong>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>RevenueCat</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!hasRevenueCatData ? (
+              <p className="text-sm text-muted-foreground">
+                Nessun dato RevenueCat ancora. Configura <span className="font-mono text-xs">revenueCatProjectId</span>{" "}
+                sul progetto e <span className="font-mono text-xs">REVENUECAT_API_KEY</span> nel{" "}
+                <span className="font-mono text-xs">.env</span>, poi esegui{" "}
+                <span className="font-mono text-xs">pnpm run sync:revenuecat</span>.
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <span className="text-sm text-muted-foreground">MRR</span>
+                  <strong className="block text-2xl font-extrabold">
+                    {formatCurrency(monetization.mrr, monetization.subscriptionCurrency)}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Abbonati attivi</span>
+                  <strong className="block text-2xl font-extrabold">
+                    {monetization.activeSubscribers.toLocaleString("it-IT")}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Ricavi ultimi 28 giorni</span>
+                  <strong className="block text-2xl font-extrabold">
+                    {formatCurrency(monetization.subscriptionRevenue28Days, monetization.subscriptionCurrency)}
+                  </strong>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </section>
@@ -177,4 +250,15 @@ export default async function HomePage() {
       </section>
     </main>
   );
+}
+
+function formatCurrency(amount: number, currency?: string) {
+  if (!currency) {
+    return amount.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  try {
+    return amount.toLocaleString("it-IT", { style: "currency", currency });
+  } catch {
+    return `${amount.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  }
 }

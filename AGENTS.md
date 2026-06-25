@@ -10,6 +10,7 @@ The v0.1 scope is intentionally simple:
 - Local JSON storage in `data/openfindability.json`.
 - Google Search Console and Umami connectors.
 - Local RespectASO connector for ASO research.
+- RevenueCat and AdMob connectors for app monetization stats.
 - Manual sync only.
 - SEO opportunities from imported metrics.
 
@@ -38,6 +39,9 @@ pnpm dev
 pnpm run doctor
 pnpm run sync
 pnpm run sync:aso
+pnpm run sync:revenuecat
+pnpm run sync:admob
+pnpm run admob:auth
 pnpm run research:aso -- --slug <project-slug>
 pnpm typecheck
 pnpm build
@@ -51,6 +55,8 @@ pnpm build
 - Keep page-level GSC metrics separate from query-level metrics.
 - Keep ASO keyword snapshots reusable across projects in `asoKeywordSnapshots`.
 - Keep app-specific ASO ranks separate in `asoAppRankSnapshots`.
+- RevenueCat/AdMob are third-party API connectors, same pattern as GSC/Umami/Play Console — not the prohibited "SaaS billing/auth/queues" category. See `docs/guide/monetization-workflow.md`.
+- RevenueCat's `revenue` snapshot field is a rolling 28-day window, not a true daily total — never sum across dates, only use the latest snapshot per project. AdMob's `revenue` snapshot field is a true daily total, safe to sum across dates/projects.
 - Do not commit secrets or real project metrics.
 - Keep private scratch notes in `private-notes/`, not in `docs/`.
 - When asked to inspect or reason about a project, create/update `project/<project-slug>/reports/` and write a dated report there.

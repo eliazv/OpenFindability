@@ -39,6 +39,23 @@ export async function getDoctorReport() {
       detail: `${data.projects.filter((p) => p.playConsolePackageName).length} configured`,
     },
     {
+      name: "RevenueCat credentials",
+      status: Boolean(process.env.REVENUECAT_API_KEY),
+      required: false,
+      detail: "REVENUECAT_API_KEY",
+    },
+    {
+      name: "AdMob credentials",
+      status: Boolean(
+        process.env.ADMOB_CLIENT_ID &&
+          process.env.ADMOB_CLIENT_SECRET &&
+          process.env.ADMOB_REFRESH_TOKEN &&
+          process.env.ADMOB_PUBLISHER_ID,
+      ),
+      required: false,
+      detail: "ADMOB_CLIENT_ID, ADMOB_CLIENT_SECRET, ADMOB_REFRESH_TOKEN and ADMOB_PUBLISHER_ID",
+    },
+    {
       name: "Connector runs",
       status: data.connectorRuns.length > 0,
       required: false,
@@ -81,9 +98,11 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
   const stale: { slug: string; source: string; ageDays: number | null }[] = [];
 
   for (const project of data.projects) {
-    const sources: ("gsc" | "umami")[] = [];
+    const sources: ("gsc" | "umami" | "revenuecat" | "admob")[] = [];
     if (project.gscProperty) sources.push("gsc");
     if (project.umamiWebsiteId) sources.push("umami");
+    if (project.revenueCatProjectId) sources.push("revenuecat");
+    if (project.admobAppId) sources.push("admob");
 
     for (const source of sources) {
       const lastRun = data.connectorRuns
