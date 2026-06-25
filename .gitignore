@@ -1,6 +1,7 @@
 .next/
 node_modules/
 data/*.json
+data/*.db*
 !.gitkeep
 .env
 .env.*

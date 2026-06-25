@@ -7,7 +7,7 @@ OpenFindability is a lightweight self-hosted dashboard for deciding what to impr
 The v0.1 scope is intentionally simple:
 
 - Next.js app in the repository root.
-- Local JSON storage in `data/openfindability.json`.
+- Local SQLite storage in `data/openfindability.db`, accessed through Drizzle ORM (`lib/db/schema.ts`/`lib/db/client.ts`).
 - Google Search Console and Umami connectors.
 - Local RespectASO connector for ASO research.
 - RevenueCat and AdMob connectors for app monetization stats.
@@ -24,11 +24,15 @@ Do not introduce a monorepo, SaaS billing, auth, queues, cron scheduling or MCP 
 - `app/project/[slug]/page.tsx`: per-project dashboard, a grid of cards (one per data source) that reads the same `lib/insights.ts`/`lib/report.ts` aggregates as the homepage, scoped to one project.
 - `components/app-sidebar.tsx` + `components/ui/sidebar.tsx`: project navigation sidebar (Kiranism/shadcn `Sidebar` primitive), listing all projects with links to their per-project dashboard.
 - `lib/`: store, connectors, sync logic, insights and shared types.
+- `lib/db/schema.ts`: Drizzle `sqliteTable` definitions (one per `AppData` array, mirroring `lib/types.ts`).
+- `lib/db/client.ts`: opens `data/openfindability.db` (WAL + foreign keys pragmas) and runs migrations on module load.
+- `drizzle/`: `drizzle-kit`-generated migration SQL, committed to git (schema history, not runtime data).
 - `scripts/`: CLI-like commands for local development.
+- `scripts/migrate-json-to-sqlite.ts`: one-time importer from the legacy `data/openfindability.json` into SQLite.
 - `docs/`: public project documentation.
 - `project/`: private per-project reports, context and notes, ignored by git.
 - `private-notes/`: private scratch folder, ignored by git.
-- `data/`: local runtime data, ignored except `.gitkeep`.
+- `data/`: local runtime data (`openfindability.db` + WAL/journal files), ignored except `.gitkeep`.
 - `secrets/`: local credentials, ignored by git.
 
 ## Commands
@@ -46,6 +50,9 @@ pnpm run sync:revenuecat
 pnpm run sync:admob
 pnpm run admob:auth
 pnpm run research:aso -- --slug <project-slug>
+pnpm run db:generate
+pnpm run db:studio
+pnpm run db:migrate-json
 pnpm typecheck
 pnpm build
 ```
@@ -74,3 +81,8 @@ pnpm build
 - `lib/sync.ts` upserts on insert (`upsertByKey`/`upsertSnapshots`/`upsertQueries`/`upsertPages`): re-running `pnpm run sync` the same day replaces existing `metricSnapshots`/`searchQueries`/`pageMetrics` rows sharing the same key instead of appending duplicates. `appReviews` keeps its own `reviewId` dedupe; `appKeywords` (ASO) stays append-only.
 - Monetization report: `buildMonetizationReportMarkdown` (`lib/report.ts`), written by `pnpm run report -- <slug> monetization` (or `all`) to `project/<slug>/reports/<date>-monetization-data.md`. Mirrors the GSC/ASO report pattern; skipped when the project has neither `admobAppId` nor `revenueCatProjectId` configured.
 - Per-project dashboard (`app/project/[slug]/page.tsx`): each card (GSC, Umami, AdMob, RevenueCat, top pages/queries, ASO keywords, Play Store/reviews, opportunities, sync log) is rendered only when that project actually has data for that source — hidden entirely otherwise (no "not configured" placeholder, unlike the homepage's Monetizzazione cards). The sidebar (`components/app-sidebar.tsx`) lists every project and links to its dashboard; both are presentation only, reading the same `lib/insights.ts`/`lib/report.ts` server-side aggregates.
+- Storage is SQLite (`better-sqlite3` + `drizzle-orm`/`drizzle-kit`), not a hand-rolled JSON file — but `lib/store.ts`'s public API (`readData`/`writeData`/`updateData`/`getDataFilePath`) is unchanged, so this is invisible to every other module. `writeData()` wipes and bulk-reinserts every table inside one `db.transaction(...)`, matching the old "overwrite the whole file" semantics since every caller builds the full `AppData` object in memory before a single `writeData()` call. `readData()` normalizes SQL `NULL` back to `undefined` to match `AppData`'s optional-field types (except `appRank`, which is genuinely nullable and kept as `null`).
+- `next.config.ts` sets `serverExternalPackages: ["better-sqlite3"]` so the native addon isn't bundled by Turbopack.
+- `lib/insights.ts`/`lib/report.ts` still aggregate over the full in-memory `AppData` blob from `readData()`, not SQL `GROUP BY`/`SUM` — switching them to real SQL aggregation is a valid future step, not required by this migration.
+- `mcp/server.ts` does not use the `db`/`readData`/`writeData` singletons from `lib/db/client.ts`/`lib/store.ts` directly — it runs via `tsx` with an arbitrary cwd from other repos, so it builds its own `AppDb` with `createDb(dbFilePath, migrationsFolder)` (paths resolved from `import.meta.url`, not `process.cwd()`) and calls `readDataWith(database)`/`writeDataWith(database, data)` against it. Both `createDb` and `readDataWith`/`writeDataWith` exist specifically to support this cross-repo use case alongside the main app's cwd-based singletons.
+- Pre-existing, unrelated to storage: `mcp/server.ts`'s `@/lib/...` path aliases only resolve under `tsx` when the process cwd is the OpenFindability repo itself, so the documented any-repo invocation (`docs/guide/mcp-server.md`) currently only works when the host's cwd happens to be this repo. Not fixed as part of the SQLite migration.

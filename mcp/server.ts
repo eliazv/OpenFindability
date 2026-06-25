@@ -1,11 +1,13 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join, isAbsolute } from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import dotenv from "dotenv";
 import { google } from "googleapis";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { createDb } from "@/lib/db/client";
+import { readDataWith, writeDataWith } from "@/lib/store";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
@@ -25,37 +27,16 @@ if (saFile && !isAbsolute(saFile)) {
   process.env.GOOGLE_SERVICE_ACCOUNT_FILE = join(projectRoot, saFile);
 }
 
+// Own db connection (not the singleton in lib/db/client.ts) since this server runs via tsx
+// with an arbitrary cwd from other repos — must resolve paths from its own file location.
+const mcpDb = createDb(join(projectRoot, "data", "openfindability.db"), join(projectRoot, "drizzle"));
+
 async function readProjects(): Promise<Project[]> {
-  const dataPath = join(projectRoot, "data", "openfindability.json");
-  try {
-    const raw = await readFile(dataPath, "utf8");
-    const data = JSON.parse(raw) as Partial<AppData>;
-    return data.projects ?? [];
-  } catch {
-    return [];
-  }
+  return readDataWith(mcpDb).projects;
 }
 
 async function readStoredData(): Promise<AppData> {
-  const dataPath = join(projectRoot, "data", "openfindability.json");
-  const empty: AppData = {
-    projects: [],
-    metricSnapshots: [],
-    searchQueries: [],
-    pageMetrics: [],
-    opportunities: [],
-    connectorRuns: [],
-    appReviews: [],
-    appKeywords: [],
-    asoKeywordSnapshots: [],
-    asoAppRankSnapshots: [],
-  };
-  try {
-    const raw = await readFile(dataPath, "utf8");
-    return { ...empty, ...(JSON.parse(raw) as Partial<AppData>) };
-  } catch {
-    return empty;
-  }
+  return readDataWith(mcpDb);
 }
 
 function yesterday(): string {
@@ -79,9 +60,7 @@ function stripRaw<T extends { rawJson?: unknown }>(items: T[]): Omit<T, "rawJson
 }
 
 async function writeStoredData(data: AppData): Promise<void> {
-  const dataPath = join(projectRoot, "data", "openfindability.json");
-  await mkdir(dirname(dataPath), { recursive: true });
-  await writeFile(dataPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  writeDataWith(mcpDb, data);
 }
 
 async function getGoogleAuth() {

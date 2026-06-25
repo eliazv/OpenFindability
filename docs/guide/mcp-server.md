@@ -48,7 +48,7 @@ Il server viene spawato automaticamente all'avvio. Nessun processo da tenere in 
 
 - Il server legge `.env` di OpenFindability in modo assoluto — le credenziali non servono nei repo target.
 - I tool `get_gsc_stats`, `get_umami_stats`, `get_project_summary`, `get_page_keywords`, `compare_periods` chiamano le API in tempo reale ad ogni invocazione.
-- I tool `get_opportunities` e la gestione progetti (`create_project`, `update_project`, `delete_project`) leggono/scrivono `data/openfindability.json`.
+- I tool `get_opportunities` e la gestione progetti (`create_project`, `update_project`, `delete_project`) leggono/scrivono `data/openfindability.db` (SQLite), tramite una connessione DB dedicata risolta dal path del file del server (non dalla cwd).
 
 ---
 

@@ -21,7 +21,10 @@
     "gsc:sites": "tsx scripts/gsc-sites.ts",
     "project:add": "tsx scripts/add-project.ts",
     "research:aso": "tsx scripts/aso-research.ts",
-    "report": "tsx scripts/report.ts"
+    "report": "tsx scripts/report.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio",
+    "db:migrate-json": "tsx scripts/migrate-json-to-sqlite.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -29,9 +32,11 @@
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.10",
+    "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
     "googleapis": "^166.0.0",
     "lucide-react": "^1.21.0",
     "next": "latest",
@@ -43,9 +48,11 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "drizzle-kit": "^0.31.10",
     "postcss": "8.5.14",
     "tailwindcss": "^4.2.2",
     "tsx": "^4.20.0",
