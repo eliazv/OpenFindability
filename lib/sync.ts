@@ -9,7 +9,17 @@ import { syncRevenueCatProject } from "@/lib/connectors/revenuecat";
 import { syncAdmobProject } from "@/lib/connectors/admob";
 import { upsertAsoCacheRows } from "@/lib/aso-cache";
 import { readData, writeData } from "@/lib/store";
-import type { ConnectorRun, MetricSnapshot, PageMetric, SearchQueryMetric, SourceType, SyncOptions, SyncResult } from "@/lib/types";
+import type {
+  ConnectorRun,
+  GscDimensionBreakdown,
+  GscSitemap,
+  MetricSnapshot,
+  PageMetric,
+  SearchQueryMetric,
+  SourceType,
+  SyncOptions,
+  SyncResult,
+} from "@/lib/types";
 
 // Re-running a sync the same day must not pile up duplicate rows for the same
 // (project, date[, source]) key, since reports/insights sum these by date.
@@ -35,6 +45,18 @@ function upsertPages(existing: PageMetric[], incoming: PageMetric[]): PageMetric
   return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.date}::${row.page}`);
 }
 
+function upsertBreakdowns(existing: GscDimensionBreakdown[], incoming: GscDimensionBreakdown[]): GscDimensionBreakdown[] {
+  return upsertByKey(
+    existing,
+    incoming,
+    (row) => `${row.projectId}::${row.rangeStart}::${row.rangeEnd}::${row.dimension}::${row.key}`,
+  );
+}
+
+function upsertSitemaps(existing: GscSitemap[], incoming: GscSitemap[]): GscSitemap[] {
+  return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.path}`);
+}
+
 export async function syncProjects(options: SyncOptions = {}): Promise<SyncResult[]> {
   const source = options.source;
   const backfillDays = options.backfillDays ?? 30;
@@ -49,6 +71,8 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
         data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
         data.searchQueries = upsertQueries(data.searchQueries, synced.queries);
         data.pageMetrics = upsertPages(data.pageMetrics, synced.pages);
+        data.gscDimensionBreakdowns = upsertBreakdowns(data.gscDimensionBreakdowns, synced.breakdowns);
+        data.gscSitemaps = upsertSitemaps(data.gscSitemaps, synced.sitemaps);
         results.push(synced.result);
         data.connectorRuns.push(toRun("gsc", project.id, startedAt, synced.result));
       } catch (error) {

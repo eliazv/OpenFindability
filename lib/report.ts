@@ -1,4 +1,12 @@
-import type { AppData, AppKeywordMetric, MetricSnapshot, PageMetric, Project, SearchQueryMetric } from "@/lib/types";
+import type {
+  AppData,
+  AppKeywordMetric,
+  GscDimensionBreakdown,
+  MetricSnapshot,
+  PageMetric,
+  Project,
+  SearchQueryMetric,
+} from "@/lib/types";
 
 export type AggregatedRow = {
   key: string;
@@ -50,6 +58,31 @@ function formatRow(row: AggregatedRow): string {
   return `${row.key} | clicks: ${row.clicks} | impr: ${row.impressions} | ctr: ${formatPercent(row.ctr)} | avgPos: ${row.avgPosition.toFixed(1)}`;
 }
 
+function formatBreakdownRow(row: GscDimensionBreakdown): string {
+  return `${row.key.padEnd(20)} | clicks: ${row.clicks} | impr: ${row.impressions} | ctr: ${formatPercent(row.ctr)} | avgPos: ${row.avgPosition.toFixed(1)}`;
+}
+
+function formatGscTrendRows(previous: PageMetric[], latest: PageMetric[], limit: number): string[] {
+  const previousByPage = new Map(previous.map((row) => [row.page, row]));
+  const lines: string[] = [];
+
+  for (const row of [...latest].sort((a, b) => b.impressions - a.impressions).slice(0, limit)) {
+    const before = previousByPage.get(row.page);
+    if (!before) continue;
+
+    const clicksDelta = formatDelta(before.clicks, row.clicks, { lowerIsBetter: false });
+    const imprDelta = formatDelta(before.impressions, row.impressions, { lowerIsBetter: false });
+    const posDelta = formatDelta(before.avgPosition, row.avgPosition, { lowerIsBetter: true, decimals: 1 });
+
+    lines.push(
+      `${row.page} | clicks: ${row.clicks} (${clicksDelta}) | impr: ${row.impressions} (${imprDelta}) | avgPos: ${row.avgPosition.toFixed(1)} (${posDelta})`,
+    );
+  }
+
+  if (lines.length === 0) lines.push("No pages found in both snapshots.");
+  return lines;
+}
+
 export function buildGscReportMarkdown(
   data: AppData,
   project: Project,
@@ -79,6 +112,24 @@ export function buildGscReportMarkdown(
 
   const pageRows = aggregatePagesByUrl(pages).slice(0, topPages);
   const queryRows = aggregateQueriesByText(queries).slice(0, topQueries);
+
+  const pageSnapshotDates = [...new Set(pages.map((row) => row.date))].sort();
+  const trendLatestDate = pageSnapshotDates[pageSnapshotDates.length - 1];
+  const trendPreviousDate = pageSnapshotDates[pageSnapshotDates.length - 2];
+
+  const breakdowns = data.gscDimensionBreakdowns.filter((row) => row.projectId === project.id);
+  const latestRangeEnd = breakdowns.reduce((max, row) => (row.rangeEnd > max ? row.rangeEnd : max), "");
+  const latestBreakdowns = breakdowns.filter((row) => row.rangeEnd === latestRangeEnd);
+  const deviceRows = latestBreakdowns.filter((row) => row.dimension === "device").sort((a, b) => b.impressions - a.impressions);
+  const countryRows = latestBreakdowns
+    .filter((row) => row.dimension === "country")
+    .sort((a, b) => b.impressions - a.impressions)
+    .slice(0, 15);
+  const appearanceRows = latestBreakdowns
+    .filter((row) => row.dimension === "searchAppearance")
+    .sort((a, b) => b.impressions - a.impressions);
+
+  const sitemaps = data.gscSitemaps.filter((row) => row.projectId === project.id);
 
   const lines: string[] = [];
   lines.push(`# ${project.name} - GSC report - ${new Date().toISOString().slice(0, 10)}`);
@@ -124,6 +175,66 @@ export function buildGscReportMarkdown(
   for (const row of queryRows) lines.push(formatRow(row));
   lines.push("```");
   lines.push("");
+
+  if (trendPreviousDate) {
+    lines.push(`## Trend (${trendPreviousDate} -> ${trendLatestDate})`);
+    lines.push("");
+    lines.push("```txt");
+    const previousPages = pages.filter((row) => row.date === trendPreviousDate);
+    const latestPages = pages.filter((row) => row.date === trendLatestDate);
+    for (const row of formatGscTrendRows(previousPages, latestPages, topPages)) lines.push(row);
+    lines.push("```");
+    lines.push("");
+  }
+
+  if (deviceRows.length > 0 || countryRows.length > 0 || appearanceRows.length > 0) {
+    lines.push(`## Breakdowns (range ending ${latestRangeEnd || "n/a"})`);
+    lines.push("");
+
+    if (deviceRows.length > 0) {
+      lines.push("### By device");
+      lines.push("");
+      lines.push("```txt");
+      for (const row of deviceRows) lines.push(formatBreakdownRow(row));
+      lines.push("```");
+      lines.push("");
+    }
+
+    if (countryRows.length > 0) {
+      lines.push(`### By country (top ${countryRows.length})`);
+      lines.push("");
+      lines.push("```txt");
+      for (const row of countryRows) lines.push(formatBreakdownRow(row));
+      lines.push("```");
+      lines.push("");
+    }
+
+    if (appearanceRows.length > 0) {
+      lines.push("### By search appearance");
+      lines.push("");
+      lines.push("```txt");
+      for (const row of appearanceRows) lines.push(formatBreakdownRow(row));
+      lines.push("```");
+      lines.push("");
+    }
+  }
+
+  if (sitemaps.length > 0) {
+    lines.push("## Sitemaps");
+    lines.push("");
+    lines.push("```txt");
+    for (const row of sitemaps) {
+      const flags = [row.isSitemapsIndex ? "index" : undefined, row.isPending ? "pending" : undefined]
+        .filter(Boolean)
+        .join(", ");
+      lines.push(
+        `${row.path} | submitted: ${row.lastSubmitted ?? "n/a"} | warnings: ${row.warnings} | errors: ${row.errors}${flags ? ` | ${flags}` : ""}`,
+      );
+    }
+    lines.push("```");
+    lines.push("");
+  }
+
   lines.push("## Notes");
   lines.push("");
   lines.push("```txt");
@@ -168,9 +279,14 @@ function formatTrendRows(previous: AppKeywordMetric[], latest: AppKeywordMetric[
   return lines;
 }
 
-function formatDelta(before: number | null, after: number | null, options: { lowerIsBetter: boolean }): string {
+function formatDelta(
+  before: number | null,
+  after: number | null,
+  options: { lowerIsBetter: boolean; decimals?: number },
+): string {
   if (before == null || after == null) return "n/a";
-  const diff = after - before;
+  const decimals = options.decimals ?? 0;
+  const diff = Number((after - before).toFixed(decimals));
   if (diff === 0) return "=";
   const improved = options.lowerIsBetter ? diff < 0 : diff > 0;
   const arrow = improved ? "up" : "down";

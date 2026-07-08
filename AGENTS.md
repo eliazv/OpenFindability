@@ -63,6 +63,8 @@ pnpm build
 - Preserve `rawJson` for imported API payloads.
 - Write connector results to `connectorRuns`.
 - Keep page-level GSC metrics separate from query-level metrics.
+- GSC sync (`lib/connectors/gsc.ts`) also fetches device/country/searchAppearance breakdowns (one `searchanalytics.query` call per dimension, aggregated over the whole synced date range — not daily) into `gscDimensionBreakdowns`, and sitemap status (`sitemaps.list`) into `gscSitemaps`. Both are upserted (`upsertBreakdowns`/`upsertSitemaps` in `lib/sync.ts`) keyed on `(projectId, rangeStart, rangeEnd, dimension, key)` and `(projectId, path)` respectively. `buildGscReportMarkdown` renders them as extra "Breakdowns"/"Sitemaps" sections when present. GSC's public API has no bulk index-coverage/crawl-error report — only per-URL URL Inspection — so that data still requires manual checks in the Search Console UI.
+- GSC report Trend section: same pattern as the ASO Trend section, but compares `pageMetrics` (not `appKeywords`) between the two most recent snapshot dates for the project, matched by page URL (clicks/impressions/avg position delta via the shared `formatDelta` helper).
 - Keep ASO keyword snapshots reusable across projects in `asoKeywordSnapshots`.
 - Keep app-specific ASO ranks separate in `asoAppRankSnapshots`.
 - RevenueCat/AdMob are third-party API connectors, same pattern as GSC/Umami/Play Console — not the prohibited "SaaS billing/auth/queues" category. See `docs/guide/monetization-workflow.md`.

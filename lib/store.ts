@@ -5,6 +5,8 @@ import {
   asoAppRankSnapshots as asoAppRankSnapshotsTable,
   asoKeywordSnapshots as asoKeywordSnapshotsTable,
   connectorRuns as connectorRunsTable,
+  gscDimensionBreakdowns as gscDimensionBreakdownsTable,
+  gscSitemaps as gscSitemapsTable,
   metricSnapshots as metricSnapshotsTable,
   opportunities as opportunitiesTable,
   pageMetrics as pageMetricsTable,
@@ -18,6 +20,8 @@ import type {
   AsoAppRankSnapshot,
   AsoKeywordSnapshot,
   ConnectorRun,
+  GscDimensionBreakdown,
+  GscSitemap,
   MetricSnapshot,
   Opportunity,
   PageMetric,
@@ -81,6 +85,14 @@ export function readDataWith(database: AppDb): AppData {
     .all()
     .map((row) => ({ ...denull(row), appRank: row.appRank })) as AsoAppRankSnapshot[];
 
+  const gscDimensionBreakdowns = database
+    .select()
+    .from(gscDimensionBreakdownsTable)
+    .all()
+    .map(denull) as GscDimensionBreakdown[];
+
+  const gscSitemaps = database.select().from(gscSitemapsTable).all().map(denull) as GscSitemap[];
+
   return {
     projects,
     metricSnapshots,
@@ -92,6 +104,8 @@ export function readDataWith(database: AppDb): AppData {
     appKeywords,
     asoKeywordSnapshots,
     asoAppRankSnapshots,
+    gscDimensionBreakdowns,
+    gscSitemaps,
   };
 }
 
@@ -104,6 +118,8 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     tx.delete(appReviewsTable).run();
     tx.delete(appKeywordsTable).run();
     tx.delete(asoAppRankSnapshotsTable).run();
+    tx.delete(gscDimensionBreakdownsTable).run();
+    tx.delete(gscSitemapsTable).run();
     tx.delete(metricSnapshotsTable).run();
     tx.delete(projectsTable).run();
     tx.delete(asoKeywordSnapshotsTable).run();
@@ -141,6 +157,12 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     }
     for (const batch of chunk(data.asoAppRankSnapshots, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(asoAppRankSnapshotsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.gscDimensionBreakdowns, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(gscDimensionBreakdownsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.gscSitemaps, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(gscSitemapsTable).values(batch).run();
     }
   });
 }

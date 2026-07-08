@@ -97,6 +97,55 @@ export const pageMetrics = sqliteTable(
   (table) => [uniqueIndex("page_metrics_project_date_page").on(table.projectId, table.date, table.page)],
 );
 
+export const gscDimensionBreakdowns = sqliteTable(
+  "gsc_dimension_breakdowns",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    rangeStart: text("range_start").notNull(),
+    rangeEnd: text("range_end").notNull(),
+    dimension: text("dimension", { enum: ["device", "country", "searchAppearance"] }).notNull(),
+    key: text("key").notNull(),
+    clicks: integer("clicks").notNull(),
+    impressions: integer("impressions").notNull(),
+    ctr: real("ctr").notNull(),
+    avgPosition: real("avg_position").notNull(),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("gsc_dimension_breakdowns_project_range_dimension_key").on(
+      table.projectId,
+      table.rangeStart,
+      table.rangeEnd,
+      table.dimension,
+      table.key,
+    ),
+  ],
+);
+
+export const gscSitemaps = sqliteTable(
+  "gsc_sitemaps",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    type: text("type"),
+    lastSubmitted: text("last_submitted"),
+    isPending: integer("is_pending", { mode: "boolean" }).notNull(),
+    isSitemapsIndex: integer("is_sitemaps_index", { mode: "boolean" }).notNull(),
+    warnings: integer("warnings").notNull(),
+    errors: integer("errors").notNull(),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("gsc_sitemaps_project_path").on(table.projectId, table.path)],
+);
+
 export const opportunities = sqliteTable(
   "opportunities",
   {
@@ -236,4 +285,6 @@ export const schema = {
   appKeywords,
   asoKeywordSnapshots,
   asoAppRankSnapshots,
+  gscDimensionBreakdowns,
+  gscSitemaps,
 };

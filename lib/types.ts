@@ -142,6 +142,37 @@ export type PageMetric = {
   rawJson?: unknown;
 };
 
+export type GscDimension = "device" | "country" | "searchAppearance";
+
+export type GscDimensionBreakdown = {
+  id: string;
+  projectId: string;
+  rangeStart: string;
+  rangeEnd: string;
+  dimension: GscDimension;
+  key: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  avgPosition: number;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
+export type GscSitemap = {
+  id: string;
+  projectId: string;
+  path: string;
+  type?: string;
+  lastSubmitted?: string;
+  isPending: boolean;
+  isSitemapsIndex: boolean;
+  warnings: number;
+  errors: number;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
 export type OpportunityType =
   | "low_ctr_query"
   | "striking_distance_query"
@@ -187,6 +218,8 @@ export type AppData = {
   appKeywords: AppKeywordMetric[];
   asoKeywordSnapshots: AsoKeywordSnapshot[];
   asoAppRankSnapshots: AsoAppRankSnapshot[];
+  gscDimensionBreakdowns: GscDimensionBreakdown[];
+  gscSitemaps: GscSitemap[];
 };
 
 export type SyncOptions = {

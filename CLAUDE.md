@@ -41,6 +41,8 @@ Important implementation notes:
 - Private scratch notes live in `private-notes/` and are ignored by git.
 - Service account JSON files live in `secrets/google/`.
 - GSC backfill defaults to 30 days.
+- GSC sync also pulls device/country/searchAppearance breakdowns (aggregated over the whole synced range, not daily) into `gscDimensionBreakdowns`, plus sitemap status (`sitemaps.list`) into `gscSitemaps`. The GSC report (`buildGscReportMarkdown`) renders these as extra sections when present. GSC's public API has no bulk index-coverage/crawl-error endpoint (only per-URL URL Inspection), so those still require manual checking in the Search Console UI.
+- The GSC report includes a Trend section (mirrors the ASO one) comparing page-level metrics between the two most recent `pageMetrics` snapshot dates per project (clicks/impressions/avg position delta), shown only when at least two dates exist. `formatDelta` (`lib/report.ts`) takes an optional `decimals` option so position deltas round to 1 decimal instead of showing long floats; ASO's integer scores are unaffected (default `decimals: 0`).
 - Umami sync imports yesterday.
 - Keep `rawJson` on imported records.
 - Store connector run logs.

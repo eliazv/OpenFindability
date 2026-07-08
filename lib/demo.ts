@@ -158,5 +158,7 @@ export function createDemoData(): AppData {
     appKeywords: [],
     asoKeywordSnapshots: [],
     asoAppRankSnapshots: [],
+    gscDimensionBreakdowns: [],
+    gscSitemaps: [],
   };
 }

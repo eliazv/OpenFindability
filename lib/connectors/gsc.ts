@@ -1,7 +1,16 @@
 import { readFile } from "node:fs/promises";
 import { google } from "googleapis";
 import { createId } from "@/lib/id";
-import type { MetricSnapshot, PageMetric, Project, SearchQueryMetric, SyncResult } from "@/lib/types";
+import type {
+  GscDimension,
+  GscDimensionBreakdown,
+  GscSitemap,
+  MetricSnapshot,
+  PageMetric,
+  Project,
+  SearchQueryMetric,
+  SyncResult,
+} from "@/lib/types";
 
 type GscRow = {
   keys?: string[];
@@ -16,6 +25,8 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   snapshots: MetricSnapshot[];
   queries: SearchQueryMetric[];
   pages: PageMetric[];
+  breakdowns: GscDimensionBreakdown[];
+  sitemaps: GscSitemap[];
 }> {
   if (!project.gscProperty) {
     return skipped(project.id, "Project has no GSC property.");
@@ -29,10 +40,14 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   const searchconsole = google.searchconsole({ version: "v1", auth });
   const createdAt = new Date().toISOString();
 
-  const [dateRows, queryRows, pageRows] = await Promise.all([
+  const [dateRows, queryRows, pageRows, deviceRows, countryRows, appearanceRows, sitemapEntries] = await Promise.all([
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["date"]),
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["query", "page"]),
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["page"]),
+    querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["device"]),
+    querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["country"]),
+    querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["searchAppearance"]),
+    listSitemaps(searchconsole, project.gscProperty),
   ]);
 
   const snapshots = dateRows.map((row) => ({
@@ -73,6 +88,26 @@ export async function syncGscProject(project: Project, startDate: string, endDat
     rawJson: row,
   }));
 
+  const breakdowns = [
+    ...toBreakdownRows(project.id, "device", deviceRows, startDate, endDate, createdAt),
+    ...toBreakdownRows(project.id, "country", countryRows, startDate, endDate, createdAt),
+    ...toBreakdownRows(project.id, "searchAppearance", appearanceRows, startDate, endDate, createdAt),
+  ];
+
+  const sitemaps = sitemapEntries.map((entry) => ({
+    id: createId("sitemap"),
+    projectId: project.id,
+    path: entry.path ?? "",
+    type: entry.type ?? undefined,
+    lastSubmitted: entry.lastSubmitted ?? undefined,
+    isPending: entry.isPending ?? false,
+    isSitemapsIndex: entry.isSitemapsIndex ?? false,
+    warnings: Number(entry.warnings ?? 0),
+    errors: Number(entry.errors ?? 0),
+    rawJson: entry,
+    createdAt,
+  }));
+
   return {
     result: {
       source: "gsc",
@@ -88,7 +123,33 @@ export async function syncGscProject(project: Project, startDate: string, endDat
     snapshots,
     queries,
     pages,
+    breakdowns,
+    sitemaps,
   };
+}
+
+function toBreakdownRows(
+  projectId: string,
+  dimension: GscDimension,
+  rows: GscRow[],
+  rangeStart: string,
+  rangeEnd: string,
+  createdAt: string,
+): GscDimensionBreakdown[] {
+  return rows.map((row) => ({
+    id: createId("gscbrk"),
+    projectId,
+    rangeStart,
+    rangeEnd,
+    dimension,
+    key: row.keys?.[0] ?? "",
+    clicks: row.clicks ?? 0,
+    impressions: row.impressions ?? 0,
+    ctr: row.ctr ?? 0,
+    avgPosition: row.position ?? 0,
+    rawJson: row,
+    createdAt,
+  }));
 }
 
 export type GscSite = {
@@ -109,6 +170,24 @@ export async function listGscSites(): Promise<GscSite[]> {
     siteUrl: entry.siteUrl ?? "",
     permissionLevel: entry.permissionLevel,
   }));
+}
+
+type SitemapEntry = {
+  path?: string | null;
+  type?: string | null;
+  lastSubmitted?: string | null;
+  isPending?: boolean | null;
+  isSitemapsIndex?: boolean | null;
+  warnings?: string | number | null;
+  errors?: string | number | null;
+};
+
+async function listSitemaps(
+  searchconsole: ReturnType<typeof google.searchconsole>,
+  siteUrl: string,
+): Promise<SitemapEntry[]> {
+  const response = await searchconsole.sitemaps.list({ siteUrl });
+  return (response.data.sitemap ?? []) as SitemapEntry[];
 }
 
 async function getGoogleAuth() {
@@ -160,5 +239,7 @@ function skipped(projectId: string, message: string) {
     snapshots: [],
     queries: [],
     pages: [],
+    breakdowns: [],
+    sitemaps: [],
   };
 }
