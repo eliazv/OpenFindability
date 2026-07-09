@@ -17,6 +17,7 @@ export const projects = sqliteTable("projects", {
   revenueCatProjectId: text("revenue_cat_project_id"),
   admobAppId: text("admob_app_id"),
   admobAppIdIos: text("admob_app_id_ios"),
+  adsenseSiteDomain: text("adsense_site_domain"),
   notes: text("notes"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
@@ -29,7 +30,7 @@ export const metricSnapshots = sqliteTable(
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
-    source: text("source", { enum: ["gsc", "umami", "play_console", "aso", "revenuecat", "admob"] }).notNull(),
+    source: text("source", { enum: ["gsc", "umami", "play_console", "aso", "revenuecat", "admob", "adsense"] }).notNull(),
     date: text("date").notNull(),
     clicks: integer("clicks"),
     impressions: integer("impressions"),
@@ -182,7 +183,7 @@ export const connectorRuns = sqliteTable(
   {
     id: text("id").primaryKey(),
     source: text("source", {
-      enum: ["gsc", "umami", "play_console", "aso", "revenuecat", "admob", "all"],
+      enum: ["gsc", "umami", "play_console", "aso", "revenuecat", "admob", "adsense", "all"],
     }).notNull(),
     projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
     status: text("status", { enum: ["success", "failed", "skipped"] }).notNull(),

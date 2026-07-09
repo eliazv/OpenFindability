@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `adsense_site_domain` text;

@@ -56,6 +56,17 @@ export async function getDoctorReport() {
       detail: "ADMOB_CLIENT_ID, ADMOB_CLIENT_SECRET, ADMOB_REFRESH_TOKEN and ADMOB_PUBLISHER_ID",
     },
     {
+      name: "AdSense credentials",
+      status: Boolean(
+        process.env.ADSENSE_CLIENT_ID &&
+          process.env.ADSENSE_CLIENT_SECRET &&
+          process.env.ADSENSE_REFRESH_TOKEN &&
+          process.env.ADSENSE_ACCOUNT_ID,
+      ),
+      required: false,
+      detail: "ADSENSE_CLIENT_ID, ADSENSE_CLIENT_SECRET, ADSENSE_REFRESH_TOKEN and ADSENSE_ACCOUNT_ID",
+    },
+    {
       name: "Connector runs",
       status: data.connectorRuns.length > 0,
       required: false,
@@ -98,11 +109,12 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
   const stale: { slug: string; source: string; ageDays: number | null }[] = [];
 
   for (const project of data.projects) {
-    const sources: ("gsc" | "umami" | "revenuecat" | "admob")[] = [];
+    const sources: ("gsc" | "umami" | "revenuecat" | "admob" | "adsense")[] = [];
     if (project.gscProperty) sources.push("gsc");
     if (project.umamiWebsiteId) sources.push("umami");
     if (project.revenueCatProjectId) sources.push("revenuecat");
     if (project.admobAppId || project.admobAppIdIos) sources.push("admob");
+    if (project.adsenseSiteDomain) sources.push("adsense");
 
     for (const source of sources) {
       const lastRun = data.connectorRuns

@@ -21,6 +21,7 @@ type Args = {
   revenueCatProjectId?: string;
   admobAppId?: string;
   admobAppIdIos?: string;
+  adsenseSiteDomain?: string;
   notes?: string;
 };
 
@@ -50,6 +51,7 @@ function parseArgs(argv: string[]): Args {
       case "revenuecat-project-id": args.revenueCatProjectId = value; break;
       case "admob-app-id": args.admobAppId = value; break;
       case "admob-app-id-ios": args.admobAppIdIos = value; break;
+      case "adsense-domain": args.adsenseSiteDomain = value; break;
       case "notes": args.notes = value; break;
       default:
         throw new Error(`Unknown argument --${key}`);
@@ -77,7 +79,7 @@ async function main() {
         "[--umami <websiteId>] [--play-console com.example.app] [--app-store-track-id 123] " +
         "[--respect-aso-app-id 3] [--aso-keywords \"one,two\"] [--aso-countries it,us] " +
         "[--revenuecat-project-id proj_xxx] [--admob-app-id ca-app-pub-xxx~yyy] " +
-        "[--admob-app-id-ios ca-app-pub-xxx~zzz] [--notes \"...\"]",
+        "[--admob-app-id-ios ca-app-pub-xxx~zzz] [--adsense-domain example.com] [--notes \"...\"]",
     );
   }
 
@@ -106,6 +108,7 @@ async function main() {
     revenueCatProjectId: args.revenueCatProjectId,
     admobAppId: args.admobAppId,
     admobAppIdIos: args.admobAppIdIos,
+    adsenseSiteDomain: args.adsenseSiteDomain,
     notes: args.notes,
     createdAt: now,
     updatedAt: now,
@@ -135,7 +138,8 @@ async function main() {
     !project.asoKeywords?.length &&
     !project.revenueCatProjectId &&
     !project.admobAppId &&
-    !project.admobAppIdIos
+    !project.admobAppIdIos &&
+    !project.adsenseSiteDomain
   ) {
     console.log(
       "Note: no data source configured yet (gsc/umami/play-console/aso/revenuecat/admob). Add one before running `pnpm run sync`.",

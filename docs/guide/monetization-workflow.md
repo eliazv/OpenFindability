@@ -1,6 +1,6 @@
 # Monetization workflow (RevenueCat + AdMob connectors)
 
-OpenFindability can pull subscription metrics from RevenueCat and ad revenue from AdMob, alongside the existing GSC/Umami/Play Console/ASO data.
+OpenFindability can pull subscription metrics from RevenueCat and ad revenue from AdMob, alongside the existing GSC/Umami/Play Console/ASO data. For website display-ad revenue (as opposed to AdMob's in-app ads), see [`docs/guide/adsense-setup.md`](adsense-setup.md).
 
 ## RevenueCat
 
@@ -89,7 +89,15 @@ pnpm run admob:apps
 pnpm run sync:admob
 ```
 
-Calls `accounts.networkReport.generate` for yesterday's date, filters rows matching the project's `admobAppId`/`admobAppIdIos`, and sums them into one `metricSnapshots` row with `revenue` (converted from `ESTIMATED_EARNINGS` micros), `impressions`, `clicks` and `adRequests`.
+Calls `accounts.networkReport.generate` for a date range (default last 30 days, same `backfillDays` default as GSC/Play Console), filters rows matching the project's `admobAppId`/`admobAppIdIos`, groups by day and sums them into one `metricSnapshots` row per day with `revenue` (converted from `ESTIMATED_EARNINGS` micros), `impressions`, `clicks` and `adRequests`.
+
+For a full one-time historical backfill (AdMob returns as many days as it actually has, up to what you ask for):
+
+```bash
+pnpm run sync:admob:backfill
+```
+
+(fixed at 1500 days ≈ 4 years. For a custom number of days, run `npx tsx scripts/sync.ts admob <days>` directly — `pnpm run sync:admob -- <days>` mis-quotes the extra arg on Windows/PowerShell).
 
 AdMob's daily network report is a true daily total, safe to sum across dates and projects (unlike RevenueCat's rolling window above).
 

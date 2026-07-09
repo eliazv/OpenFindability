@@ -1,4 +1,4 @@
-export type SourceType = "gsc" | "umami" | "play_console" | "aso" | "revenuecat" | "admob";
+export type SourceType = "gsc" | "umami" | "play_console" | "aso" | "revenuecat" | "admob" | "adsense";
 
 export type ProjectType = "web" | "app" | "web_app";
 
@@ -19,6 +19,7 @@ export type Project = {
   revenueCatProjectId?: string;
   admobAppId?: string;
   admobAppIdIos?: string;
+  adsenseSiteDomain?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

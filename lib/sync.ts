@@ -7,6 +7,7 @@ import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { syncAsoProject } from "@/lib/connectors/aso";
 import { syncRevenueCatProject } from "@/lib/connectors/revenuecat";
 import { syncAdmobProject } from "@/lib/connectors/admob";
+import { syncAdsenseProject } from "@/lib/connectors/adsense";
 import { upsertAsoCacheRows } from "@/lib/aso-cache";
 import { readData, writeData } from "@/lib/store";
 import type {
@@ -159,7 +160,7 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
 
     if (!source || source === "admob") {
       try {
-        const synced = await syncAdmobProject(project, daysAgo(1));
+        const synced = await syncAdmobProject(project, daysAgo(backfillDays), daysAgo(1));
         data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
         data.admobMediationMetrics = upsertMediationMetrics(data.admobMediationMetrics, synced.mediationMetrics);
         results.push(synced.result);
@@ -168,6 +169,19 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
         const result = failed("admob", project.id, error);
         results.push(result);
         data.connectorRuns.push(toRun("admob", project.id, startedAt, result));
+      }
+    }
+
+    if (!source || source === "adsense") {
+      try {
+        const synced = await syncAdsenseProject(project, daysAgo(backfillDays), daysAgo(1));
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
+        results.push(synced.result);
+        data.connectorRuns.push(toRun("adsense", project.id, startedAt, synced.result));
+      } catch (error) {
+        const result = failed("adsense", project.id, error);
+        results.push(result);
+        data.connectorRuns.push(toRun("adsense", project.id, startedAt, result));
       }
     }
   }

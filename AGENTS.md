@@ -48,8 +48,13 @@ pnpm run sync
 pnpm run sync:aso
 pnpm run sync:revenuecat
 pnpm run sync:admob
+pnpm run sync:admob:backfill
 pnpm run admob:auth
 pnpm run admob:apps
+pnpm run sync:adsense
+pnpm run sync:adsense:backfill
+pnpm run adsense:auth
+pnpm run adsense:accounts
 pnpm run research:aso -- --slug <project-slug>
 pnpm run db:generate
 pnpm run db:studio
@@ -91,3 +96,5 @@ pnpm build
 - Pre-existing, unrelated to storage: `mcp/server.ts`'s `@/lib/...` path aliases only resolve under `tsx` when the process cwd is the OpenFindability repo itself, so the documented any-repo invocation (`docs/guide/mcp-server.md`) currently only works when the host's cwd happens to be this repo. Not fixed as part of the SQLite migration.
 - AdMob apps can have separate app ids per platform: `Project.admobAppId` (Android/primary) and `Project.admobAppIdIos` (iOS, optional). `syncAdmobProject` (`lib/connectors/admob.ts`) fetches the network report filtered to whichever ids are configured and sums them into one `metricSnapshots` row per project per day — so a single OpenFindability project can represent one logical app shipped on both stores.
 - AdMob mediation data (revenue/requests/eCPM per ad network like AdMob Network, AppLovin, Unity Ads, etc., and per ad format) is a separate report from the network report and is stored in its own table, `admobMediationMetrics` (`AdmobMediationMetric` in `lib/types.ts`), not in `metricSnapshots`. `syncAdmobProject` also calls `accounts.mediationReport.generate` (dimensions `DATE, APP, AD_SOURCE, FORMAT`) and returns `mediationMetrics` alongside `snapshots`; `lib/sync.ts`'s `upsertMediationMetrics` dedupes by `(projectId, date, adSourceId, format)` the same way other sources dedupe on re-sync.
+- `syncAdmobProject` takes a date range (`startDate, endDate`), not one day — both AdMob reports return one row per day already via the `DATE` dimension, so backfilling history is one API call, not one per day. Default backfill is 30 days (shared `backfillDays` option); a deeper one-time backfill is `npx tsx scripts/sync.ts admob 1500` (pnpm arg passthrough for extra positional args is unreliable on Windows/PowerShell, so invoke `tsx` directly for this).
+- AdSense (`lib/connectors/adsense.ts`, source `"adsense"`) is for site display-ad revenue, distinct from AdMob (app ads) — same interactive OAuth2 pattern (`ADSENSE_CLIENT_ID`/`SECRET`/`REFRESH_TOKEN`, `pnpm run adsense:auth`) but scoped by `Project.adsenseSiteDomain` (a domain, not an app id) via the `OWNED_SITE_DOMAIN_NAME` report filter. Requires enabling **"AdSense Management API"** in Cloud Console, not "AdSense Platform API" (that one's for reseller/multi-account platforms). Reuses `metricSnapshots` directly (no separate table like AdMob's mediation) — `revenue`/`pageviews`/`impressions`/`clicks`/`adRequests` map straight onto existing fields. `pnpm run sync:adsense`/`sync:adsense:backfill`/`adsense:accounts` mirror the equivalent AdMob commands.

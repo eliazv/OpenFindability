@@ -22,8 +22,13 @@ pnpm run sync
 pnpm run sync:aso
 pnpm run sync:revenuecat
 pnpm run sync:admob
+pnpm run sync:admob:backfill
 pnpm run admob:auth
 pnpm run admob:apps
+pnpm run sync:adsense
+pnpm run sync:adsense:backfill
+pnpm run adsense:auth
+pnpm run adsense:accounts
 pnpm run research:aso -- --slug <project-slug>
 pnpm run db:generate
 pnpm run db:studio
@@ -82,3 +87,7 @@ Important implementation notes:
 - `pnpm run db:generate` was re-run after these schema changes (`drizzle/0002_damp_karen_page.sql`) — always regenerate + apply (`readData()`/`writeData()` auto-run `migrate()` at module load, so just re-running any script does it) after editing `lib/db/schema.ts`.
 - `scripts/add-project.ts` accepts `--admob-app-id-ios` alongside the existing `--admob-app-id`.
 - `pnpm run admob:apps` (`scripts/admob-list-apps.ts`) lists every app registered under the AdMob account (`accounts.apps.list`) with its `ca-app-pub-...~...` id, platform and display name — the fastest way to find app ids to configure per project instead of digging through the AdMob UI.
+- `syncAdmobProject(project, startDate, endDate)` takes a date range, not a single day: both the network report and the mediation report use the `DATE` dimension so one API call returns one row per day (per app/ad-source/format) for the whole range, which we then group by day in `lib/connectors/admob.ts` into one `metricSnapshots`/`admobMediationMetrics` row per date. `lib/sync.ts` calls it with `daysAgo(backfillDays)` to `daysAgo(1)`, reusing the same `backfillDays` option (default 30) already shared with GSC/Play Console. `scripts/sync.ts` accepts an optional extra CLI arg to override it for a one-time deep backfill; `pnpm run sync:admob:backfill` is a fixed 1500-day (~4y) version of this baked into `package.json` (pnpm's `--` arg passthrough for custom values mis-quotes on Windows/PowerShell — use `npx tsx scripts/sync.ts admob <days>` directly instead). AdMob simply returns fewer rows than requested once it runs out of real history — asking for more days than the account/app has data for is harmless.
+- **AdSense connector** (`lib/connectors/adsense.ts`, source `"adsense"`) — for site display-ad revenue, separate from AdMob (app ads). AdSense Management API v2 has no OAuth-free service-account option either: same interactive OAuth2 pattern as AdMob (`ADSENSE_CLIENT_ID`/`ADSENSE_CLIENT_SECRET`/`ADSENSE_REFRESH_TOKEN`, minted once via `pnpm run adsense:auth`, needs a real browser) plus `ADSENSE_ACCOUNT_ID` (bare `pub-...` id, discoverable via `pnpm run adsense:accounts` → `accounts.list()`; the connector prefixes it to `accounts/${id}` itself, mirroring how `ADMOB_PUBLISHER_ID` is stored bare and prefixed in `lib/connectors/admob.ts`). Enable **"AdSense Management API"** (`adsense.googleapis.com`) in Cloud Console — not "AdSense Platform API" (`adsenseplatform.googleapis.com`), which is for reseller/multi-account platforms, the wrong product for reading your own account's data.
+- A project maps to AdSense via `Project.adsenseSiteDomain` (a domain string like `example.com`), not an app id — AdSense reports on websites, not apps. `syncAdsenseProject(project, startDate, endDate)` calls `accounts.reports.generate` with a `DATE` dimension (same range-in-one-call pattern as AdMob) filtered by `OWNED_SITE_DOMAIN_NAME==<domain>`, and maps `ESTIMATED_EARNINGS`/`PAGE_VIEWS`/`IMPRESSIONS`/`CLICKS`/`AD_REQUESTS` into the existing `metricSnapshots` shape (`pageviews` reused the same way Umami uses it) — no new table needed, unlike AdMob's separate mediation table. AdSense's response shape is GET-style query params + a `{headers, rows}` result (dimension/metric name → column index), not AdMob's POST body + streamed `[{header},{row},...,{footer}]` — the two connectors share the pattern (OAuth2, date-range backfill, `Project` field → filter) but not request/response code.
+- `pnpm run sync:adsense`/`pnpm run sync:adsense:backfill` mirror the AdMob commands exactly (same `backfillDays` default, same 1500-day fixed backfill script). `adsense` was added to `SourceType` (`lib/types.ts`), the `metric_snapshots.source`/`connector_runs.source` enums (`lib/db/schema.ts`), `scripts/sync.ts`'s `validSources`, and `lib/doctor.ts`'s credential/staleness checks.
