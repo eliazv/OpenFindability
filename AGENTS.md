@@ -49,6 +49,7 @@ pnpm run sync:aso
 pnpm run sync:revenuecat
 pnpm run sync:admob
 pnpm run admob:auth
+pnpm run admob:apps
 pnpm run research:aso -- --slug <project-slug>
 pnpm run db:generate
 pnpm run db:studio
@@ -88,3 +89,5 @@ pnpm build
 - `lib/insights.ts`/`lib/report.ts` still aggregate over the full in-memory `AppData` blob from `readData()`, not SQL `GROUP BY`/`SUM` — switching them to real SQL aggregation is a valid future step, not required by this migration.
 - `mcp/server.ts` does not use the `db`/`readData`/`writeData` singletons from `lib/db/client.ts`/`lib/store.ts` directly — it runs via `tsx` with an arbitrary cwd from other repos, so it builds its own `AppDb` with `createDb(dbFilePath, migrationsFolder)` (paths resolved from `import.meta.url`, not `process.cwd()`) and calls `readDataWith(database)`/`writeDataWith(database, data)` against it. Both `createDb` and `readDataWith`/`writeDataWith` exist specifically to support this cross-repo use case alongside the main app's cwd-based singletons.
 - Pre-existing, unrelated to storage: `mcp/server.ts`'s `@/lib/...` path aliases only resolve under `tsx` when the process cwd is the OpenFindability repo itself, so the documented any-repo invocation (`docs/guide/mcp-server.md`) currently only works when the host's cwd happens to be this repo. Not fixed as part of the SQLite migration.
+- AdMob apps can have separate app ids per platform: `Project.admobAppId` (Android/primary) and `Project.admobAppIdIos` (iOS, optional). `syncAdmobProject` (`lib/connectors/admob.ts`) fetches the network report filtered to whichever ids are configured and sums them into one `metricSnapshots` row per project per day — so a single OpenFindability project can represent one logical app shipped on both stores.
+- AdMob mediation data (revenue/requests/eCPM per ad network like AdMob Network, AppLovin, Unity Ads, etc., and per ad format) is a separate report from the network report and is stored in its own table, `admobMediationMetrics` (`AdmobMediationMetric` in `lib/types.ts`), not in `metricSnapshots`. `syncAdmobProject` also calls `accounts.mediationReport.generate` (dimensions `DATE, APP, AD_SOURCE, FORMAT`) and returns `mediationMetrics` alongside `snapshots`; `lib/sync.ts`'s `upsertMediationMetrics` dedupes by `(projectId, date, adSourceId, format)` the same way other sources dedupe on re-sync.

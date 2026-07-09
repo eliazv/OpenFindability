@@ -1,5 +1,6 @@
 import { db, type AppDb } from "@/lib/db/client";
 import {
+  admobMediationMetrics as admobMediationMetricsTable,
   appKeywords as appKeywordsTable,
   appReviews as appReviewsTable,
   asoAppRankSnapshots as asoAppRankSnapshotsTable,
@@ -14,6 +15,7 @@ import {
   searchQueries as searchQueriesTable,
 } from "@/lib/db/schema";
 import type {
+  AdmobMediationMetric,
   AppData,
   AppKeywordMetric,
   AppReview,
@@ -93,6 +95,12 @@ export function readDataWith(database: AppDb): AppData {
 
   const gscSitemaps = database.select().from(gscSitemapsTable).all().map(denull) as GscSitemap[];
 
+  const admobMediationMetrics = database
+    .select()
+    .from(admobMediationMetricsTable)
+    .all()
+    .map(denull) as AdmobMediationMetric[];
+
   return {
     projects,
     metricSnapshots,
@@ -106,6 +114,7 @@ export function readDataWith(database: AppDb): AppData {
     asoAppRankSnapshots,
     gscDimensionBreakdowns,
     gscSitemaps,
+    admobMediationMetrics,
   };
 }
 
@@ -120,6 +129,7 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     tx.delete(asoAppRankSnapshotsTable).run();
     tx.delete(gscDimensionBreakdownsTable).run();
     tx.delete(gscSitemapsTable).run();
+    tx.delete(admobMediationMetricsTable).run();
     tx.delete(metricSnapshotsTable).run();
     tx.delete(projectsTable).run();
     tx.delete(asoKeywordSnapshotsTable).run();
@@ -163,6 +173,9 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     }
     for (const batch of chunk(data.gscSitemaps, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(gscSitemapsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.admobMediationMetrics, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(admobMediationMetricsTable).values(batch).run();
     }
   });
 }

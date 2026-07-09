@@ -18,6 +18,7 @@
     "sync:revenuecat": "tsx scripts/sync.ts revenuecat",
     "sync:admob": "tsx scripts/sync.ts admob",
     "admob:auth": "tsx scripts/admob-auth.ts",
+    "admob:apps": "tsx scripts/admob-list-apps.ts",
     "gsc:sites": "tsx scripts/gsc-sites.ts",
     "project:add": "tsx scripts/add-project.ts",
     "research:aso": "tsx scripts/aso-research.ts",

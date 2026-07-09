@@ -62,15 +62,25 @@ AdMob has no service-account support — it needs interactive OAuth2 as the AdMo
 
 ### Configure a project
 
+If the app ships on both Android and iOS with two different AdMob app ids, set both — `admobAppId` is Android/primary, `admobAppIdIos` is the iOS counterpart. Revenue from both is summed into one snapshot per project per day.
+
 ```json
 {
-  "admobAppId": "ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy"
+  "admobAppId": "ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy",
+  "admobAppIdIos": "ca-app-pub-xxxxxxxxxxxxxxxx~zzzzzzzzzz"
 }
 ```
 
 ```bash
 pnpm run project:add -- --name "Sette e Mezzo" --slug settemezzo --type app \
-  --admob-app-id ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy
+  --admob-app-id ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy \
+  --admob-app-id-ios ca-app-pub-xxxxxxxxxxxxxxxx~zzzzzzzzzz
+```
+
+Don't know the App IDs? List every app registered under the AdMob account:
+
+```bash
+pnpm run admob:apps
 ```
 
 ### Sync
@@ -79,9 +89,13 @@ pnpm run project:add -- --name "Sette e Mezzo" --slug settemezzo --type app \
 pnpm run sync:admob
 ```
 
-Calls `accounts.networkReport.generate` for yesterday's date, filters the report row matching the project's `admobAppId`, and stores one `metricSnapshots` row with `revenue` (converted from `ESTIMATED_EARNINGS` micros), `impressions`, `clicks` and `adRequests`.
+Calls `accounts.networkReport.generate` for yesterday's date, filters rows matching the project's `admobAppId`/`admobAppIdIos`, and sums them into one `metricSnapshots` row with `revenue` (converted from `ESTIMATED_EARNINGS` micros), `impressions`, `clicks` and `adRequests`.
 
 AdMob's daily network report is a true daily total, safe to sum across dates and projects (unlike RevenueCat's rolling window above).
+
+### Mediation report
+
+The same sync also calls `accounts.mediationReport.generate` (dimensions `DATE, APP, AD_SOURCE, FORMAT`) to see which mediated ad network (AdMob Network, AppLovin, Unity Ads, Meta, etc.) and ad format is actually driving revenue — the network report above only gives an account-level total. Results are stored in a separate table, `admobMediationMetrics` (one row per project/date/ad source/format), with `adRequests`, `matchedRequests`, `matchRate` (computed), `impressions`, `clicks`, `estimatedEarnings` and `observedEcpm`. Not yet surfaced in the dashboard/report — query it directly (`pnpm run db:studio` or `readData().admobMediationMetrics`) for now.
 
 ## Dashboard
 
@@ -109,4 +123,4 @@ Writes `project/<slug>/reports/<date>-monetization-data.md` (`buildMonetizationR
 - Both connectors are part of the default `pnpm run sync` (like GSC/Umami/Play Console), since each is a single cheap API call per project — unlike ASO, which stays strictly opt-in (`pnpm run sync:aso`) due to rate limits.
 - `pnpm run doctor` checks that `REVENUECAT_API_KEY` and the full AdMob credential set are configured, and flags stale syncs per project/source.
 - RevenueCat's Charts time-series API (which would give true daily revenue instead of a rolling window) is not implemented yet — flagged as a known v0.1 limitation rather than guessed at.
-- `lib/sync.ts` upserts `metricSnapshots` by `(projectId, source, date)` on every sync, so re-running `pnpm run sync:revenuecat`/`pnpm run sync:admob` (or the default `pnpm run sync`) the same day replaces that day's row instead of duplicating it — safe for the monthly/trend sums above.
+- `lib/sync.ts` upserts `metricSnapshots` by `(projectId, source, date)` on every sync, so re-running `pnpm run sync:revenuecat`/`pnpm run sync:admob` (or the default `pnpm run sync`) the same day replaces that day's row instead of duplicating it — safe for the monthly/trend sums above. `admobMediationMetrics` is upserted the same way, keyed by `(projectId, date, adSourceId, format)`.

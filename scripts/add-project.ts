@@ -20,6 +20,7 @@ type Args = {
   asoCountries?: string;
   revenueCatProjectId?: string;
   admobAppId?: string;
+  admobAppIdIos?: string;
   notes?: string;
 };
 
@@ -48,6 +49,7 @@ function parseArgs(argv: string[]): Args {
       case "aso-countries": args.asoCountries = value; break;
       case "revenuecat-project-id": args.revenueCatProjectId = value; break;
       case "admob-app-id": args.admobAppId = value; break;
+      case "admob-app-id-ios": args.admobAppIdIos = value; break;
       case "notes": args.notes = value; break;
       default:
         throw new Error(`Unknown argument --${key}`);
@@ -74,7 +76,8 @@ async function main() {
         "[--category Category] [--url https://example.com/] [--gsc sc-domain:example.com] " +
         "[--umami <websiteId>] [--play-console com.example.app] [--app-store-track-id 123] " +
         "[--respect-aso-app-id 3] [--aso-keywords \"one,two\"] [--aso-countries it,us] " +
-        "[--revenuecat-project-id proj_xxx] [--admob-app-id ca-app-pub-xxx~yyy] [--notes \"...\"]",
+        "[--revenuecat-project-id proj_xxx] [--admob-app-id ca-app-pub-xxx~yyy] " +
+        "[--admob-app-id-ios ca-app-pub-xxx~zzz] [--notes \"...\"]",
     );
   }
 
@@ -102,6 +105,7 @@ async function main() {
     asoCountries: splitCsv(args.asoCountries),
     revenueCatProjectId: args.revenueCatProjectId,
     admobAppId: args.admobAppId,
+    admobAppIdIos: args.admobAppIdIos,
     notes: args.notes,
     createdAt: now,
     updatedAt: now,
@@ -130,7 +134,8 @@ async function main() {
     !project.playConsolePackageName &&
     !project.asoKeywords?.length &&
     !project.revenueCatProjectId &&
-    !project.admobAppId
+    !project.admobAppId &&
+    !project.admobAppIdIos
   ) {
     console.log(
       "Note: no data source configured yet (gsc/umami/play-console/aso/revenuecat/admob). Add one before running `pnpm run sync`.",

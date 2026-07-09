@@ -16,6 +16,7 @@ export const projects = sqliteTable("projects", {
   asoCountries: text("aso_countries", { mode: "json" }).$type<string[]>(),
   revenueCatProjectId: text("revenue_cat_project_id"),
   admobAppId: text("admob_app_id"),
+  admobAppIdIos: text("admob_app_id_ios"),
   notes: text("notes"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
@@ -274,6 +275,38 @@ export const asoAppRankSnapshots = sqliteTable(
   (table) => [index("aso_app_rank_snapshots_project_date").on(table.projectId, table.date)],
 );
 
+export const admobMediationMetrics = sqliteTable(
+  "admob_mediation_metrics",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    adSourceId: text("ad_source_id"),
+    adSourceName: text("ad_source_name").notNull(),
+    format: text("format"),
+    adRequests: integer("ad_requests"),
+    matchedRequests: integer("matched_requests"),
+    matchRate: real("match_rate"),
+    impressions: integer("impressions"),
+    clicks: integer("clicks"),
+    estimatedEarnings: real("estimated_earnings"),
+    observedEcpm: real("observed_ecpm"),
+    currency: text("currency"),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("admob_mediation_metrics_project_date_source_format").on(
+      table.projectId,
+      table.date,
+      table.adSourceId,
+      table.format,
+    ),
+  ],
+);
+
 export const schema = {
   projects,
   metricSnapshots,
@@ -287,4 +320,5 @@ export const schema = {
   asoAppRankSnapshots,
   gscDimensionBreakdowns,
   gscSitemaps,
+  admobMediationMetrics,
 };

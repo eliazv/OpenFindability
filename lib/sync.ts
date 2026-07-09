@@ -10,6 +10,7 @@ import { syncAdmobProject } from "@/lib/connectors/admob";
 import { upsertAsoCacheRows } from "@/lib/aso-cache";
 import { readData, writeData } from "@/lib/store";
 import type {
+  AdmobMediationMetric,
   ConnectorRun,
   GscDimensionBreakdown,
   GscSitemap,
@@ -55,6 +56,17 @@ function upsertBreakdowns(existing: GscDimensionBreakdown[], incoming: GscDimens
 
 function upsertSitemaps(existing: GscSitemap[], incoming: GscSitemap[]): GscSitemap[] {
   return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.path}`);
+}
+
+function upsertMediationMetrics(
+  existing: AdmobMediationMetric[],
+  incoming: AdmobMediationMetric[],
+): AdmobMediationMetric[] {
+  return upsertByKey(
+    existing,
+    incoming,
+    (row) => `${row.projectId}::${row.date}::${row.adSourceId ?? row.adSourceName}::${row.format ?? ""}`,
+  );
 }
 
 export async function syncProjects(options: SyncOptions = {}): Promise<SyncResult[]> {
@@ -149,6 +161,7 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
       try {
         const synced = await syncAdmobProject(project, daysAgo(1));
         data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
+        data.admobMediationMetrics = upsertMediationMetrics(data.admobMediationMetrics, synced.mediationMetrics);
         results.push(synced.result);
         data.connectorRuns.push(toRun("admob", project.id, startedAt, synced.result));
       } catch (error) {

@@ -102,7 +102,7 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
     if (project.gscProperty) sources.push("gsc");
     if (project.umamiWebsiteId) sources.push("umami");
     if (project.revenueCatProjectId) sources.push("revenuecat");
-    if (project.admobAppId) sources.push("admob");
+    if (project.admobAppId || project.admobAppIdIos) sources.push("admob");
 
     for (const source of sources) {
       const lastRun = data.connectorRuns

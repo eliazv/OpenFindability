@@ -15,6 +15,13 @@
       "when": 1783503539646,
       "tag": "0001_fantastic_silver_centurion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783603863713,
+      "tag": "0002_damp_karen_page",
+      "breakpoints": true
     }
   ]
 }

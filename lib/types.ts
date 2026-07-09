@@ -18,6 +18,7 @@ export type Project = {
   asoCountries?: string[];
   revenueCatProjectId?: string;
   admobAppId?: string;
+  admobAppIdIos?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -113,6 +114,25 @@ export type AsoAppRankSnapshot = {
   appRank: number | null;
   rawJson?: unknown;
   observedAt: string;
+  createdAt: string;
+};
+
+export type AdmobMediationMetric = {
+  id: string;
+  projectId: string;
+  date: string;
+  adSourceId?: string;
+  adSourceName: string;
+  format?: string;
+  adRequests?: number;
+  matchedRequests?: number;
+  matchRate?: number;
+  impressions?: number;
+  clicks?: number;
+  estimatedEarnings?: number;
+  observedEcpm?: number;
+  currency?: string;
+  rawJson?: unknown;
   createdAt: string;
 };
 
@@ -220,6 +240,7 @@ export type AppData = {
   asoAppRankSnapshots: AsoAppRankSnapshot[];
   gscDimensionBreakdowns: GscDimensionBreakdown[];
   gscSitemaps: GscSitemap[];
+  admobMediationMetrics: AdmobMediationMetric[];
 };
 
 export type SyncOptions = {
