@@ -1,16 +1,18 @@
 # OpenFindability
 
-Local SEO dashboard connecting Google Search Console and Umami to your Claude Code workflow via MCP.
+Local dashboard that pulls together how your web and app projects are found and how they monetize — Google Search Console, Umami, Google Play Console, ASO keyword research (via a local RespectASO instance), RevenueCat and AdMob (including ad mediation by network) — in one place, plus an MCP server so Claude Code can query the same data live from any project.
 
-Track how your web projects are found, spot SEO opportunities, and query live analytics data from any Claude Code session — without building a SaaS or a heavy monorepo.
+No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app backed by a single SQLite file.
 
 ## What it does
 
-- **Local Next.js dashboard** — visualize GSC + Umami data for all your projects
-- **MCP server** — call live GSC and Umami data from any Claude Code project as a native tool
-- **SEO opportunities** — automated detection of low-CTR queries, striking distance keywords, cannibalization, and more
-- **File-backed storage** — single JSON file, no database
-- **Demo data** — seed and explore without real credentials
+- **Local dashboard** — sidebar with every project, a homepage overview and a per-project page (SEO, analytics, Play Store reviews, ASO keywords, ad/subscription revenue, opportunities, sync log)
+- **SEO opportunities** — automated detection of low-CTR queries, striking-distance keywords, cannibalization, declining/growing pages, and more
+- **ASO research** — keyword popularity/difficulty/opportunity scoring via a local RespectASO instance, with a reusable cross-project keyword cache
+- **App monetization** — RevenueCat (MRR, subscribers, trials) and AdMob (ad revenue, impressions, clicks, and a per-ad-network mediation breakdown), Android + iOS summed per app
+- **MCP server** — call live GSC/Umami data and manage projects from any Claude Code session as native tools
+- **SQLite storage** — `data/openfindability.db` via Drizzle ORM, a single local file with full history (no server, no manual setup)
+- **Demo data** — seed and explore without any real credentials
 
 ## Quick start
 
@@ -24,8 +26,6 @@ Open `http://localhost:3000`.
 
 ## Guided setup
 
-Use this order for a clean local setup:
-
 ```bash
 pnpm install
 cp .env.example .env
@@ -33,27 +33,40 @@ pnpm run doctor
 pnpm dev
 ```
 
-Then configure only the connectors you need.
+Then configure only the connectors you need — every one is optional and independent.
 
 ### 1. Add credentials
 
-Google Search Console and Play Console use a Google service account JSON file. Put it under `secrets/google/` and point `.env` to it:
+**Google Search Console / Play Console** use a Google service account JSON file. Put it under `secrets/google/` and point `.env` to it:
 
 ```env
 GOOGLE_SERVICE_ACCOUNT_FILE=./secrets/google/search-console-service-account.json
 ```
 
-Umami only needs the API base URL and API key:
+**Umami** only needs the API base URL and key:
 
 ```env
 UMAMI_BASE_URL=https://api.umami.is/v1
 UMAMI_API_KEY=...
 ```
 
-RespectASO is optional and local:
+**RespectASO** is optional and local:
 
 ```env
 RESPECT_ASO_BASE_URL=http://localhost
+```
+
+**RevenueCat** uses a V2 secret key:
+
+```env
+REVENUECAT_API_KEY=sk_xxx
+```
+
+**AdMob** needs interactive OAuth2 (no service account support) — see [`docs/guide/admob-setup.md`](docs/guide/admob-setup.md) for the full walkthrough:
+
+```bash
+pnpm run admob:auth   # one-time, mints ADMOB_REFRESH_TOKEN (needs a real browser)
+pnpm run admob:apps   # lists every AdMob app id on the account
 ```
 
 ### 2. Add a project
@@ -67,7 +80,7 @@ pnpm run project:add -- \
   --gsc sc-domain:example.com
 ```
 
-For an app with ASO research:
+For an app with ASO research and monetization:
 
 ```bash
 pnpm run project:add -- \
@@ -77,14 +90,17 @@ pnpm run project:add -- \
   --app-store-track-id 1234567890 \
   --respect-aso-app-id 3 \
   --aso-countries it \
-  --aso-keywords "main keyword,secondary keyword"
+  --aso-keywords "main keyword,secondary keyword" \
+  --revenuecat-project-id proj_xxx \
+  --admob-app-id ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy \
+  --admob-app-id-ios ca-app-pub-xxxxxxxxxxxxxxxx~zzzzzzzzzz
 ```
 
 ### 3. Sync or research
 
 ```bash
-pnpm run sync:gsc       # import Search Console data
-pnpm run sync:aso       # import configured RespectASO keywords
+pnpm run sync           # sync GSC/Umami/Play Console/RevenueCat/AdMob for every project
+pnpm run sync:aso       # import configured RespectASO keywords (opt-in, rate-limited)
 pnpm run report -- example-app all
 ```
 
@@ -99,7 +115,7 @@ pnpm run research:aso -- \
   --keywords "main keyword,secondary keyword,online,offline"
 ```
 
-Research reports are written to `project/<slug>/reports/`, which is ignored by git. ASO keyword observations are also cached in `data/openfindability.json`, so later research can reuse recent `keyword + country` results across projects. Use `--refresh` to force a new RespectASO lookup.
+Research reports are written to `project/<slug>/reports/`, which is ignored by git. ASO keyword observations are also cached in the database, so later research can reuse recent `keyword + country` results across projects. Use `--refresh` to force a new RespectASO lookup.
 
 ## MCP server — use from any Claude Code project
 
@@ -161,39 +177,20 @@ Live tools (`get_gsc_stats`, `get_umami_stats`, `get_project_summary`, `get_page
 
 See [`docs/guide/mcp-server.md`](docs/guide/mcp-server.md) for full setup and usage.
 
-## Configure real connectors
-
-Copy `.env.example` to `.env` and fill the values you need.
-
-**Google Search Console** — use a Google service account with access to your Search Console property. Put the JSON file under `secrets/google/`.
-
-```env
-GOOGLE_SERVICE_ACCOUNT_FILE=./secrets/google/search-console-service-account.json
-```
-
-or inline:
-
-```env
-GOOGLE_SERVICE_ACCOUNT_JSON={...}
-```
-
-**Umami:**
-
-```env
-UMAMI_BASE_URL=https://api.umami.is/v1
-UMAMI_API_KEY=...
-```
-
-Then add projects via the MCP `create_project` tool or edit `data/openfindability.json` directly.
-
 ## Useful commands
 
 ```bash
-pnpm run doctor       # check connector config
-pnpm seed:demo        # seed demo data
-pnpm run sync         # sync all connectors
-pnpm run sync:gsc     # sync GSC only
-pnpm run sync:umami   # sync Umami only
+pnpm run doctor           # check connector config, flag stale syncs
+pnpm seed:demo            # seed demo data
+pnpm dev                  # start the dashboard
+pnpm run sync             # sync gsc/umami/play_console/revenuecat/admob for every project
+pnpm run sync:aso         # sync ASO keywords (opt-in)
+pnpm run admob:auth       # one-time AdMob OAuth2 setup
+pnpm run admob:apps       # list AdMob app ids on the account
+pnpm run research:aso -- --slug <project-slug>
+pnpm run report -- <slug> <gsc|aso|monetization|all>
+pnpm run db:studio        # open Drizzle Studio (local GUI SQL browser)
+pnpm run db:generate      # regenerate migrations after editing lib/db/schema.ts
 pnpm typecheck
 pnpm build
 ```
@@ -202,11 +199,16 @@ pnpm build
 
 v0.1 uses manual sync only.
 
-- GSC imports the last 30 days by default (Search Console data has ~2 day delay).
-- Umami imports yesterday.
-- Every import keeps `rawJson`.
-- Connector runs are logged to `connectorRuns`.
+- GSC imports the last 30 days by default (Search Console data has ~2 day delay), plus device/country/searchAppearance breakdowns and sitemap status.
+- Umami and AdMob/RevenueCat import yesterday's data.
+- ASO stays opt-in (`pnpm run sync:aso`) — rate-limited and cached upstream, so it never runs as part of the default `pnpm run sync`.
+- Every import keeps `rawJson`. Connector runs are logged to `connectorRuns`.
+- Re-running a sync the same day replaces that day's row per project/source instead of duplicating it — different days accumulate, so history is preserved.
 - Page-level GSC data is stored separately from query-level data.
+
+## Storage
+
+All data lives in `data/openfindability.db`, a local SQLite database accessed through Drizzle ORM (`lib/db/schema.ts`). No server process, no extra infra — still a single local file, just relational and queryable (`pnpm run db:studio`) instead of a hand-rolled JSON blob.
 
 ## Private files
 
@@ -214,8 +216,8 @@ These are intentionally ignored by git:
 
 ```
 .env
-data/openfindability.json
-project/           ← per-project reports, context, notes
+data/                ← openfindability.db (+ WAL/journal files)
+project/             ← per-project reports, context, notes
 private-notes/
 secrets/
 ```
