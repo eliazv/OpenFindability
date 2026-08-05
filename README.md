@@ -1,6 +1,6 @@
 # OpenFindability
 
-Local dashboard that pulls together how your web and app projects are found and how they monetize — Google Search Console, Umami, Google Play Console, ASO keyword research (via a local RespectASO instance), RevenueCat, AdMob (including ad mediation by network) and AdSense — in one place, plus an MCP server so Claude Code can query the same data live from any project.
+Local dashboard for SEO, ASO and app/site monetization — Google Search Console (+ index audit), Umami, Play Console, ASO keyword research (via a local RespectASO instance), App Store Connect (ASO copy + Product Page Optimization tests), RevenueCat, AdMob (including ad mediation by network) and AdSense — with a Claude Code MCP server. SQLite-backed, no SaaS.
 
 No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app backed by a single SQLite file.
 
@@ -10,6 +10,7 @@ No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app b
 - **SEO opportunities** — automated detection of low-CTR queries, striking-distance keywords, cannibalization, declining/growing pages, and more
 - **GSC index audit** — inspects sitemap/Search Analytics URLs across every connected Search Console property, groups indexing problems and keeps history
 - **ASO research** — keyword popularity/difficulty/opportunity scoring via a local RespectASO instance, with a reusable cross-project keyword cache
+- **App Store Connect** — read/write live App Store product text (name, subtitle, keywords, description, promotional text) with a full pull/push history, plus Product Page Optimization (icon/screenshot/app preview A/B test) management — see [`docs/guide/appstoreconnect-workflow.md`](docs/guide/appstoreconnect-workflow.md)
 - **App & site monetization** — RevenueCat (MRR, subscribers, trials), AdMob (in-app ad revenue, impressions, clicks, per-ad-network mediation breakdown, Android + iOS summed per app) and AdSense (site display-ad revenue)
 - **MCP server** — call live GSC/Umami data and manage projects from any Claude Code session as native tools
 - **SQLite storage** — `data/openfindability.db` via Drizzle ORM, a single local file with full history (no server, no manual setup)
@@ -75,6 +76,18 @@ pnpm run admob:apps   # lists every AdMob app id on the account
 ```bash
 pnpm run adsense:auth       # one-time, mints ADSENSE_REFRESH_TOKEN (needs a real browser)
 pnpm run adsense:accounts   # lists AdSense account ids
+```
+
+**App Store Connect** needs an API key (Users and Access → Integrations → App Store Connect API). Put the `.p8` file under `secrets/appstoreconnect/` and point `.env` to it:
+
+```env
+ASC_ISSUER_ID=...
+ASC_KEY_ID=...
+ASC_PRIVATE_KEY_PATH=./secrets/appstoreconnect/AuthKey_<KEY_ID>.p8
+```
+
+```bash
+pnpm run asc:apps   # lists every app visible to the key, to confirm the appStoreTrackId mapping
 ```
 
 ### 2. Add a project
@@ -220,8 +233,12 @@ pnpm run admob:auth       # one-time AdMob OAuth2 setup
 pnpm run admob:apps       # list AdMob app ids on the account
 pnpm run adsense:auth     # one-time AdSense OAuth2 setup
 pnpm run adsense:accounts # list AdSense account ids
+pnpm run asc:apps         # list App Store Connect apps visible to the key
+pnpm run aso:pull-copy -- --slug <project-slug>                  # read live App Store text
+pnpm run aso:push-copy -- --slug <project-slug> --locale it [...] [--apply]  # write it (dry-run by default)
+pnpm run asc:experiments -- --slug <project-slug>  # sync/create Product Page Optimization tests
 pnpm run research:aso -- --slug <project-slug>
-pnpm run report -- <slug> <gsc|aso|monetization|all>
+pnpm run report -- <slug> <gsc|aso|asc|monetization|all>
 pnpm run db:studio        # open Drizzle Studio (local GUI SQL browser)
 pnpm run db:generate      # regenerate migrations after editing lib/db/schema.ts
 pnpm typecheck
