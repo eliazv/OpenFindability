@@ -9,6 +9,7 @@ const legacyJsonPath = path.join(process.cwd(), "data", "openfindability.json");
 async function main() {
   const raw = await readFile(legacyJsonPath, "utf8");
   const data = JSON.parse(raw) as AppData;
+  data.gscIndexInspections ??= [];
 
   await writeData(data);
 

@@ -8,6 +8,7 @@ No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app b
 
 - **Local dashboard** — sidebar with every project, a homepage overview and a per-project page (SEO, analytics, Play Store reviews, ASO keywords, ad/subscription revenue, opportunities, sync log)
 - **SEO opportunities** — automated detection of low-CTR queries, striking-distance keywords, cannibalization, declining/growing pages, and more
+- **GSC index audit** — inspects sitemap/Search Analytics URLs across every connected Search Console property, groups indexing problems and keeps history
 - **ASO research** — keyword popularity/difficulty/opportunity scoring via a local RespectASO instance, with a reusable cross-project keyword cache
 - **App & site monetization** — RevenueCat (MRR, subscribers, trials), AdMob (in-app ad revenue, impressions, clicks, per-ad-network mediation breakdown, Android + iOS summed per app) and AdSense (site display-ad revenue)
 - **MCP server** — call live GSC/Umami data and manage projects from any Claude Code session as native tools
@@ -118,6 +119,7 @@ pnpm run project:add -- \
 
 ```bash
 pnpm run sync           # sync GSC/Umami/Play Console/RevenueCat/AdMob/AdSense for every project
+pnpm run audit:index    # inspect up to 2,000 URLs for every connected GSC property
 pnpm run sync:aso       # import configured RespectASO keywords (opt-in, rate-limited)
 pnpm run report -- example-app all
 ```
@@ -134,6 +136,15 @@ pnpm run research:aso -- \
 ```
 
 Research reports are written to `project/<slug>/reports/`, which is ignored by git. ASO keyword observations are also cached in the database, so later research can reuse recent `keyword + country` results across projects. Use `--refresh` to force a new RespectASO lookup.
+
+The index audit is manual and progressive. To make a smaller first pass or target one property/project:
+
+```bash
+pnpm run audit:index -- 200
+pnpm run audit:index -- 2000 example-site
+```
+
+It writes a global report to `private-notes/index-audits/` and per-project reports to `project/<slug>/reports/`. See [`docs/guide/gsc-index-audit.md`](docs/guide/gsc-index-audit.md) for coverage and API limitations.
 
 ## MCP server — use from any Claude Code project
 

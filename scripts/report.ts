@@ -1,7 +1,13 @@
 import "dotenv/config";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildAsoReportMarkdown, buildGscReportMarkdown, buildMonetizationReportMarkdown } from "@/lib/report";
+import {
+  buildAscReportMarkdown,
+  buildAsoReportMarkdown,
+  buildGscIndexAuditReportMarkdown,
+  buildGscReportMarkdown,
+  buildMonetizationReportMarkdown,
+} from "@/lib/report";
 import { readData } from "@/lib/store";
 import type { AppData, Project, SourceType } from "@/lib/types";
 
@@ -27,7 +33,7 @@ async function main() {
   const args = process.argv.slice(2).filter((token) => token !== "--");
   const slug = args[0];
   if (!slug) {
-    throw new Error("Usage: pnpm run report -- <project-slug> [gsc|aso|monetization|all]");
+    throw new Error("Usage: pnpm run report -- <project-slug> [gsc|index|aso|asc|monetization|all]");
   }
   const section = args[1] ?? "all";
 
@@ -58,6 +64,28 @@ async function main() {
       const fileName = `${today}-aso-data.md`;
       await writeFile(path.join(reportsDir, fileName), markdown, "utf8");
       console.log(`Wrote ASO data report to project/${slug}/reports/${fileName}`);
+    }
+  }
+
+  if (section === "index" || section === "all") {
+    if (!project.gscProperty) {
+      console.log(`Skipping index audit report for "${slug}": no gscProperty configured on the project.`);
+    } else {
+      const markdown = buildGscIndexAuditReportMarkdown(data, { project });
+      const fileName = `${today}-gsc-index-audit.md`;
+      await writeFile(path.join(reportsDir, fileName), markdown, "utf8");
+      console.log(`Wrote GSC index audit report to project/${slug}/reports/${fileName}`);
+    }
+  }
+
+  if (section === "asc" || section === "all") {
+    if (data.ascMetadataSnapshots.every((row) => row.projectId !== project.id) && data.ascExperiments.every((row) => row.projectId !== project.id)) {
+      console.log(`Skipping App Store Connect report for "${slug}": no data pulled yet (run aso:pull-copy / asc:experiments).`);
+    } else {
+      const markdown = buildAscReportMarkdown(data, project);
+      const fileName = `${today}-appstoreconnect-data.md`;
+      await writeFile(path.join(reportsDir, fileName), markdown, "utf8");
+      console.log(`Wrote App Store Connect report to project/${slug}/reports/${fileName}`);
     }
   }
 

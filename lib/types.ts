@@ -118,6 +118,47 @@ export type AsoAppRankSnapshot = {
   createdAt: string;
 };
 
+export type AscMetadataKind = "pull" | "push";
+
+export type AscMetadataSnapshot = {
+  id: string;
+  projectId: string;
+  locale: string;
+  kind: AscMetadataKind;
+  name?: string;
+  subtitle?: string;
+  keywords?: string;
+  description?: string;
+  promotionalText?: string;
+  whatsNew?: string;
+  versionState?: string;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
+export type AscExperimentElementType = "appIcon" | "screenshot" | "appPreview";
+
+export type AscExperiment = {
+  id: string;
+  projectId: string;
+  ascExperimentId: string;
+  name: string;
+  state: string;
+  elementType?: AscExperimentElementType | string;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
+export type AscExperimentTreatment = {
+  id: string;
+  experimentId: string;
+  ascTreatmentId: string;
+  name: string;
+  state?: string;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
 export type AdmobMediationMetric = {
   id: string;
   projectId: string;
@@ -194,6 +235,45 @@ export type GscSitemap = {
   createdAt: string;
 };
 
+export type GscIndexIssueCode =
+  | "indexed"
+  | "blocked_by_robots"
+  | "blocked_by_noindex"
+  | "not_found"
+  | "soft_404"
+  | "server_error"
+  | "access_denied"
+  | "redirect_error"
+  | "crawled_not_indexed"
+  | "discovered_not_indexed"
+  | "duplicate_canonical"
+  | "redirected"
+  | "not_indexed"
+  | "inspection_error";
+
+export type GscIndexInspection = {
+  id: string;
+  projectId?: string;
+  siteUrl: string;
+  url: string;
+  inspectionDate: string;
+  inspectedAt: string;
+  discoveredFrom: string[];
+  verdict?: string;
+  coverageState?: string;
+  robotsTxtState?: string;
+  indexingState?: string;
+  pageFetchState?: string;
+  googleCanonical?: string;
+  userCanonical?: string;
+  lastCrawlTime?: string;
+  crawledAs?: string;
+  inspectionResultLink?: string;
+  issueCode: GscIndexIssueCode;
+  severity: "none" | "low" | "medium" | "high";
+  rawJson?: unknown;
+};
+
 export type OpportunityType =
   | "low_ctr_query"
   | "striking_distance_query"
@@ -217,9 +297,11 @@ export type Opportunity = {
   rawJson?: unknown;
 };
 
+export type ConnectorSource = SourceType | "gsc_index" | "asc_metadata" | "asc_experiments" | "all";
+
 export type ConnectorRun = {
   id: string;
-  source: SourceType | "all";
+  source: ConnectorSource;
   projectId?: string;
   status: "success" | "failed" | "skipped";
   startedAt: string;
@@ -241,7 +323,11 @@ export type AppData = {
   asoAppRankSnapshots: AsoAppRankSnapshot[];
   gscDimensionBreakdowns: GscDimensionBreakdown[];
   gscSitemaps: GscSitemap[];
+  gscIndexInspections: GscIndexInspection[];
   admobMediationMetrics: AdmobMediationMetric[];
+  ascMetadataSnapshots: AscMetadataSnapshot[];
+  ascExperiments: AscExperiment[];
+  ascExperimentTreatments: AscExperimentTreatment[];
 };
 
 export type SyncOptions = {

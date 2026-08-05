@@ -160,6 +160,10 @@ export function createDemoData(): AppData {
     asoAppRankSnapshots: [],
     gscDimensionBreakdowns: [],
     gscSitemaps: [],
+    gscIndexInspections: [],
     admobMediationMetrics: [],
+    ascMetadataSnapshots: [],
+    ascExperiments: [],
+    ascExperimentTreatments: [],
   };
 }

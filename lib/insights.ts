@@ -1,5 +1,20 @@
 import { createId } from "@/lib/id";
-import type { AppData, MetricSnapshot, Opportunity, SourceType } from "@/lib/types";
+import type { AppData, GscIndexInspection, MetricSnapshot, Opportunity, SourceType } from "@/lib/types";
+
+export function getLatestGscIndexInspections(
+  data: AppData,
+  filter: { projectId?: string; siteUrl?: string } = {},
+): GscIndexInspection[] {
+  const latest = new Map<string, GscIndexInspection>();
+  for (const row of data.gscIndexInspections) {
+    if (filter.projectId && row.projectId !== filter.projectId) continue;
+    if (filter.siteUrl && row.siteUrl !== filter.siteUrl) continue;
+    const key = `${row.siteUrl}::${row.url}`;
+    const current = latest.get(key);
+    if (!current || row.inspectedAt > current.inspectedAt) latest.set(key, row);
+  }
+  return [...latest.values()];
+}
 
 export function buildOpportunities(data: AppData): Opportunity[] {
   const detectedAt = new Date().toISOString();

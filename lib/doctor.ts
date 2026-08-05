@@ -67,6 +67,11 @@ export async function getDoctorReport() {
       detail: "ADSENSE_CLIENT_ID, ADSENSE_CLIENT_SECRET, ADSENSE_REFRESH_TOKEN and ADSENSE_ACCOUNT_ID",
     },
     {
+      name: "App Store Connect credentials",
+      ...(await checkAscCredentials()),
+      required: false,
+    },
+    {
       name: "Connector runs",
       status: data.connectorRuns.length > 0,
       required: false,
@@ -165,6 +170,19 @@ async function checkRespectAso(data: AppData): Promise<{ status: boolean; detail
   } catch {
     return { status: false, detail: `not reachable at ${baseUrl} — start it with \`docker compose up -d\`` };
   }
+}
+
+async function checkAscCredentials(): Promise<{ status: boolean; detail: string }> {
+  const issuerId = process.env.ASC_ISSUER_ID;
+  const keyId = process.env.ASC_KEY_ID;
+  const keyPath = process.env.ASC_PRIVATE_KEY_PATH;
+  if (!issuerId || !keyId || !keyPath) {
+    return { status: false, detail: "ASC_ISSUER_ID, ASC_KEY_ID and ASC_PRIVATE_KEY_PATH" };
+  }
+  if (!(await exists(keyPath))) {
+    return { status: false, detail: `ASC_PRIVATE_KEY_PATH set but file not found: ${keyPath}` };
+  }
+  return { status: true, detail: `key file at ${keyPath}` };
 }
 
 async function exists(filePath: string): Promise<boolean> {

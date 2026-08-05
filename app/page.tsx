@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   buildOpportunities,
   getAdmobRevenueTrend,
+  getLatestGscIndexInspections,
   getRevenueCatMrrTrend,
   summarizeMonetization,
   summarizeProject,
@@ -56,6 +57,9 @@ export default async function HomePage() {
     revenueCatMrrTrend.at(0)?.value,
     revenueCatMrrTrend.at(-1)?.value,
   );
+  const latestIndexInspections = getLatestGscIndexInspections(data);
+  const indexProblems = latestIndexInspections.filter((row) => row.severity !== "none");
+  const indexSites = [...new Set(latestIndexInspections.map((row) => row.siteUrl))];
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -102,6 +106,61 @@ export default async function HomePage() {
       </section>
 
       <section className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {latestIndexInspections.length > 0 && (
+          <Card className="sm:col-span-2">
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Indicizzazione Google</CardTitle>
+              <Badge variant={indexProblems.some((row) => row.severity === "high") ? "destructive" : "warning"}>
+                {indexProblems.length} problemi
+              </Badge>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <span className="text-sm text-muted-foreground">Proprietà controllate</span>
+                  <strong className="block text-2xl font-extrabold">{indexSites.length}</strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">URL ispezionati</span>
+                  <strong className="block text-2xl font-extrabold">{latestIndexInspections.length}</strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">URL indicizzati</span>
+                  <strong className="block text-2xl font-extrabold">
+                    {latestIndexInspections.filter((row) => row.issueCode === "indexed").length}
+                  </strong>
+                </div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Proprietà</TableHead>
+                    <TableHead>Controllati</TableHead>
+                    <TableHead>Problemi</TableHead>
+                    <TableHead>Critici</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {indexSites.map((siteUrl) => {
+                    const rows = latestIndexInspections.filter((row) => row.siteUrl === siteUrl);
+                    return (
+                      <TableRow key={siteUrl}>
+                        <TableCell className="font-mono text-xs">{siteUrl}</TableCell>
+                        <TableCell>{rows.length}</TableCell>
+                        <TableCell>{rows.filter((row) => row.severity !== "none").length}</TableCell>
+                        <TableCell>{rows.filter((row) => row.severity === "high").length}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <p className="text-xs text-muted-foreground">
+                Aggiorna manualmente con <span className="font-mono">pnpm run audit:index</span>.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>AdMob</CardTitle>

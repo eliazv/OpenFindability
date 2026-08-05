@@ -158,18 +158,21 @@ export type GscSite = {
 };
 
 export async function listGscSites(): Promise<GscSite[]> {
-  const auth = await getGoogleAuth();
-  if (!auth) {
-    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE is not configured.");
-  }
-
-  const searchconsole = google.searchconsole({ version: "v1", auth });
+  const searchconsole = await createGscClient();
   const response = await searchconsole.sites.list({});
 
   return (response.data.siteEntry ?? []).map((entry) => ({
     siteUrl: entry.siteUrl ?? "",
     permissionLevel: entry.permissionLevel,
   }));
+}
+
+export async function createGscClient(): Promise<ReturnType<typeof google.searchconsole>> {
+  const auth = await getGoogleAuth();
+  if (!auth) {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE is not configured.");
+  }
+  return google.searchconsole({ version: "v1", auth });
 }
 
 type SitemapEntry = {
@@ -182,7 +185,7 @@ type SitemapEntry = {
   errors?: string | number | null;
 };
 
-async function listSitemaps(
+export async function listSitemaps(
   searchconsole: ReturnType<typeof google.searchconsole>,
   siteUrl: string,
 ): Promise<SitemapEntry[]> {

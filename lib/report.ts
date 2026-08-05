@@ -2,11 +2,14 @@ import type {
   AppData,
   AppKeywordMetric,
   GscDimensionBreakdown,
+  GscIndexInspection,
+  GscIndexIssueCode,
   MetricSnapshot,
   PageMetric,
   Project,
   SearchQueryMetric,
 } from "@/lib/types";
+import { getIndexIssueRecommendation } from "@/lib/gsc-index-audit";
 
 export type AggregatedRow = {
   key: string;
@@ -48,6 +51,146 @@ export function aggregatePagesByUrl(pages: PageMetric[]): AggregatedRow[] {
 
 export function aggregateQueriesByText(queries: SearchQueryMetric[]): AggregatedRow[] {
   return aggregate(queries, (row) => row.query);
+}
+
+export function buildGscIndexAuditReportMarkdown(
+  data: AppData,
+  options: { siteUrl?: string; project?: Project } = {},
+): string {
+  const scoped = data.gscIndexInspections.filter((row) => {
+    if (options.siteUrl) return row.siteUrl === options.siteUrl;
+    if (options.project) return row.projectId === options.project.id;
+    return true;
+  });
+  const byUrl = new Map<string, GscIndexInspection[]>();
+  for (const row of scoped) {
+    const key = `${row.siteUrl}::${row.url}`;
+    const rows = byUrl.get(key) ?? [];
+    rows.push(row);
+    byUrl.set(key, rows);
+  }
+
+  const latest: GscIndexInspection[] = [];
+  const newProblems: GscIndexInspection[] = [];
+  for (const rows of byUrl.values()) {
+    rows.sort((a, b) => b.inspectedAt.localeCompare(a.inspectedAt));
+    latest.push(rows[0]);
+    if (rows[0].severity !== "none" && rows[0].issueCode !== "inspection_error") {
+      const previous = rows[1];
+      if (!previous || previous.issueCode !== rows[0].issueCode) newProblems.push(rows[0]);
+    }
+  }
+
+  const problems = latest
+    .filter((row) => row.severity !== "none")
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || a.url.localeCompare(b.url));
+  const indexed = latest.filter((row) => row.issueCode === "indexed").length;
+  const sites = [...new Set(latest.map((row) => row.siteUrl))];
+  const byIssue = new Map<GscIndexIssueCode, GscIndexInspection[]>();
+  for (const row of problems) {
+    const rows = byIssue.get(row.issueCode) ?? [];
+    rows.push(row);
+    byIssue.set(row.issueCode, rows);
+  }
+
+  const title = options.project
+    ? `${options.project.name} - GSC index audit`
+    : options.siteUrl
+      ? `${options.siteUrl} - GSC index audit`
+      : "Google Search Console - index audit";
+  const lines = [
+    `# ${title} - ${new Date().toISOString().slice(0, 10)}`,
+    "",
+    "## Summary",
+    "",
+    "```txt",
+    `Properties:        ${sites.length}`,
+    `URLs inspected:    ${latest.length}`,
+    `Indexed:           ${indexed}`,
+    `Problems/errors:   ${problems.length}`,
+    `New/changed issues:${String(newProblems.length).padStart(5)}`,
+    "```",
+    "",
+  ];
+
+  if (options.project) {
+    const sitemapSignals = data.gscSitemaps
+      .filter((row) => row.projectId === options.project?.id)
+      .map((row) => {
+        const raw = row.rawJson as
+          | { contents?: Array<{ submitted?: string | number; indexed?: string | number }> }
+          | undefined;
+        const submitted = (raw?.contents ?? []).reduce((sum, item) => sum + Number(item.submitted ?? 0), 0);
+        const sitemapIndexed = (raw?.contents ?? []).reduce((sum, item) => sum + Number(item.indexed ?? 0), 0);
+        return { ...row, submitted, sitemapIndexed };
+      });
+    if (sitemapSignals.length > 0) {
+      lines.push("## Sitemap signals", "", "```txt");
+      for (const sitemap of sitemapSignals) {
+        lines.push(
+          `${sitemap.path} | submitted: ${sitemap.submitted} | indexed: ${sitemap.sitemapIndexed} | ` +
+            `warnings: ${sitemap.warnings} | errors: ${sitemap.errors}`,
+        );
+      }
+      lines.push("```", "");
+    }
+  }
+
+  if (latest.length === 0) {
+    lines.push("No URL Inspection data found. Run `pnpm run audit:index` first.", "");
+    return lines.join("\n");
+  }
+
+  lines.push("## Problems by type", "");
+  for (const [issueCode, rows] of [...byIssue.entries()].sort((a, b) => b[1].length - a[1].length)) {
+    const sortedRows = [...rows].sort(
+      (a, b) => Number(isFromSitemap(b)) - Number(isFromSitemap(a)) || a.url.localeCompare(b.url),
+    );
+    const sitemapCount = rows.filter(isFromSitemap).length;
+    lines.push(`### ${issueCode} (${rows.length}; ${sitemapCount} in sitemap)`, "");
+    lines.push(getIndexIssueRecommendation(issueCode), "", "```txt");
+    for (const row of sortedRows.slice(0, 200)) {
+      const context = [
+        row.coverageState,
+        row.pageFetchState && `fetch=${row.pageFetchState}`,
+        row.googleCanonical && row.googleCanonical !== row.url ? `googleCanonical=${row.googleCanonical}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      lines.push(`${row.siteUrl} | ${row.url}${context ? ` | ${context}` : ""}`);
+    }
+    if (rows.length > 200) lines.push(`... ${rows.length - 200} more URL(s) stored in SQLite.`);
+    lines.push("```", "");
+  }
+
+  if (newProblems.length > 0) {
+    lines.push("## New or changed issues", "", "```txt");
+    for (const row of newProblems.slice(0, 200)) {
+      lines.push(`${row.issueCode.padEnd(26)} | ${row.siteUrl} | ${row.url}`);
+    }
+    lines.push("```", "");
+  }
+
+  lines.push(
+    "## Scope limitations",
+    "",
+    "```txt",
+    "The Search Console API has no bulk Page Indexing report export.",
+    "This audit covers URLs discovered through submitted sitemaps, Search Analytics,",
+    "stored GSC data and previous audits. URL Inspection reflects Google's indexed",
+    "version and is limited to 2,000 requests per property per day.",
+    "```",
+    "",
+  );
+  return lines.join("\n");
+}
+
+function isFromSitemap(row: GscIndexInspection): boolean {
+  return row.discoveredFrom.some((source) => source.startsWith("sitemap:"));
+}
+
+function severityRank(severity: GscIndexInspection["severity"]): number {
+  return { none: 0, low: 1, medium: 2, high: 3 }[severity];
 }
 
 function formatPercent(value: number): string {
@@ -381,6 +524,77 @@ export function buildAsoReportMarkdown(data: AppData, project: Project): string 
   lines.push("  avoid            not worth targeting");
   lines.push("```");
   lines.push("");
+
+  return lines.join("\n");
+}
+
+export function buildAscReportMarkdown(data: AppData, project: Project): string {
+  const metadata = data.ascMetadataSnapshots
+    .filter((row) => row.projectId === project.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const experiments = data.ascExperiments
+    .filter((row) => row.projectId === project.id)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const lines: string[] = [];
+  lines.push(`# ${project.name} - App Store Connect report - ${new Date().toISOString().slice(0, 10)}`);
+  lines.push("");
+
+  if (metadata.length === 0 && experiments.length === 0) {
+    lines.push("No App Store Connect data pulled yet for this project.");
+    lines.push("");
+    lines.push("```txt");
+    lines.push("Run `pnpm run aso:pull-copy -- --slug " + project.slug + "` and/or");
+    lines.push("`pnpm run asc:experiments -- --slug " + project.slug + "` first.");
+    lines.push("```");
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  if (metadata.length > 0) {
+    const byLocale = new Map<string, typeof metadata>();
+    for (const row of metadata) {
+      const list = byLocale.get(row.locale) ?? [];
+      list.push(row);
+      byLocale.set(row.locale, list);
+    }
+
+    lines.push("## Store copy (latest snapshot per locale)");
+    lines.push("");
+    for (const [locale, rows] of byLocale) {
+      const latest = rows[0];
+      lines.push(`### ${locale} (${latest.kind}, ${latest.createdAt.slice(0, 10)})`);
+      lines.push("");
+      lines.push("```txt");
+      lines.push(`Name:       ${latest.name ?? "(unchanged/unknown)"}`);
+      lines.push(`Subtitle:   ${latest.subtitle ?? "(unchanged/unknown)"}`);
+      lines.push(`Keywords:   ${latest.keywords ?? "(unchanged/unknown)"}`);
+      lines.push(`Promo text: ${latest.promotionalText ?? "(unchanged/unknown)"}`);
+      lines.push(`Description: ${(latest.description ?? "").slice(0, 200)}${(latest.description?.length ?? 0) > 200 ? "..." : ""}`);
+      lines.push("```");
+      lines.push("");
+    }
+  }
+
+  if (experiments.length > 0) {
+    lines.push("## Product Page Optimization experiments");
+    lines.push("");
+    lines.push("```txt");
+    for (const exp of experiments) {
+      const treatments = data.ascExperimentTreatments.filter((t) => t.experimentId === exp.id);
+      lines.push(`${exp.name} [${exp.state}]${exp.elementType ? ` (${exp.elementType})` : ""}`);
+      for (const t of treatments) {
+        lines.push(`  - ${t.name}${t.state ? ` [${t.state}]` : ""}`);
+      }
+    }
+    lines.push("```");
+    lines.push("");
+    lines.push("```txt");
+    lines.push("Apple only exposes test winners/conversion metrics in the App Store Connect UI");
+    lines.push("(App Analytics > Product Page Optimization Tests), not via this API — check there for results.");
+    lines.push("```");
+    lines.push("");
+  }
 
   return lines.join("\n");
 }

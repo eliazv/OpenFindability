@@ -3,10 +3,14 @@ import {
   admobMediationMetrics as admobMediationMetricsTable,
   appKeywords as appKeywordsTable,
   appReviews as appReviewsTable,
+  ascExperiments as ascExperimentsTable,
+  ascExperimentTreatments as ascExperimentTreatmentsTable,
+  ascMetadataSnapshots as ascMetadataSnapshotsTable,
   asoAppRankSnapshots as asoAppRankSnapshotsTable,
   asoKeywordSnapshots as asoKeywordSnapshotsTable,
   connectorRuns as connectorRunsTable,
   gscDimensionBreakdowns as gscDimensionBreakdownsTable,
+  gscIndexInspections as gscIndexInspectionsTable,
   gscSitemaps as gscSitemapsTable,
   metricSnapshots as metricSnapshotsTable,
   opportunities as opportunitiesTable,
@@ -19,10 +23,14 @@ import type {
   AppData,
   AppKeywordMetric,
   AppReview,
+  AscExperiment,
+  AscExperimentTreatment,
+  AscMetadataSnapshot,
   AsoAppRankSnapshot,
   AsoKeywordSnapshot,
   ConnectorRun,
   GscDimensionBreakdown,
+  GscIndexInspection,
   GscSitemap,
   MetricSnapshot,
   Opportunity,
@@ -95,11 +103,31 @@ export function readDataWith(database: AppDb): AppData {
 
   const gscSitemaps = database.select().from(gscSitemapsTable).all().map(denull) as GscSitemap[];
 
+  const gscIndexInspections = database
+    .select()
+    .from(gscIndexInspectionsTable)
+    .all()
+    .map(denull) as GscIndexInspection[];
+
   const admobMediationMetrics = database
     .select()
     .from(admobMediationMetricsTable)
     .all()
     .map(denull) as AdmobMediationMetric[];
+
+  const ascMetadataSnapshots = database
+    .select()
+    .from(ascMetadataSnapshotsTable)
+    .all()
+    .map(denull) as AscMetadataSnapshot[];
+
+  const ascExperiments = database.select().from(ascExperimentsTable).all().map(denull) as AscExperiment[];
+
+  const ascExperimentTreatments = database
+    .select()
+    .from(ascExperimentTreatmentsTable)
+    .all()
+    .map(denull) as AscExperimentTreatment[];
 
   return {
     projects,
@@ -114,7 +142,11 @@ export function readDataWith(database: AppDb): AppData {
     asoAppRankSnapshots,
     gscDimensionBreakdowns,
     gscSitemaps,
+    gscIndexInspections,
     admobMediationMetrics,
+    ascMetadataSnapshots,
+    ascExperiments,
+    ascExperimentTreatments,
   };
 }
 
@@ -129,7 +161,11 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     tx.delete(asoAppRankSnapshotsTable).run();
     tx.delete(gscDimensionBreakdownsTable).run();
     tx.delete(gscSitemapsTable).run();
+    tx.delete(gscIndexInspectionsTable).run();
     tx.delete(admobMediationMetricsTable).run();
+    tx.delete(ascMetadataSnapshotsTable).run();
+    tx.delete(ascExperimentTreatmentsTable).run();
+    tx.delete(ascExperimentsTable).run();
     tx.delete(metricSnapshotsTable).run();
     tx.delete(projectsTable).run();
     tx.delete(asoKeywordSnapshotsTable).run();
@@ -174,8 +210,20 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     for (const batch of chunk(data.gscSitemaps, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(gscSitemapsTable).values(batch).run();
     }
+    for (const batch of chunk(data.gscIndexInspections, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(gscIndexInspectionsTable).values(batch).run();
+    }
     for (const batch of chunk(data.admobMediationMetrics, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(admobMediationMetricsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.ascMetadataSnapshots, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(ascMetadataSnapshotsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.ascExperiments, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(ascExperimentsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.ascExperimentTreatments, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(ascExperimentTreatmentsTable).values(batch).run();
     }
   });
 }

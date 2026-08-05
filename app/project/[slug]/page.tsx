@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getProjectMetricTrend, summarizeProject } from "@/lib/insights";
+import { getLatestGscIndexInspections, getProjectMetricTrend, summarizeProject } from "@/lib/insights";
 import { aggregatePagesByUrl, aggregateQueriesByText } from "@/lib/report";
 import { readData } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +49,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
     .filter((run) => run.projectId === project.id)
     .slice(-6)
     .reverse();
+  const indexInspections = getLatestGscIndexInspections(data, { projectId: project.id });
+  const indexProblems = indexInspections
+    .filter((row) => row.severity !== "none")
+    .sort((a, b) => severityOrder(b.severity) - severityOrder(a.severity));
 
   const clicksTrend = getProjectMetricTrend(data, project.id, "gsc", "clicks");
   const visitorsTrend = getProjectMetricTrend(data, project.id, "umami", "visitors");
@@ -97,6 +101,63 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
       </header>
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {indexInspections.length > 0 && (
+          <Card className="lg:col-span-2">
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Audit indicizzazione Google</CardTitle>
+              <Badge variant={indexProblems.some((row) => row.severity === "high") ? "destructive" : "warning"}>
+                {indexProblems.length} problemi
+              </Badge>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <span className="text-sm text-muted-foreground">URL controllati</span>
+                  <strong className="block text-2xl font-extrabold">{indexInspections.length}</strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Indicizzati</span>
+                  <strong className="block text-2xl font-extrabold">
+                    {indexInspections.filter((row) => row.issueCode === "indexed").length}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Critici</span>
+                  <strong className="block text-2xl font-extrabold">
+                    {indexProblems.filter((row) => row.severity === "high").length}
+                  </strong>
+                </div>
+              </div>
+              {indexProblems.length > 0 && (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>URL</TableHead>
+                      <TableHead>Problema</TableHead>
+                      <TableHead>Stato GSC</TableHead>
+                      <TableHead>Priorità</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {indexProblems.slice(0, 20).map((row) => (
+                      <TableRow key={`${row.siteUrl}:${row.url}`}>
+                        <TableCell className="max-w-[360px] truncate font-mono text-xs">{row.url}</TableCell>
+                        <TableCell>{row.issueCode}</TableCell>
+                        <TableCell>{row.coverageState ?? row.pageFetchState ?? "Errore ispezione"}</TableCell>
+                        <TableCell>
+                          <Badge variant={row.severity === "high" ? "destructive" : row.severity === "medium" ? "warning" : "success"}>
+                            {row.severity}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {gscSnapshots.length > 0 && (
           <Card>
             <CardHeader>
@@ -391,4 +452,8 @@ function formatCurrency(amount: number, currency?: string) {
   } catch {
     return `${amount.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
   }
+}
+
+function severityOrder(severity: "none" | "low" | "medium" | "high") {
+  return { none: 0, low: 1, medium: 2, high: 3 }[severity];
 }

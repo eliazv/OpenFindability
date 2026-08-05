@@ -148,6 +148,53 @@ export const gscSitemaps = sqliteTable(
   (table) => [uniqueIndex("gsc_sitemaps_project_path").on(table.projectId, table.path)],
 );
 
+export const gscIndexInspections = sqliteTable(
+  "gsc_index_inspections",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    siteUrl: text("site_url").notNull(),
+    url: text("url").notNull(),
+    inspectionDate: text("inspection_date").notNull(),
+    inspectedAt: text("inspected_at").notNull(),
+    discoveredFrom: text("discovered_from", { mode: "json" }).$type<string[]>().notNull(),
+    verdict: text("verdict"),
+    coverageState: text("coverage_state"),
+    robotsTxtState: text("robots_txt_state"),
+    indexingState: text("indexing_state"),
+    pageFetchState: text("page_fetch_state"),
+    googleCanonical: text("google_canonical"),
+    userCanonical: text("user_canonical"),
+    lastCrawlTime: text("last_crawl_time"),
+    crawledAs: text("crawled_as"),
+    inspectionResultLink: text("inspection_result_link"),
+    issueCode: text("issue_code", {
+      enum: [
+        "indexed",
+        "blocked_by_robots",
+        "blocked_by_noindex",
+        "not_found",
+        "soft_404",
+        "server_error",
+        "access_denied",
+        "redirect_error",
+        "crawled_not_indexed",
+        "discovered_not_indexed",
+        "duplicate_canonical",
+        "redirected",
+        "not_indexed",
+        "inspection_error",
+      ],
+    }).notNull(),
+    severity: text("severity", { enum: ["none", "low", "medium", "high"] }).notNull(),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+  },
+  (table) => [
+    uniqueIndex("gsc_index_inspections_site_url_date_url").on(table.siteUrl, table.inspectionDate, table.url),
+    index("gsc_index_inspections_project_date").on(table.projectId, table.inspectionDate),
+  ],
+);
+
 export const opportunities = sqliteTable(
   "opportunities",
   {
@@ -183,7 +230,19 @@ export const connectorRuns = sqliteTable(
   {
     id: text("id").primaryKey(),
     source: text("source", {
-      enum: ["gsc", "umami", "play_console", "aso", "revenuecat", "admob", "adsense", "all"],
+      enum: [
+        "gsc",
+        "gsc_index",
+        "umami",
+        "play_console",
+        "aso",
+        "revenuecat",
+        "admob",
+        "adsense",
+        "asc_metadata",
+        "asc_experiments",
+        "all",
+      ],
     }).notNull(),
     projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
     status: text("status", { enum: ["success", "failed", "skipped"] }).notNull(),
@@ -276,6 +335,61 @@ export const asoAppRankSnapshots = sqliteTable(
   (table) => [index("aso_app_rank_snapshots_project_date").on(table.projectId, table.date)],
 );
 
+export const ascMetadataSnapshots = sqliteTable(
+  "asc_metadata_snapshots",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    locale: text("locale").notNull(),
+    kind: text("kind", { enum: ["pull", "push"] }).notNull(),
+    name: text("name"),
+    subtitle: text("subtitle"),
+    keywords: text("keywords"),
+    description: text("description"),
+    promotionalText: text("promotional_text"),
+    whatsNew: text("whats_new"),
+    versionState: text("version_state"),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("asc_metadata_snapshots_project_locale").on(table.projectId, table.locale)],
+);
+
+export const ascExperiments = sqliteTable(
+  "asc_experiments",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    ascExperimentId: text("asc_experiment_id").notNull(),
+    name: text("name").notNull(),
+    state: text("state").notNull(),
+    elementType: text("element_type"),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("asc_experiments_project_asc_id").on(table.projectId, table.ascExperimentId)],
+);
+
+export const ascExperimentTreatments = sqliteTable(
+  "asc_experiment_treatments",
+  {
+    id: text("id").primaryKey(),
+    experimentId: text("experiment_id")
+      .notNull()
+      .references(() => ascExperiments.id, { onDelete: "cascade" }),
+    ascTreatmentId: text("asc_treatment_id").notNull(),
+    name: text("name").notNull(),
+    state: text("state"),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("asc_experiment_treatments_experiment_asc_id").on(table.experimentId, table.ascTreatmentId)],
+);
+
 export const admobMediationMetrics = sqliteTable(
   "admob_mediation_metrics",
   {
@@ -321,5 +435,9 @@ export const schema = {
   asoAppRankSnapshots,
   gscDimensionBreakdowns,
   gscSitemaps,
+  gscIndexInspections,
   admobMediationMetrics,
+  ascMetadataSnapshots,
+  ascExperiments,
+  ascExperimentTreatments,
 };
