@@ -27,6 +27,7 @@
     "sync:play-vitals": "tsx scripts/sync.ts play_vitals",
     "sync:play-stats": "tsx scripts/sync.ts play_stats",
     "sync:asc-analytics": "tsx scripts/sync.ts asc_analytics",
+    "sync:asc-analytics:backfill": "tsx scripts/sync.ts asc_analytics 365",
     "discover:apps": "tsx scripts/discover-apps.ts",
     "asc:apps": "tsx scripts/asc-apps.ts",
     "aso:pull-copy": "tsx scripts/asc-metadata.ts pull",

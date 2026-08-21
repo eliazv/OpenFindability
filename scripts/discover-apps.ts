@@ -63,13 +63,20 @@ async function main() {
     if (data.projects.some((p) => p.appStoreTrackId === appId)) continue;
 
     const nameGuess = app.name ?? app.bundleId ?? String(app.id);
-    // If a Play Console project with the same name-derived slug already exists (common for
-    // apps shipping on both stores), link this store id to it instead of creating a duplicate.
-    const sameApp = data.projects.find((p) => p.slug === slugify(nameGuess) && !p.appStoreTrackId);
+    // Match against existing projects without an App Store id yet. An exact slug match is
+    // the strong case (same name); apps often get renamed on the store after the project was
+    // created here, so also fall back to word-overlap similarity and flag those as fuzzy so
+    // they can be double-checked instead of silently creating a duplicate project.
+    const exactMatch = data.projects.find((p) => p.slug === slugify(nameGuess) && !p.appStoreTrackId);
+    const fuzzyMatch = exactMatch
+      ? undefined
+      : bestFuzzyMatch(data.projects.filter((p) => !p.appStoreTrackId), nameGuess);
+    const sameApp = exactMatch ?? fuzzyMatch;
     if (sameApp) {
       sameApp.appStoreTrackId = appId;
       sameApp.updatedAt = nowIso();
-      console.log(`Linked App Store id ${appId} to existing project "${sameApp.slug}".`);
+      const tag = exactMatch ? "" : " (fuzzy match — verify this is correct)";
+      console.log(`Linked App Store id ${appId} to existing project "${sameApp.slug}"${tag}.`);
       linked += 1;
       continue;
     }
@@ -100,6 +107,32 @@ async function main() {
   }
 
   console.log(`\nDone. Created ${created} new project(s), linked ${linked} existing project(s).`);
+}
+
+// Apps often get renamed on the store after the project already exists here (e.g. "ContaSpicci"
+// -> "Cashtrack"), so an exact slug match misses those. Fall back to Jaccard word-overlap on the
+// name tokens; a high threshold keeps this from matching genuinely unrelated apps.
+function bestFuzzyMatch(candidates: Project[], name: string): Project | undefined {
+  const tokens = new Set(slugify(name).split("-").filter(Boolean));
+  if (tokens.size === 0) return undefined;
+
+  let best: { project: Project; score: number } | undefined;
+  for (const project of candidates) {
+    const otherTokens = new Set(project.slug.split("-").filter(Boolean));
+    const intersection = [...tokens].filter((t) => otherTokens.has(t)).length;
+    const union = new Set([...tokens, ...otherTokens]).size;
+    const jaccard = union > 0 ? intersection / union : 0;
+    // A subset match (one name's tokens fully contained in the other's) handles the common
+    // "store added a subtitle" case (e.g. "Applytics" -> "Applytics: Analisi App Store"),
+    // where Jaccard alone would score too low on a short original name.
+    const smaller = Math.min(tokens.size, otherTokens.size);
+    const isSubset = smaller > 0 && intersection === smaller;
+    const score = isSubset ? Math.max(jaccard, 0.4) : jaccard;
+    if (score >= 0.4 && (!best || score > best.score)) {
+      best = { project, score };
+    }
+  }
+  return best?.project;
 }
 
 function uniqueSlug(projects: Project[], name: string): string {

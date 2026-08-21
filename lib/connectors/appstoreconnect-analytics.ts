@@ -118,6 +118,81 @@ function findColumn(headers: string[], ...needles: string[]): string | undefined
   return headers.find((h) => needles.some((needle) => h.toLowerCase().includes(needle.toLowerCase())));
 }
 
+// --- Sales Reports (downloads, historical) ---
+// Apple's older Reports API (not the newer Analytics Reports API above) exposes daily
+// SALES/SUMMARY reports with a real per-app Units column and up to 365 days of history,
+// with no ONGOING-request/24-48h-wait dance — one authenticated GET per day, gzipped TSV
+// body (note: `Accept: application/a-gzip`, not JSON — Apple 406s otherwise). The file
+// covers every app under the whole account (vendor), so results are cached per date and
+// shared across all projects synced in the same process run instead of refetching per app.
+const SALES_REPORT_BASE = "https://api.appstoreconnect.apple.com/v1/salesReports";
+const salesReportCache = new Map<string, Promise<Map<string, number> | null>>();
+
+function enumerateDates(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+// Resolves to null when Apple has no report for that day (404/410 -- normal for days before
+// the account existed or today's not-yet-processed day), or a map of Apple Identifier -> units
+// summed across every non-in-app-purchase row (product type codes starting with "IA" are IAP,
+// not app installs/redownloads).
+function fetchSalesReportForDate(vendorNumber: string, date: string): Promise<Map<string, number> | null> {
+  const cacheKey = `${vendorNumber}::${date}`;
+  const cached = salesReportCache.get(cacheKey);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const token = await getAscToken();
+    const url = `${SALES_REPORT_BASE}?${new URLSearchParams({
+      "filter[frequency]": "DAILY",
+      "filter[reportDate]": date,
+      "filter[reportSubType]": "SUMMARY",
+      "filter[reportType]": "SALES",
+      "filter[vendorNumber]": vendorNumber,
+    })}`;
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/a-gzip" } });
+
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(`App Store Connect Sales Reports API ${response.status} on ${date}${body ? `: ${body}` : ""}`);
+    }
+
+    const compressed = Buffer.from(await response.arrayBuffer());
+    const text = gunzipSync(compressed).toString("utf8");
+    const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
+    const byApp = new Map<string, number>();
+    if (lines.length < 2) return byApp;
+
+    const headers = lines[0].split("\t");
+    const appleIdIdx = headers.findIndex((h) => h.toLowerCase() === "apple identifier");
+    const unitsIdx = headers.findIndex((h) => h.toLowerCase() === "units");
+    const productTypeIdx = headers.findIndex((h) => h.toLowerCase() === "product type identifier");
+    if (appleIdIdx === -1 || unitsIdx === -1) return byApp;
+
+    for (const line of lines.slice(1)) {
+      const cells = line.split("\t");
+      const productType = productTypeIdx >= 0 ? cells[productTypeIdx] : "";
+      if (productType?.toUpperCase().startsWith("IA")) continue; // in-app purchase, not an install
+      const appleId = cells[appleIdIdx];
+      if (!appleId) continue;
+      const units = Number(cells[unitsIdx]) || 0;
+      byApp.set(appleId, (byApp.get(appleId) ?? 0) + units);
+    }
+    return byApp;
+  })();
+
+  salesReportCache.set(cacheKey, promise);
+  return promise;
+}
+
 export async function syncAscAnalyticsProject(
   project: Project,
   startDate: string,
@@ -129,84 +204,46 @@ export async function syncAscAnalyticsProject(
 
   const appId = String(project.appStoreTrackId);
   const createdAt = new Date().toISOString();
-
-  let requestId: string;
-  try {
-    requestId = await ensureOngoingAnalyticsRequest(appId);
-  } catch (error) {
-    return skipped(
-      project.id,
-      `Could not create/find an ONGOING analytics report request (first request needs an Admin-role API key): ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-
-  const reports = await listReportsForRequest(requestId);
-  const downloadsReport = reports.find((r) => /download/i.test(r.name));
-  const sessionsReport = reports.find((r) => /session|retention|engagement/i.test(r.name));
-
-  if (!downloadsReport && !sessionsReport) {
-    return {
-      result: {
-        source: "asc_analytics",
-        projectId: project.id,
-        status: "success",
-        message: `Analytics report request ${requestId} exists but no downloads/sessions report is available yet (Apple generates the first instance 24-48h after the request is created).`,
-        inserted: { snapshots: 0, queries: 0, pages: 0 },
-      },
-      metrics: [],
-    };
-  }
-
   const byDate = new Map<string, { downloads?: number; retentionDay1?: number; retentionDay7?: number; retentionDay28?: number; raw: Record<string, unknown> }>();
-  let anyInstanceFound = false;
 
-  if (downloadsReport) {
-    const instance = await latestInstance(downloadsReport.id);
-    if (instance) {
-      anyInstanceFound = true;
-      const rows = await downloadSegments(instance.id);
-      if (rows.length > 0) {
-        const headers = Object.keys(rows[0]);
-        const dateCol = findColumn(headers, "date");
-        const countCol = findColumn(headers, "counts", "units", "total downloads");
-        for (const row of rows) {
-          const date = dateCol ? row[dateCol] : undefined;
-          if (!date || date < startDate || date > endDate) continue;
-          const entry = byDate.get(date) ?? { raw: {} };
-          const value = countCol ? Number(row[countCol]) : undefined;
-          entry.downloads = (entry.downloads ?? 0) + (value ?? 0);
-          entry.raw.downloadsRow = row;
-          byDate.set(date, entry);
-        }
+  // Downloads: Sales Reports (immediate, up to 365 days of history) when a vendor number is
+  // configured. One HTTP call per calendar day, shared across every project via the module-
+  // level cache above -- cheap even at full 30-project backfill since each day is fetched once.
+  const vendorNumber = process.env.ASC_VENDOR_NUMBER?.trim();
+  let salesReportsAvailable = false;
+  let salesReportError: string | undefined;
+  if (vendorNumber) {
+    for (const date of enumerateDates(startDate, endDate)) {
+      try {
+        const byApp = await fetchSalesReportForDate(vendorNumber, date);
+        if (!byApp) continue;
+        const units = byApp.get(appId);
+        if (units === undefined) continue;
+        salesReportsAvailable = true;
+        const entry = byDate.get(date) ?? { raw: {} };
+        entry.downloads = units;
+        entry.raw.salesReportUnits = units;
+        byDate.set(date, entry);
+      } catch (error) {
+        salesReportError = error instanceof Error ? error.message : String(error);
       }
     }
   }
 
-  if (sessionsReport) {
-    const instance = await latestInstance(sessionsReport.id);
-    if (instance) {
-      anyInstanceFound = true;
-      const rows = await downloadSegments(instance.id);
-      if (rows.length > 0) {
-        const headers = Object.keys(rows[0]);
-        const dateCol = findColumn(headers, "date");
-        const day1Col = findColumn(headers, "day 1", "day1");
-        const day7Col = findColumn(headers, "day 7", "day7");
-        const day28Col = findColumn(headers, "day 28", "day28");
-        for (const row of rows) {
-          const date = dateCol ? row[dateCol] : undefined;
-          if (!date || date < startDate || date > endDate) continue;
-          const entry = byDate.get(date) ?? { raw: {} };
-          if (day1Col) entry.retentionDay1 = Number(row[day1Col]);
-          if (day7Col) entry.retentionDay7 = Number(row[day7Col]);
-          if (day28Col) entry.retentionDay28 = Number(row[day28Col]);
-          entry.raw.sessionsRow = row;
-          byDate.set(date, entry);
-        }
-      }
+  // Retention: Analytics Reports API (ONGOING request -> reports -> instances -> segments).
+  // Best-effort and independent of Sales Reports above -- a failure here (e.g. the first
+  // request needing an Admin-role key) must not wipe out downloads we already have.
+  let analyticsNote: string | undefined;
+  try {
+    const requestId = await ensureOngoingAnalyticsRequest(appId);
+    const reports = await listReportsForRequest(requestId);
+    const sessionsReport = reports.find((r) => /session|retention|engagement/i.test(r.name));
+
+    if (sessionsReport) {
+      await attachSessionsRetention(sessionsReport.id, startDate, endDate, byDate);
     }
+  } catch (error) {
+    analyticsNote = `retention unavailable (${error instanceof Error ? error.message : String(error)})`;
   }
 
   const metrics: AscAnalyticsMetric[] = [...byDate.entries()]
@@ -223,20 +260,57 @@ export async function syncAscAnalyticsProject(
       createdAt,
     }));
 
-  const message = !anyInstanceFound
-    ? `Report request ${requestId} exists but Apple hasn't generated a report instance yet (first instance typically appears 24-48h after the request was created).`
-    : `Imported App Store Connect analytics for ${metrics.length} day(s) between ${startDate} and ${endDate}.`;
+  const parts = [
+    !vendorNumber
+      ? "downloads skipped (ASC_VENDOR_NUMBER not set)"
+      : salesReportsAvailable
+        ? "downloads via Sales Reports"
+        : salesReportError
+          ? `downloads unavailable (${salesReportError})`
+          : "no Sales Reports data yet for this range",
+    analyticsNote ?? "retention via Analytics Reports",
+  ];
 
   return {
     result: {
       source: "asc_analytics",
       projectId: project.id,
       status: "success",
-      message,
+      message: `Imported App Store Connect analytics for ${metrics.length} day(s) between ${startDate} and ${endDate} (${parts.join("; ")}).`,
       inserted: { snapshots: metrics.length, queries: 0, pages: 0 },
     },
     metrics,
   };
+}
+
+async function attachSessionsRetention(
+  reportId: string,
+  startDate: string,
+  endDate: string,
+  byDate: Map<string, { downloads?: number; retentionDay1?: number; retentionDay7?: number; retentionDay28?: number; raw: Record<string, unknown> }>,
+): Promise<void> {
+  const instance = await latestInstance(reportId);
+  if (!instance) return;
+
+  const rows = await downloadSegments(instance.id);
+  if (rows.length === 0) return;
+
+  const headers = Object.keys(rows[0]);
+  const dateCol = findColumn(headers, "date");
+  const day1Col = findColumn(headers, "day 1", "day1");
+  const day7Col = findColumn(headers, "day 7", "day7");
+  const day28Col = findColumn(headers, "day 28", "day28");
+
+  for (const row of rows) {
+    const date = dateCol ? row[dateCol] : undefined;
+    if (!date || date < startDate || date > endDate) continue;
+    const entry = byDate.get(date) ?? { raw: {} };
+    if (day1Col) entry.retentionDay1 = Number(row[day1Col]);
+    if (day7Col) entry.retentionDay7 = Number(row[day7Col]);
+    if (day28Col) entry.retentionDay28 = Number(row[day28Col]);
+    entry.raw.sessionsRow = row;
+    byDate.set(date, entry);
+  }
 }
 
 function skipped(projectId: string, message: string) {

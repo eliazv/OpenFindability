@@ -72,6 +72,14 @@ export async function getDoctorReport() {
       required: false,
     },
     {
+      name: "App Store Sales Reports (downloads history)",
+      status: Boolean(process.env.ASC_VENDOR_NUMBER),
+      required: false,
+      detail: process.env.ASC_VENDOR_NUMBER
+        ? "ASC_VENDOR_NUMBER set"
+        : "ASC_VENDOR_NUMBER not set — downloads history unavailable, retention-only via Analytics Reports",
+    },
+    {
       name: "Play vitals credentials (crash/ANR)",
       status: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_FILE),
       required: false,
