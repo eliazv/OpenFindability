@@ -26,6 +26,7 @@
     "adsense:accounts": "tsx scripts/adsense-accounts.ts",
     "sync:play-vitals": "tsx scripts/sync.ts play_vitals",
     "sync:play-stats": "tsx scripts/sync.ts play_stats",
+    "sync:play-stats:backfill": "tsx scripts/sync.ts play_stats 730",
     "sync:asc-analytics": "tsx scripts/sync.ts asc_analytics",
     "sync:asc-analytics:backfill": "tsx scripts/sync.ts asc_analytics 365",
     "discover:apps": "tsx scripts/discover-apps.ts",
