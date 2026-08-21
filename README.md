@@ -1,6 +1,8 @@
 # OpenFindability
 
-Local dashboard for SEO, ASO and app/site monetization — Google Search Console (+ index audit), Umami, Play Console, ASO keyword research (via a local RespectASO instance), App Store Connect (ASO copy + Product Page Optimization tests), RevenueCat, AdMob (including ad mediation by network) and AdSense — with a Claude Code MCP server. SQLite-backed, no SaaS.
+Self-hosted growth intelligence for indie developers with apps and websites: unifies Google Search Console, Umami, Play Console, App Store Connect, RevenueCat, AdMob and AdSense — plus ASO keyword research via a local RespectASO instance — into one local SQLite-backed dashboard, with read/write store metadata (App Store text + PPO, Play Store listing) and a Claude Code MCP server.
+
+Unlike single-purpose ASO or app-analytics tools, OpenFindability correlates web search demand (GSC), app-store visibility (ASO/Play/App Store) and actual revenue (RevenueCat/AdMob/AdSense) for the same product, and can act on it — not just chart it.
 
 No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app backed by a single SQLite file.
 
@@ -12,6 +14,8 @@ No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app b
 - **ASO research** — keyword popularity/difficulty/opportunity scoring via a local RespectASO instance, with a reusable cross-project keyword cache
 - **App Store Connect** — read/write live App Store product text (name, subtitle, keywords, description, promotional text) with a full pull/push history, plus Product Page Optimization (icon/screenshot/app preview A/B test) management — see [`docs/guide/appstoreconnect-workflow.md`](docs/guide/appstoreconnect-workflow.md)
 - **App & site monetization** — RevenueCat (MRR, subscribers, trials), AdMob (in-app ad revenue, impressions, clicks, per-ad-network mediation breakdown, Android + iOS summed per app) and AdSense (site display-ad revenue)
+- **Play Console listing writes** — pull/push live Play Store title/short/full description (dry-run by default, `--apply` to publish)
+- **Account-wide app growth stats** — `discover:apps` auto-lists every app visible to your Play Console/App Store Connect credentials and creates matching projects; syncs install/uninstall stats, crash/ANR rate (Play vitals) and App Store downloads/retention (ASC Analytics)
 - **MCP server** — call live GSC/Umami data and manage projects from any Claude Code session as native tools
 - **SQLite storage** — `data/openfindability.db` via Drizzle ORM, a single local file with full history (no server, no manual setup)
 - **Demo data** — seed and explore without any real credentials
