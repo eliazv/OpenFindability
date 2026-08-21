@@ -29,10 +29,11 @@ export async function syncUmamiProject(project: Project, date: string): Promise<
   url.searchParams.set("startAt", String(startAt));
   url.searchParams.set("endAt", String(endAt));
 
+  const isCloud = new URL(baseUrl).hostname.endsWith("umami.is");
   const response = await fetch(url, {
     headers: {
       Accept: "application/json",
-      "x-umami-api-key": apiKey,
+      ...(isCloud ? { "x-umami-api-key": apiKey } : { Authorization: `Bearer ${apiKey}` }),
     },
   });
 

@@ -30,7 +30,20 @@ export const metricSnapshots = sqliteTable(
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
-    source: text("source", { enum: ["gsc", "umami", "play_console", "aso", "revenuecat", "admob", "adsense"] }).notNull(),
+    source: text("source", {
+      enum: [
+        "gsc",
+        "umami",
+        "play_console",
+        "aso",
+        "revenuecat",
+        "admob",
+        "adsense",
+        "play_vitals",
+        "play_stats",
+        "asc_analytics",
+      ],
+    }).notNull(),
     date: text("date").notNull(),
     clicks: integer("clicks"),
     impressions: integer("impressions"),
@@ -241,6 +254,10 @@ export const connectorRuns = sqliteTable(
         "adsense",
         "asc_metadata",
         "asc_experiments",
+        "play_vitals",
+        "play_stats",
+        "asc_analytics",
+        "app_discovery",
         "all",
       ],
     }).notNull(),
@@ -422,6 +439,57 @@ export const admobMediationMetrics = sqliteTable(
   ],
 );
 
+export const playVitalsMetrics = sqliteTable(
+  "play_vitals_metrics",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    crashRate: real("crash_rate"),
+    anrRate: real("anr_rate"),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("play_vitals_metrics_project_date").on(table.projectId, table.date)],
+);
+
+export const playInstallStats = sqliteTable(
+  "play_install_stats",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    installs: integer("installs"),
+    uninstalls: integer("uninstalls"),
+    activeDeviceInstalls: integer("active_device_installs"),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("play_install_stats_project_date").on(table.projectId, table.date)],
+);
+
+export const ascAnalyticsMetrics = sqliteTable(
+  "asc_analytics_metrics",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    downloads: integer("downloads"),
+    retentionDay1: real("retention_day1"),
+    retentionDay7: real("retention_day7"),
+    retentionDay28: real("retention_day28"),
+    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("asc_analytics_metrics_project_date").on(table.projectId, table.date)],
+);
+
 export const schema = {
   projects,
   metricSnapshots,
@@ -440,4 +508,7 @@ export const schema = {
   ascMetadataSnapshots,
   ascExperiments,
   ascExperimentTreatments,
+  playVitalsMetrics,
+  playInstallStats,
+  ascAnalyticsMetrics,
 };

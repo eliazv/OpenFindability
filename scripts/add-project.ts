@@ -2,6 +2,7 @@ import "dotenv/config";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { createId } from "@/lib/id";
+import { slugify } from "@/lib/slug";
 import { updateData } from "@/lib/store";
 import type { Project, ProjectType } from "@/lib/types";
 
@@ -58,15 +59,6 @@ function parseArgs(argv: string[]): Args {
     }
   }
   return args;
-}
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 async function main() {

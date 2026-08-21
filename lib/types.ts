@@ -1,4 +1,14 @@
-export type SourceType = "gsc" | "umami" | "play_console" | "aso" | "revenuecat" | "admob" | "adsense";
+export type SourceType =
+  | "gsc"
+  | "umami"
+  | "play_console"
+  | "aso"
+  | "revenuecat"
+  | "admob"
+  | "adsense"
+  | "play_vitals"
+  | "play_stats"
+  | "asc_analytics";
 
 export type ProjectType = "web" | "app" | "web_app";
 
@@ -178,6 +188,39 @@ export type AdmobMediationMetric = {
   createdAt: string;
 };
 
+export type PlayVitalsMetric = {
+  id: string;
+  projectId: string;
+  date: string;
+  crashRate?: number;
+  anrRate?: number;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
+export type PlayInstallStat = {
+  id: string;
+  projectId: string;
+  date: string;
+  installs?: number;
+  uninstalls?: number;
+  activeDeviceInstalls?: number;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
+export type AscAnalyticsMetric = {
+  id: string;
+  projectId: string;
+  date: string;
+  downloads?: number;
+  retentionDay1?: number;
+  retentionDay7?: number;
+  retentionDay28?: number;
+  rawJson?: unknown;
+  createdAt: string;
+};
+
 export type AppReview = {
   id: string;
   projectId: string;
@@ -297,7 +340,13 @@ export type Opportunity = {
   rawJson?: unknown;
 };
 
-export type ConnectorSource = SourceType | "gsc_index" | "asc_metadata" | "asc_experiments" | "all";
+export type ConnectorSource =
+  | SourceType
+  | "gsc_index"
+  | "asc_metadata"
+  | "asc_experiments"
+  | "app_discovery"
+  | "all";
 
 export type ConnectorRun = {
   id: string;
@@ -328,6 +377,9 @@ export type AppData = {
   ascMetadataSnapshots: AscMetadataSnapshot[];
   ascExperiments: AscExperiment[];
   ascExperimentTreatments: AscExperimentTreatment[];
+  playVitalsMetrics: PlayVitalsMetric[];
+  playInstallStats: PlayInstallStat[];
+  ascAnalyticsMetrics: AscAnalyticsMetric[];
 };
 
 export type SyncOptions = {

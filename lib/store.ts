@@ -3,6 +3,7 @@ import {
   admobMediationMetrics as admobMediationMetricsTable,
   appKeywords as appKeywordsTable,
   appReviews as appReviewsTable,
+  ascAnalyticsMetrics as ascAnalyticsMetricsTable,
   ascExperiments as ascExperimentsTable,
   ascExperimentTreatments as ascExperimentTreatmentsTable,
   ascMetadataSnapshots as ascMetadataSnapshotsTable,
@@ -15,6 +16,8 @@ import {
   metricSnapshots as metricSnapshotsTable,
   opportunities as opportunitiesTable,
   pageMetrics as pageMetricsTable,
+  playInstallStats as playInstallStatsTable,
+  playVitalsMetrics as playVitalsMetricsTable,
   projects as projectsTable,
   searchQueries as searchQueriesTable,
 } from "@/lib/db/schema";
@@ -23,6 +26,7 @@ import type {
   AppData,
   AppKeywordMetric,
   AppReview,
+  AscAnalyticsMetric,
   AscExperiment,
   AscExperimentTreatment,
   AscMetadataSnapshot,
@@ -35,6 +39,8 @@ import type {
   MetricSnapshot,
   Opportunity,
   PageMetric,
+  PlayInstallStat,
+  PlayVitalsMetric,
   Project,
   SearchQueryMetric,
 } from "@/lib/types";
@@ -129,6 +135,16 @@ export function readDataWith(database: AppDb): AppData {
     .all()
     .map(denull) as AscExperimentTreatment[];
 
+  const playVitalsMetrics = database.select().from(playVitalsMetricsTable).all().map(denull) as PlayVitalsMetric[];
+
+  const playInstallStats = database.select().from(playInstallStatsTable).all().map(denull) as PlayInstallStat[];
+
+  const ascAnalyticsMetrics = database
+    .select()
+    .from(ascAnalyticsMetricsTable)
+    .all()
+    .map(denull) as AscAnalyticsMetric[];
+
   return {
     projects,
     metricSnapshots,
@@ -147,6 +163,9 @@ export function readDataWith(database: AppDb): AppData {
     ascMetadataSnapshots,
     ascExperiments,
     ascExperimentTreatments,
+    playVitalsMetrics,
+    playInstallStats,
+    ascAnalyticsMetrics,
   };
 }
 
@@ -166,6 +185,9 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     tx.delete(ascMetadataSnapshotsTable).run();
     tx.delete(ascExperimentTreatmentsTable).run();
     tx.delete(ascExperimentsTable).run();
+    tx.delete(playVitalsMetricsTable).run();
+    tx.delete(playInstallStatsTable).run();
+    tx.delete(ascAnalyticsMetricsTable).run();
     tx.delete(metricSnapshotsTable).run();
     tx.delete(projectsTable).run();
     tx.delete(asoKeywordSnapshotsTable).run();
@@ -224,6 +246,15 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     }
     for (const batch of chunk(data.ascExperimentTreatments, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(ascExperimentTreatmentsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.playVitalsMetrics, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(playVitalsMetricsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.playInstallStats, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(playInstallStatsTable).values(batch).run();
+    }
+    for (const batch of chunk(data.ascAnalyticsMetrics, INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(ascAnalyticsMetricsTable).values(batch).run();
     }
   });
 }

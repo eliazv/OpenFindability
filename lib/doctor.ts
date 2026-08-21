@@ -72,6 +72,20 @@ export async function getDoctorReport() {
       required: false,
     },
     {
+      name: "Play vitals credentials (crash/ANR)",
+      status: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_FILE),
+      required: false,
+      detail: "reuses GOOGLE_SERVICE_ACCOUNT_JSON/_FILE with the playdeveloperreporting scope",
+    },
+    {
+      name: "Play install/uninstall stats (GCS export)",
+      status: Boolean(process.env.GOOGLE_PLAY_STATS_BUCKET),
+      required: false,
+      detail: process.env.GOOGLE_PLAY_STATS_BUCKET
+        ? `bucket: ${process.env.GOOGLE_PLAY_STATS_BUCKET}`
+        : "GOOGLE_PLAY_STATS_BUCKET not set — enable Play Console statistics export first",
+    },
+    {
       name: "Connector runs",
       status: data.connectorRuns.length > 0,
       required: false,
@@ -114,12 +128,14 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
   const stale: { slug: string; source: string; ageDays: number | null }[] = [];
 
   for (const project of data.projects) {
-    const sources: ("gsc" | "umami" | "revenuecat" | "admob" | "adsense")[] = [];
+    const sources: ("gsc" | "umami" | "revenuecat" | "admob" | "adsense" | "play_vitals" | "play_stats" | "asc_analytics")[] = [];
     if (project.gscProperty) sources.push("gsc");
     if (project.umamiWebsiteId) sources.push("umami");
     if (project.revenueCatProjectId) sources.push("revenuecat");
     if (project.admobAppId || project.admobAppIdIos) sources.push("admob");
     if (project.adsenseSiteDomain) sources.push("adsense");
+    if (project.playConsolePackageName) sources.push("play_vitals", "play_stats");
+    if (project.appStoreTrackId) sources.push("asc_analytics");
 
     for (const source of sources) {
       const lastRun = data.connectorRuns

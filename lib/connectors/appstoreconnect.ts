@@ -117,10 +117,16 @@ export type AscAppInfoLocalization = {
 
 export async function getAppInfoLocalizations(appId: string): Promise<AscAppInfoLocalization[]> {
   const appInfos = await ascFetchAllPages(`/apps/${appId}/appInfos`);
-  // Apple keeps historical appInfo resources around; the editable one has no `appStoreState`
-  // terminal-state marker set yet (or is in a pre-review state) — take the first (Apple returns
-  // the current one first in practice) but fall back to all of them if that assumption is wrong.
-  const appInfoId = appInfos[0]?.id;
+  // Apple can expose two appInfo resources at once when a new version is in progress: one
+  // READY_FOR_SALE (the live one, read-only — writes 409 with "can not be modified in the
+  // current state") and one PREPARE_FOR_SUBMISSION (the editable draft). Picking "the first"
+  // is not reliable — prefer the editable one so callers can actually write to it; fall back
+  // to the first result (e.g. the live one) when no draft exists, which is still fine for reads.
+  const editable = appInfos.find((info) => {
+    const state = (info.attributes?.appStoreState ?? info.attributes?.state) as string | undefined;
+    return state && EDITABLE_VERSION_STATES.has(state);
+  });
+  const appInfoId = (editable ?? appInfos[0])?.id;
   if (!appInfoId) return [];
 
   const localizations = await ascFetchAllPages(`/appInfos/${appInfoId}/appInfoLocalizations`);

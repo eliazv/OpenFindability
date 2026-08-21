@@ -2,13 +2,16 @@ import { createId } from "@/lib/id";
 import type { MetricSnapshot, Project, SyncResult } from "@/lib/types";
 
 type RevenueCatOverviewMetrics = {
-  active_trials?: number;
-  active_subscriptions?: number;
-  mrr?: number;
-  revenue_last_28_days?: number;
-  new_customers_last_28_days?: number;
-  active_users_last_28_days?: number;
+  currency?: string;
+  metrics?: Array<{ id: string; value: number | null }>;
 };
+
+function metricValue(
+  payload: RevenueCatOverviewMetrics,
+  id: string,
+): number {
+  return payload.metrics?.find((m) => m.id === id)?.value ?? 0;
+}
 
 export async function syncRevenueCatProject(project: Project, date: string): Promise<{
   result: SyncResult;
@@ -52,11 +55,12 @@ export async function syncRevenueCatProject(project: Project, date: string): Pro
         projectId: project.id,
         source: "revenuecat",
         date,
-        revenue: payload.revenue_last_28_days ?? 0,
-        mrr: payload.mrr ?? 0,
-        activeSubscribers: payload.active_subscriptions ?? 0,
-        activeTrials: payload.active_trials ?? 0,
-        newCustomers: payload.new_customers_last_28_days ?? 0,
+        revenue: metricValue(payload, "revenue"),
+        mrr: metricValue(payload, "mrr"),
+        activeSubscribers: metricValue(payload, "active_subscriptions"),
+        activeTrials: metricValue(payload, "active_trials"),
+        newCustomers: metricValue(payload, "new_customers"),
+        currency: payload.currency,
         rawJson: payload,
         createdAt,
       },

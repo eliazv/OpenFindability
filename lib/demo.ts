@@ -165,5 +165,8 @@ export function createDemoData(): AppData {
     ascMetadataSnapshots: [],
     ascExperiments: [],
     ascExperimentTreatments: [],
+    playVitalsMetrics: [],
+    playInstallStats: [],
+    ascAnalyticsMetrics: [],
   };
 }

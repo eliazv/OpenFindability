@@ -4,7 +4,18 @@ import type { SourceType } from "@/lib/types";
 
 async function main() {
   const arg = process.argv[2];
-  const validSources: SourceType[] = ["gsc", "umami", "play_console", "aso", "revenuecat", "admob", "adsense"];
+  const validSources: SourceType[] = [
+    "gsc",
+    "umami",
+    "play_console",
+    "aso",
+    "revenuecat",
+    "admob",
+    "adsense",
+    "play_vitals",
+    "play_stats",
+    "asc_analytics",
+  ];
   const source = validSources.includes(arg as SourceType) ? (arg as SourceType) : undefined;
   // e.g. `pnpm run sync:admob -- 1500` backfills ~4 years instead of the default 30 days.
   const backfillArg = process.argv[3];

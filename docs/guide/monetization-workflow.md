@@ -99,17 +99,19 @@ pnpm run sync:admob:backfill
 
 (fixed at 1500 days ≈ 4 years. For a custom number of days, run `npx tsx scripts/sync.ts admob <days>` directly — `pnpm run sync:admob -- <days>` mis-quotes the extra arg on Windows/PowerShell).
 
-AdMob's daily network report is a true daily total, safe to sum across dates and projects (unlike RevenueCat's rolling window above).
+AdMob's daily reports are true daily values, safe to sum across dates and projects (unlike RevenueCat's rolling window above). When mediation is active, however, the **network report contains AdMob Network performance only**: use the mediation report total for complete app-ad revenue.
 
 ### Mediation report
 
-The same sync also calls `accounts.mediationReport.generate` (dimensions `DATE, APP, AD_SOURCE, FORMAT`) to see which mediated ad network (AdMob Network, AppLovin, Unity Ads, Meta, etc.) and ad format is actually driving revenue — the network report above only gives an account-level total. Results are stored in a separate table, `admobMediationMetrics` (one row per project/date/ad source/format), with `adRequests`, `matchedRequests`, `matchRate` (computed), `impressions`, `clicks`, `estimatedEarnings` and `observedEcpm`. Not yet surfaced in the dashboard/report — query it directly (`pnpm run db:studio` or `readData().admobMediationMetrics`) for now.
+The same sync also calls `accounts.mediationReport.generate` (dimensions `DATE, APP, AD_SOURCE, FORMAT`) to see which mediated ad network (AdMob Network, AppLovin, Unity Ads, Meta, etc.) and ad format is actually driving revenue. Results are stored in a separate table, `admobMediationMetrics` (one row per project/date/ad source/format), with `adRequests`, `matchedRequests`, `matchRate` (computed), `impressions`, `clicks`, `estimatedEarnings` and `observedEcpm`.
+
+Dashboard totals, revenue charts and monetization reports prefer the sum of mediation earnings for each project/day, because it includes both AdMob Network and third-party winners. They fall back to the network-report snapshot only for legacy days/projects with no mediation rows. Do not sum `AD_REQUESTS` across ad sources: one app request can be sent to several bidders.
 
 ## Dashboard
 
 The home page shows a "Monetizzazione" section with two cards:
 
-- **AdMob**: revenue yesterday and this month (true sums), a trend badge comparing this month to the previous calendar month, and an area chart (`components/charts/admob-revenue-chart.tsx`) of daily revenue summed across projects over the last 30 days (`getAdmobRevenueTrend` in `lib/insights.ts`).
+- **AdMob**: complete mediated revenue yesterday and this month (true sums), a trend badge comparing this month to the previous calendar month, and an area chart (`components/charts/admob-revenue-chart.tsx`) of daily revenue summed across projects over the last 30 days (`getAdmobRevenueTrend` in `lib/insights.ts`).
 - **RevenueCat**: MRR, active subscribers and revenue over the last 28 days (latest snapshot only, summed across projects), a trend badge comparing MRR at the start vs. end of the last 30 days, and an area chart (`components/charts/revenuecat-mrr-chart.tsx`) of MRR summed across projects over the last 30 days (`getRevenueCatMrrTrend` in `lib/insights.ts`).
 
 Both cards show a setup hint instead of numbers until at least one snapshot exists for that source. The charts use the shared `components/ui/chart.tsx` primitive (Recharts, ported from shadcn/Kiranism) and only render once there are at least two distinct dates of data.
@@ -124,7 +126,7 @@ All of this is still computed server-side from `data/openfindability.json` by pl
 pnpm run report -- <project-slug> monetization
 ```
 
-Writes `project/<slug>/reports/<date>-monetization-data.md` (`buildMonetizationReportMarkdown` in `lib/report.ts`): AdMob revenue for the last sync day, this month and the previous month (true daily sums) plus a daily table for the last 30 synced days; RevenueCat's latest MRR, active subscribers, active trials and new customers, plus its rolling 28-day revenue and an MRR trend table for the last 30 synced days. Skipped (with a log message) if the project has neither `admobAppId` nor `revenueCatProjectId` configured. Also included when running `pnpm run report -- <slug> all`.
+Writes `project/<slug>/reports/<date>-monetization-data.md` (`buildMonetizationReportMarkdown` in `lib/report.ts`): complete AdMob mediation revenue for the last sync day, this month and the previous month, a daily table, source/format breakdown and explicit reconciliation against the AdMob-only Network Report; RevenueCat's latest MRR, active subscribers, active trials and new customers, plus its rolling 28-day revenue and an MRR trend table for the last 30 synced days. Skipped (with a log message) if the project has neither `admobAppId` nor `revenueCatProjectId` configured. Also included when running `pnpm run report -- <slug> all`.
 
 ## Notes
 

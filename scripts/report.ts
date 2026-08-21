@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   buildAscReportMarkdown,
   buildAsoReportMarkdown,
+  buildGrowthReportMarkdown,
   buildGscIndexAuditReportMarkdown,
   buildGscReportMarkdown,
   buildMonetizationReportMarkdown,
@@ -33,7 +34,7 @@ async function main() {
   const args = process.argv.slice(2).filter((token) => token !== "--");
   const slug = args[0];
   if (!slug) {
-    throw new Error("Usage: pnpm run report -- <project-slug> [gsc|index|aso|asc|monetization|all]");
+    throw new Error("Usage: pnpm run report -- <project-slug> [gsc|index|aso|asc|monetization|growth|all]");
   }
   const section = args[1] ?? "all";
 
@@ -86,6 +87,17 @@ async function main() {
       const fileName = `${today}-appstoreconnect-data.md`;
       await writeFile(path.join(reportsDir, fileName), markdown, "utf8");
       console.log(`Wrote App Store Connect report to project/${slug}/reports/${fileName}`);
+    }
+  }
+
+  if (section === "growth" || section === "all") {
+    if (!project.playConsolePackageName && !project.appStoreTrackId) {
+      console.log(`Skipping growth report for "${slug}": no playConsolePackageName/appStoreTrackId configured on the project.`);
+    } else {
+      const markdown = buildGrowthReportMarkdown(data, project);
+      const fileName = `${today}-growth-data.md`;
+      await writeFile(path.join(reportsDir, fileName), markdown, "utf8");
+      console.log(`Wrote growth data report to project/${slug}/reports/${fileName}`);
     }
   }
 

@@ -111,7 +111,7 @@ export function summarizeProject(data: AppData, projectId: string) {
   const snapshots = data.metricSnapshots.filter((metric) => metric.projectId === projectId);
   const gsc = snapshots.filter((metric) => metric.source === "gsc");
   const umami = snapshots.filter((metric) => metric.source === "umami");
-  const admob = snapshots.filter((metric) => metric.source === "admob");
+  const admob = getAdmobRevenueRows(data, projectId);
   const revenuecat = snapshots.filter((metric) => metric.source === "revenuecat");
   const latestRevenueCat = latestByDate(revenuecat);
   const opportunities = data.opportunities.filter((opportunity) => opportunity.projectId === projectId);
@@ -134,9 +134,11 @@ export function summarizeProject(data: AppData, projectId: string) {
 
 // RevenueCat's `revenue` field is a rolling 28-day window, not a true daily total: summing it
 // across snapshots would double-count, so monetization totals use only the latest snapshot per
-// project. AdMob's `revenue` is a true daily total and is safe to sum across dates/projects.
+// project. AdMob mediation rows include AdMob Network plus third-party mediated sources and
+// are therefore the complete app-ad total. The network report is only a fallback for older
+// snapshots/projects that do not have mediation data.
 export function summarizeMonetization(data: AppData) {
-  const admob = data.metricSnapshots.filter((metric) => metric.source === "admob");
+  const admob = getAdmobRevenueRows(data);
   const revenuecat = data.metricSnapshots.filter((metric) => metric.source === "revenuecat");
 
   const now = new Date();
@@ -168,8 +170,8 @@ export function summarizeMonetization(data: AppData) {
 export type TrendPoint = { date: string; value: number };
 
 export function getAdmobRevenueTrend(data: AppData, days = 30): TrendPoint[] {
-  const admob = data.metricSnapshots.filter((metric) => metric.source === "admob" && metric.date >= cutoffDate(days));
-  return sumByDate(groupLatestByProjectAndDate(admob), "revenue");
+  const admob = getAdmobRevenueRows(data).filter((metric) => metric.date >= cutoffDate(days));
+  return sumByDate(admob, "revenue");
 }
 
 export function getRevenueCatMrrTrend(data: AppData, days = 30): TrendPoint[] {
@@ -189,10 +191,76 @@ export function getProjectMetricTrend(
   key: keyof MetricSnapshot,
   days = 30,
 ): TrendPoint[] {
+  if (source === "admob" && key === "revenue") {
+    return sumByDate(
+      getAdmobRevenueRows(data, projectId).filter((metric) => metric.date >= cutoffDate(days)),
+      "revenue",
+    );
+  }
+
   const snapshots = data.metricSnapshots.filter(
     (metric) => metric.projectId === projectId && metric.source === source && metric.date >= cutoffDate(days),
   );
   return sumByDate(groupLatestByProjectAndDate(snapshots), key);
+}
+
+type AdmobRevenueRow = {
+  projectId: string;
+  date: string;
+  revenue: number;
+  currency?: string;
+};
+
+/**
+ * Returns one complete AdMob revenue row per project/day.
+ *
+ * The mediation report includes the winning AdMob Network impression as well as third-party
+ * mediated sources. The network report only represents AdMob Network performance, so using it
+ * as the total undercounts apps with mediation. Keep it as a per-day fallback for legacy data.
+ */
+export function getAdmobRevenueRows(data: AppData, projectId?: string): AdmobRevenueRow[] {
+  const networkRows = groupLatestByProjectAndDate(
+    data.metricSnapshots.filter(
+      (metric) => metric.source === "admob" && (!projectId || metric.projectId === projectId),
+    ),
+  );
+  const byProjectDate = new Map<string, AdmobRevenueRow>();
+  const mediationKeys = new Set<string>();
+
+  for (const row of networkRows) {
+    byProjectDate.set(`${row.projectId}::${row.date}`, {
+      projectId: row.projectId,
+      date: row.date,
+      revenue: row.revenue ?? 0,
+      currency: row.currency,
+    });
+  }
+
+  for (const row of data.admobMediationMetrics) {
+    if (projectId && row.projectId !== projectId) continue;
+    const key = `${row.projectId}::${row.date}`;
+    const existing = byProjectDate.get(key);
+
+    if (!mediationKeys.has(key)) {
+      byProjectDate.set(key, {
+        projectId: row.projectId,
+        date: row.date,
+        revenue: row.estimatedEarnings ?? 0,
+        currency: row.currency,
+      });
+      mediationKeys.add(key);
+      continue;
+    }
+
+    if (existing) {
+      existing.revenue += row.estimatedEarnings ?? 0;
+      existing.currency ??= row.currency;
+    }
+  }
+
+  return [...byProjectDate.values()]
+    .map(({ projectId: id, date, revenue, currency }) => ({ projectId: id, date, revenue, currency }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function cutoffDate(days: number): string {
@@ -216,7 +284,7 @@ function groupLatestByProjectAndDate(snapshots: MetricSnapshot[]): MetricSnapsho
   return [...byKey.values()];
 }
 
-function sumByDate(snapshots: MetricSnapshot[], key: keyof MetricSnapshot): TrendPoint[] {
+function sumByDate<T extends { date: string }>(snapshots: T[], key: keyof T): TrendPoint[] {
   const byDate = new Map<string, number>();
   for (const snapshot of snapshots) {
     byDate.set(snapshot.date, (byDate.get(snapshot.date) ?? 0) + Number(snapshot[key] ?? 0));
