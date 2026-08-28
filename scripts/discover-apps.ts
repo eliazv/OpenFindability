@@ -41,6 +41,23 @@ async function main() {
     if (data.projects.some((p) => p.playConsolePackageName === app.packageName)) continue;
 
     const name = app.name ?? app.packageName;
+    // Same exact/fuzzy matching as the App Store loop below, against projects without a
+    // Play Console package yet -- otherwise a renamed/differently-worded Play listing name
+    // creates a duplicate project instead of linking to the existing (e.g. App Store-only) one.
+    const exactMatch = data.projects.find((p) => p.slug === slugify(name) && !p.playConsolePackageName);
+    const fuzzyMatch = exactMatch
+      ? undefined
+      : bestFuzzyMatch(data.projects.filter((p) => !p.playConsolePackageName), name);
+    const sameApp = exactMatch ?? fuzzyMatch;
+    if (sameApp) {
+      sameApp.playConsolePackageName = app.packageName;
+      sameApp.updatedAt = nowIso();
+      const tag = exactMatch ? "" : " (fuzzy match — verify)";
+      console.log(`Linked Play Console package ${app.packageName} to existing project "${sameApp.slug}"${tag}.`);
+      linked += 1;
+      continue;
+    }
+
     const slug = uniqueSlug(data.projects, name);
     const now = nowIso();
     const project: Project = {

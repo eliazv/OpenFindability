@@ -27,6 +27,7 @@ export type Project = {
   asoKeywords?: string[];
   asoCountries?: string[];
   revenueCatProjectId?: string;
+  revenueCatApiKey?: string;
   admobAppId?: string;
   admobAppIdIos?: string;
   adsenseSiteDomain?: string;

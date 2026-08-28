@@ -15,6 +15,7 @@ export const projects = sqliteTable("projects", {
   asoKeywords: text("aso_keywords", { mode: "json" }).$type<string[]>(),
   asoCountries: text("aso_countries", { mode: "json" }).$type<string[]>(),
   revenueCatProjectId: text("revenue_cat_project_id"),
+  revenueCatApiKey: text("revenue_cat_api_key"),
   admobAppId: text("admob_app_id"),
   admobAppIdIos: text("admob_app_id_ios"),
   adsenseSiteDomain: text("adsense_site_domain"),

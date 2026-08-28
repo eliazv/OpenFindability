@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `revenue_cat_api_key` text;

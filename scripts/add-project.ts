@@ -20,6 +20,7 @@ type Args = {
   asoKeywords?: string;
   asoCountries?: string;
   revenueCatProjectId?: string;
+  revenueCatApiKey?: string;
   admobAppId?: string;
   admobAppIdIos?: string;
   adsenseSiteDomain?: string;
@@ -50,6 +51,7 @@ function parseArgs(argv: string[]): Args {
       case "aso-keywords": args.asoKeywords = value; break;
       case "aso-countries": args.asoCountries = value; break;
       case "revenuecat-project-id": args.revenueCatProjectId = value; break;
+      case "revenuecat-api-key": args.revenueCatApiKey = value; break;
       case "admob-app-id": args.admobAppId = value; break;
       case "admob-app-id-ios": args.admobAppIdIos = value; break;
       case "adsense-domain": args.adsenseSiteDomain = value; break;
@@ -98,6 +100,7 @@ async function main() {
     asoKeywords: splitCsv(args.asoKeywords),
     asoCountries: splitCsv(args.asoCountries),
     revenueCatProjectId: args.revenueCatProjectId,
+    revenueCatApiKey: args.revenueCatApiKey,
     admobAppId: args.admobAppId,
     admobAppIdIos: args.admobAppIdIos,
     adsenseSiteDomain: args.adsenseSiteDomain,

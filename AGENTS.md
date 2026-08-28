@@ -83,6 +83,7 @@ pnpm build
 - Keep app-specific ASO ranks separate in `asoAppRankSnapshots`.
 - RevenueCat/AdMob are third-party API connectors, same pattern as GSC/Umami/Play Console — not the prohibited "SaaS billing/auth/queues" category. See `docs/guide/monetization-workflow.md`.
 - RevenueCat's `revenue` snapshot field is a rolling 28-day window, not a true daily total — never sum across dates, only use the latest snapshot per project. AdMob's `revenue` snapshot field is a true daily total, safe to sum across dates/projects.
+- `Project.revenueCatApiKey` (per-project V2 secret key override, falls back to the global `REVENUECAT_API_KEY` env var) lets multiple RevenueCat projects sync in one `pnpm run sync` run instead of swapping the env var by hand between apps. The overview metrics endpoint has no date range, so only one snapshot (today) is written per run; there is no backfill.
 - Do not commit secrets or real project metrics.
 - Keep private scratch notes in `private-notes/`, not in `docs/`.
 - When asked to inspect or reason about a project, create/update `project/<project-slug>/reports/` and write a dated report there.

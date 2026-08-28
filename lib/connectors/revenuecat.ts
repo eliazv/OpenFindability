@@ -21,9 +21,12 @@ export async function syncRevenueCatProject(project: Project, date: string): Pro
     return skipped(project.id, "Project has no RevenueCat project id.");
   }
 
-  const apiKey = process.env.REVENUECAT_API_KEY;
+  // Each RevenueCat project has its own V2 secret key, so a project-level override lets
+  // every app sync in one run instead of requiring REVENUECAT_API_KEY to be swapped by hand
+  // between apps. Falls back to the single global key for backward compatibility.
+  const apiKey = project.revenueCatApiKey || process.env.REVENUECAT_API_KEY;
   if (!apiKey) {
-    return skipped(project.id, "REVENUECAT_API_KEY is not configured.");
+    return skipped(project.id, "Neither project.revenueCatApiKey nor REVENUECAT_API_KEY is configured.");
   }
 
   const url = `https://api.revenuecat.com/v2/projects/${project.revenueCatProjectId}/metrics/overview`;

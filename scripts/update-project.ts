@@ -14,6 +14,7 @@ type Args = {
   asoKeywords?: string;
   asoCountries?: string;
   revenueCatProjectId?: string;
+  revenueCatApiKey?: string;
   admobAppId?: string;
   admobAppIdIos?: string;
   adsenseSiteDomain?: string;
@@ -41,6 +42,7 @@ function parseArgs(argv: string[]): Args {
       case "aso-keywords": args.asoKeywords = value; break;
       case "aso-countries": args.asoCountries = value; break;
       case "revenuecat-project-id": args.revenueCatProjectId = value; break;
+      case "revenuecat-api-key": args.revenueCatApiKey = value; break;
       case "admob-app-id": args.admobAppId = value; break;
       case "admob-app-id-ios": args.admobAppIdIos = value; break;
       case "adsense-domain": args.adsenseSiteDomain = value; break;
@@ -69,6 +71,7 @@ async function main() {
         "[--url https://example.com/] [--gsc sc-domain:example.com] [--umami <websiteId>] " +
         "[--play-console com.example.app] [--app-store-track-id 123] [--respect-aso-app-id 3] " +
         "[--aso-keywords \"one,two\"] [--aso-countries it,us] [--revenuecat-project-id proj_xxx] " +
+        "[--revenuecat-api-key sk_xxx] " +
         "[--admob-app-id ca-app-pub-xxx~yyy] [--admob-app-id-ios ca-app-pub-xxx~zzz] " +
         "[--adsense-domain example.com] [--notes \"...\"]\n\n" +
         "Only fields you pass are changed — everything else on the existing project is left untouched.",
@@ -89,6 +92,7 @@ async function main() {
   if (args.asoKeywords !== undefined) updates.asoKeywords = splitCsv(args.asoKeywords);
   if (args.asoCountries !== undefined) updates.asoCountries = splitCsv(args.asoCountries);
   if (args.revenueCatProjectId !== undefined) updates.revenueCatProjectId = args.revenueCatProjectId;
+  if (args.revenueCatApiKey !== undefined) updates.revenueCatApiKey = args.revenueCatApiKey;
   if (args.admobAppId !== undefined) updates.admobAppId = args.admobAppId;
   if (args.admobAppIdIos !== undefined) updates.admobAppIdIos = args.admobAppIdIos;
   if (args.adsenseSiteDomain !== undefined) updates.adsenseSiteDomain = args.adsenseSiteDomain;
