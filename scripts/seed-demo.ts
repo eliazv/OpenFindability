@@ -1,9 +1,13 @@
 import "dotenv/config";
 import { createDemoData } from "@/lib/demo";
 import { buildOpportunities } from "@/lib/insights";
-import { updateData } from "@/lib/store";
+import { readData, updateData } from "@/lib/store";
 
 async function main() {
+  const existing = await readData();
+  if (existing.projects.length > 0 && !process.argv.includes("--force")) {
+    throw new Error("Demo seeding would replace existing analytics. Take a backup, then pass --force only if this is intentional.");
+  }
   const data = createDemoData();
   data.opportunities = buildOpportunities(data);
   await updateData(() => data);
