@@ -275,7 +275,7 @@ function gscDateWindows(startDate: string, endDate: string, daysPerWindow = DETA
  * a multi-day aggregate to endDate. If a seven-day window hits the export cap,
  * retry each day separately to give every day a chance to be represented.
  */
-async function queryDailyDetails(
+export async function queryDailyDetails(
   searchconsole: ReturnType<typeof google.searchconsole>,
   siteUrl: string,
   startDate: string,
@@ -310,7 +310,7 @@ async function querySearchAnalytics(
   return (await pagedSearchAnalytics(searchconsole, siteUrl, startDate, endDate, dimensions)).rows;
 }
 
-async function pagedSearchAnalytics(
+export async function pagedSearchAnalytics(
   searchconsole: ReturnType<typeof google.searchconsole>,
   siteUrl: string,
   startDate: string,
