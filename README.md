@@ -251,6 +251,27 @@ v0.1 uses manual sync only.
 
 All data lives in `data/openfindability.db`, a local SQLite database accessed through Drizzle ORM (`lib/db/schema.ts`). No server process, no extra infra — still a single local file, just relational and queryable (`pnpm run db:studio`) instead of a hand-rolled JSON blob. `pnpm run db:backup` makes a **consistent** SQLite snapshot using the online backup API (including WAL state) under ignored `data/backups/`. This is manual, not off-site backup or a cloud-sync solution.
 
+## Security and public repository checklist
+
+OpenFindability is public, but tokens, store credentials, customer reports and SQLite data must remain **private**. Scan tracked files and past history locally (no GitHub Actions required):
+
+```bash
+pnpm run audit:secrets
+pnpm run audit:secrets:history
+# independent scanner, if installed:
+gitleaks git --redact --log-opts="--all"
+```
+
+A clean signature scan is not proof that history is secret-free. Rotate any leaked credential immediately. See [SECURITY.md](SECURITY.md).
+
+For read-only version/rollout checks on an app without deploying it:
+
+```bash
+pnpm run store:status -- --slug <project-slug>
+```
+
+`discover:apps` is dry-run by default; review cross-store app matches and rerun with `--apply` to save safe matches. Fuzzy matches are only suggestions.
+
 ## Private files
 
 These are intentionally ignored by git:
