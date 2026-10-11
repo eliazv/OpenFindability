@@ -68,12 +68,12 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
     },
     ga4: {
       latestDataDate: ga4.latestDataDate, observedDays: ga4.observedDays,
-      activeUsers: total(ga4.rows, "visitors"), pageviews: total(ga4.rows, "pageviews"),
+      summedDailyActiveUsers: total(ga4.rows, "visitors"), pageviews: total(ga4.rows, "pageviews"),
       sessions: ga4.rows.reduce<number | null>((sum, row) => {
         const v = (row.rawJson as { sessions?: number } | undefined)?.sessions;
         return typeof v === "number" ? (sum ?? 0) + v : sum;
       }, null),
-      note: "GA4 active users is not equivalent to Umami visitors. Do not add the two sources.",
+      note: "Sum of daily active users is user-days, NOT distinct active users across the whole window; do not combine it with Umami.",
     },
     advertising: {
       latestDataDate: ad.latestDataDate, observedDays: ad.observedDays,
