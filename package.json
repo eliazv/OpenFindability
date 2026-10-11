@@ -35,6 +35,7 @@
     "discover:apps": "tsx scripts/discover-apps.ts",
     "asc:apps": "tsx scripts/asc-apps.ts",
     "store:status": "tsx scripts/store-status.ts",
+    "mcp:start": "node scripts/mcp-launch.mjs",
     "aso:pull-copy": "tsx scripts/asc-metadata.ts pull",
     "aso:push-copy": "tsx scripts/asc-metadata.ts push",
     "asc:experiments": "tsx scripts/asc-experiments.ts",
