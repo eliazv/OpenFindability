@@ -6,6 +6,7 @@ async function main() {
   const arg = process.argv[2];
   const validSources: SourceType[] = [
     "gsc",
+    "ga4",
     "umami",
     "play_console",
     "aso",
