@@ -88,7 +88,7 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   const queries = queryRows.map((row) => ({
     id: createId("query"),
     projectId: project.id,
-    date: row.keys?.[0] ?? endDate,
+    date: row.keys![0],
     query: row.keys![1],
     page: row.keys![2],
     clicks: row.clicks ?? 0,
@@ -101,7 +101,7 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   const pages = pageRows.map((row) => ({
     id: createId("page"),
     projectId: project.id,
-    date: row.keys?.[0] ?? endDate,
+    date: row.keys![0],
     page: row.keys![1],
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
