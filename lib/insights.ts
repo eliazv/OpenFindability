@@ -1,5 +1,6 @@
 import { createId } from "@/lib/id";
-import type { AppData, GscIndexInspection, MetricSnapshot, Opportunity, SourceType } from "@/lib/types";
+import { recentGscDetails } from "@/lib/gsc-detail";
+import type { AppData, GscIndexInspection, MetricSnapshot, Opportunity, SearchQueryMetric, SourceType } from "@/lib/types";
 
 export function getLatestGscIndexInspections(
   data: AppData,
@@ -19,8 +20,9 @@ export function getLatestGscIndexInspections(
 export function buildOpportunities(data: AppData): Opportunity[] {
   const detectedAt = new Date().toISOString();
   const opportunities: Opportunity[] = [];
+  const { queries: recentQueries, pages: recentPages } = recentGscDetails(data, 28);
 
-  for (const query of data.searchQueries) {
+  for (const query of recentQueries) {
     const ctrPercent = query.ctr * 100;
     const potentialClicks = computePotentialClicks(query.impressions, ctrPercent, query.avgPosition);
 
@@ -85,7 +87,7 @@ export function buildOpportunities(data: AppData): Opportunity[] {
     }
   }
 
-  for (const page of data.pageMetrics) {
+  for (const page of recentPages) {
     if (page.impressions >= 3000 && page.ctr < 0.01) {
       opportunities.push({
         id: createId("opp"),
@@ -102,7 +104,7 @@ export function buildOpportunities(data: AppData): Opportunity[] {
     }
   }
 
-  opportunities.push(...buildCannibalizationOpportunities(data, detectedAt));
+  opportunities.push(...buildCannibalizationOpportunities(recentQueries, detectedAt));
 
   return opportunities.sort((a, b) => b.score - a.score).slice(0, 50);
 }
@@ -333,10 +335,10 @@ function computePotentialClicks(impressions: number, actualCtrPercent: number, p
   return Math.round((impressions * ctrGap) / 100);
 }
 
-function buildCannibalizationOpportunities(data: AppData, detectedAt: string): Opportunity[] {
-  const byProjectAndQuery = new Map<string, typeof data.searchQueries>();
+function buildCannibalizationOpportunities(queries: SearchQueryMetric[], detectedAt: string): Opportunity[] {
+  const byProjectAndQuery = new Map<string, SearchQueryMetric[]>();
 
-  for (const row of data.searchQueries) {
+  for (const row of queries) {
     if (!row.page || row.impressions < 60) continue;
     const key = `${row.projectId}::${row.query.toLowerCase().trim()}`;
     const current = byProjectAndQuery.get(key) ?? [];
