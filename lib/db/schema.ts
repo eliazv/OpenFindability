@@ -262,7 +262,7 @@ export const connectorRuns = sqliteTable(
       ],
     }).notNull(),
     projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
-    status: text("status", { enum: ["success", "failed", "skipped"] }).notNull(),
+    status: text("status", { enum: ["success", "partial", "no_data", "failed", "skipped"] }).notNull(),
     startedAt: text("started_at").notNull(),
     finishedAt: text("finished_at").notNull(),
     errorMessage: text("error_message"),
