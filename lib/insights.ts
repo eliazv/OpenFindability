@@ -92,7 +92,7 @@ export function buildOpportunities(data: AppData): Opportunity[] {
       opportunities.push({
         id: createId("opp"),
         projectId: page.projectId,
-        type: "declining_page",
+        type: "low_ctr_page",
         title: `Pagina con visibilita' ma pochi click: ${page.page}`,
         description: `${page.impressions.toLocaleString("it-IT")} impression e CTR ${(page.ctr * 100).toFixed(1)}%. Controlla snippet, search intent e copertura query.`,
         severity: "medium",
@@ -106,7 +106,15 @@ export function buildOpportunities(data: AppData): Opportunity[] {
 
   opportunities.push(...buildCannibalizationOpportunities(recentQueries, detectedAt));
 
-  return opportunities.sort((a, b) => b.score - a.score).slice(0, 50);
+  // Keep a fair shortlist for every configured project: one high-volume site
+  // must not monopolize all 50 slots and hide the smaller projects entirely.
+  const byProject = new Map<string, Opportunity[]>();
+  for (const row of opportunities.sort((a, b) => b.score - a.score)) {
+    const rows = byProject.get(row.projectId) ?? [];
+    if (rows.length < 30) rows.push(row);
+    byProject.set(row.projectId, rows);
+  }
+  return [...byProject.values()].flat().sort((a, b) => b.score - a.score);
 }
 
 export function summarizeProject(data: AppData, projectId: string) {
