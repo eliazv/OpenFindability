@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Layers, LayoutDashboard, RefreshCw, Smartphone, Stethoscope } from "lucide-react";
+import { Globe, Layers, LayoutDashboard, Smartphone, Stethoscope } from "lucide-react";
 
 import type { Project, ProjectType } from "@/lib/types";
+import { SyncButton } from "@/components/sync-button";
 import {
   Sidebar,
   SidebarContent,
@@ -76,12 +77,7 @@ export function AppSidebar({ projects }: { projects: Project[] }) {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Sync manuale">
-              <a href="/api/sync">
-                <RefreshCw />
-                <span>Sync manuale</span>
-              </a>
-            </SidebarMenuButton>
+            <SyncButton sidebar />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
