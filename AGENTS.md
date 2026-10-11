@@ -118,3 +118,5 @@ pnpm build
 - Opportunity scoring and query cannibalization aggregate actual daily rows over a rolling 28-day period (weighted position/CTR). GSC report and project top pages/queries are scoped to 28 days. Never date a range aggregate with only its end date again.
 - `pnpm run db:backup` uses SQLite's online backup API and integrity_check; store backups under ignored `data/backups/`. Before running a historical backfill on a real database, take a backup and run `pnpm run test:gsc`.
 - OpenFindability SQLite is **local**, not always-on for ChatGPT Mobile. Apps Script Google Sheet integration remains a separate planned bridge; don't start server/cron or sync the entire SQLite DB to Google Sheets.
+
+- On each successful GSC sync, replace prior v2 daily page/query rows for every covered finalized day (including rows Google stopped returning), while retaining unmarked legacy history. Recomputed opportunities preserve prior ignored/done status and stable ID when semantic identity matches.
