@@ -1,6 +1,6 @@
 # Google Search Console → Google Sheets → OpenFindability (Apps Script giornaliero)
 
-> **Stato:** proposta Apps Script/Sheets **non implementata**; correzione preliminare dello storico giornaliero GSC implementata nel branch `fix/gsc-daily-history-2026-10-11` (vedi note sotto).  
+> **Stato aggiornato (2026-10-11):** implementati il codice Apps Script (`integrations/google-sheets-gsc/Code.gs`), il manifest e l\u0027esportatore `OF_*` nel branch `feat/ga4-gsc-sheets-incremental-2026-10-11`. **Autorizzazione e trigger Google non ancora attivati**: istruzioni operative in [`google-sheets-live-setup.md`](google-sheets-live-setup.md). Questo documento conserva le decisioni architetturali di partenza.  
 > **Data:** 2026-10-11  
 > **Obiettivo:** accedere da ChatGPT Mobile ai dati SEO di tutti i siti, senza Windsor.ai o abbonamenti, mantenendo una futura integrazione pulita con OpenFindability.  
 > **Decisione consigliata:** Google Sheets privato, alimentato direttamente da Search Console con Apps Script ogni giorno; OpenFindability lo legge opzionalmente quando è in esecuzione. **Non** rendere la sincronizzazione del foglio dipendente dall'accensione del PC.
