@@ -1,5 +1,6 @@
 import { daysAgo, nowIso } from "@/lib/dates";
 import { buildOpportunities } from "@/lib/insights";
+import { isDailyGscDetail } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
@@ -100,8 +101,15 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
       try {
         const synced = await syncGscProject(project, daysAgo(backfillDays), daysAgo(2));
         data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        data.searchQueries = upsertQueries(data.searchQueries, synced.queries);
-        data.pageMetrics = upsertPages(data.pageMetrics, synced.pages);
+        // A successful refetch is an authoritative snapshot of each covered day.
+        // Remove previous *daily* rows for these days first, including keywords
+        // Google no longer returns. Preserve all legacy multi-day aggregates for
+        // audit/migration (they lack the v2 daily grain marker).
+        const coveredDays = new Set(synced.snapshots.map((snapshot) => snapshot.date));
+        const keepUncovered = (row: SearchQueryMetric | PageMetric) =>
+          row.projectId !== project.id || !coveredDays.has(row.date) || !isDailyGscDetail(row);
+        data.searchQueries = upsertQueries(data.searchQueries.filter(keepUncovered), synced.queries);
+        data.pageMetrics = upsertPages(data.pageMetrics.filter(keepUncovered), synced.pages);
         data.gscDimensionBreakdowns = upsertBreakdowns(data.gscDimensionBreakdowns, synced.breakdowns);
         data.gscSitemaps = upsertSitemaps(data.gscSitemaps, synced.sitemaps);
         results.push(synced.result);
