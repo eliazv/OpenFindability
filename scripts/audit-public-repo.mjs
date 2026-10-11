@@ -6,7 +6,7 @@ import { readFileSync, existsSync } from "node:fs";
 
 const history = process.argv.includes("--history");
 function git(args, encoding = "utf8") {
-  return execFileSync("git", args, { encoding, maxBuffer: 64 * 1024 * 1024 });
+  return execFileSync("git", args, { encoding: encoding === "buffer" ? null : encoding, maxBuffer: 64 * 1024 * 1024 });
 }
 const badPaths = [
   /(^|\/)\.env(?:\..+)?$/i,
