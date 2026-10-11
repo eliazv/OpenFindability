@@ -1,6 +1,6 @@
 # Google Search Console → Google Sheets → OpenFindability (Apps Script giornaliero)
 
-> **Stato:** proposta tecnica da implementare, non implementata.  
+> **Stato:** proposta Apps Script/Sheets **non implementata**; correzione preliminare dello storico giornaliero GSC implementata nel branch `fix/gsc-daily-history-2026-10-11` (vedi note sotto).  
 > **Data:** 2026-10-11  
 > **Obiettivo:** accedere da ChatGPT Mobile ai dati SEO di tutti i siti, senza Windsor.ai o abbonamenti, mantenendo una futura integrazione pulita con OpenFindability.  
 > **Decisione consigliata:** Google Sheets privato, alimentato direttamente da Search Console con Apps Script ogni giorno; OpenFindability lo legge opzionalmente quando è in esecuzione. **Non** rendere la sincronizzazione del foglio dipendente dall'accensione del PC.
@@ -26,7 +26,7 @@
 | `mcp/server.ts` | MCP locale con query live GSC; README documenta tool quali `get_gsc_stats`, `compare_periods`, `get_page_keywords`. | Non risolve il solo accesso ChatGPT Mobile; resti operativo da Claude Code/CLI. |
 | `README.md`, `AGENTS.md` | Progetto local-first SQLite, credenziali in `secrets/google/`, reports privati ignorati, niente segreti nel git. | Non introdurre un backend remoto solo per il foglio. |
 
-**Problema da risolvere prima dell'import:** la riga `pageMetrics.date=2026-10-09` potrebbe rappresentare nel codice attuale una pagina aggregata su 30 giorni, *non* i clic di quella sola data. Importare righe Apps Script veramente giornaliere nella stessa serie senza migrazione o separazione produrrebbe confronti scorretti. Anche `searchQueries` ha lo stesso problema.
+**Problema da risolvere prima dell'import:** la riga `pageMetrics.date=2026-10-09` potrebbe rappresentare nel codice attuale una pagina aggregata su 30 giorni, *non* i clic di quella sola data. La nuova sincronizzazione diretta scrive date giornaliere vere con marker `_openfindability.grain=day`. Le vecchie righe aggregate restano archiviate nel DB, ma sono escluse dalle analisi giornaliere tramite `lib/gsc-detail.ts`. L\x27import futuro da Sheets deve mantenere lo stesso contratto di granularità e non mescolare i due formati.
 
 ## Architettura di destinazione
 
