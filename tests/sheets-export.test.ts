@@ -10,7 +10,13 @@ test("private Sheet export excludes raw data, avoids duplicate AdMob totals and 
       { id: "g", projectId: "p", date: "2026-10-09", source: "gsc", clicks: 500, createdAt: "2026-10-11" },
       { id: "a", projectId: "p", date: "2026-10-09", source: "admob", revenue: 5, currency: "EUR", createdAt: "2026-10-11" },
       { id: "r", projectId: "p", date: "2026-10-10", source: "revenuecat", mrr: 9, revenue: 25, currency: "EUR", rawJson: { customer_private: "secret" }, createdAt: "2026-10-11" },
-    ], searchQueries: [], pageMetrics: [], connectorRuns: [],
+    ], connectorRuns: [],
+    searchQueries: [
+      { id: "q1", projectId: "p", date: "2026-10-08", query: "kw", page: "https://x/a", clicks: 1, impressions: 10, ctr: 0.1, avgPosition: 4, rawJson: { _openfindability: { version: 2, grain: "day" } } },
+      { id: "q2", projectId: "p", date: "2026-10-09", query: "kw", page: "https://x/a", clicks: 3, impressions: 30, ctr: 0.1, avgPosition: 8, rawJson: { _openfindability: { version: 2, grain: "day" } } },
+      { id: "q3", projectId: "p", date: "2026-10-09", query: "legacy", page: "https://x/a", clicks: 900, impressions: 9000, ctr: 0.1, avgPosition: 1 },
+    ],
+    pageMetrics: [],
     opportunities: [
       { id: "o1", projectId: "p", type: "striking_distance_query", title: "Low", description: "d", severity: "low", score: 10, status: "open", detectedAt: "2026-10-10", rawJson: { query: "q1", page: "https://x/a", clicks: 2, impressions: 100, ctr: 0.02, avgPosition: 8.5, projectId: "p", rawJson: { leaked: "secret" } } },
       { id: "o2", projectId: "p", type: "query_cannibalization", title: "High", description: "d", severity: "high", score: 90, status: "open", detectedAt: "2026-10-10", rawJson: { query: "q2", pages: [{ page: "https://x/a", clicks: 3, impressions: 60 }, { page: "https://x/b", clicks: 1, impressions: 40 }] } },
@@ -28,6 +34,9 @@ test("private Sheet export excludes raw data, avoids duplicate AdMob totals and 
   assert.equal(JSON.stringify(projection).includes("customer_private"), false);
   assert.equal(JSON.stringify(projection).includes("secret"), false);
   assert.equal(projection.OF_Projects.length, 1);
+  assert.deepEqual(projection.OF_GscDaily, [["p", "game", "2026-10-09", 500, 0, null, null]]);
+  // Daily rows are merged with an impression-weighted position; legacy range aggregates are excluded.
+  assert.deepEqual(projection.OF_GscQueries.map((row) => row.slice(2, 8)), [["kw", "https://x/a", 4, 40, 0.1, 7]]);
   assert.deepEqual(projection.OF_Opportunities.map((row) => row[6]), ["High", "Low"]);
   assert.deepEqual(projection.OF_Opportunities[0].slice(8, 14), ["q2", "https://x/a | https://x/b", 4, 100, 0.04, null]);
   assert.deepEqual(projection.OF_Opportunities[1].slice(8, 14), ["q1", "https://x/a", 2, 100, 0.02, 8.5]);

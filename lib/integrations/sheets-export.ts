@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { google } from "googleapis";
+import { recentGscDetails } from "@/lib/gsc-detail";
 import { getAdmobRevenueRows } from "@/lib/insights";
 import type { AppData } from "@/lib/types";
 
@@ -9,8 +10,19 @@ export const OF_SHEET_HEADERS = {
   OF_Revenue: ["project_id", "slug", "source", "date", "metric", "value", "currency", "grain"],
   OF_AppMetrics: ["project_id", "slug", "platform", "date", "metric", "value", "grain"],
   OF_Opportunities: ["project_id", "slug", "type", "severity", "score", "status", "title", "description", "query", "page", "clicks", "impressions", "ctr", "avg_position", "detected_at"],
+  OF_GscDaily: ["project_id", "slug", "date", "clicks", "impressions", "ctr", "avg_position"],
+  OF_GscQueries: ["project_id", "slug", "query", "page", "clicks", "impressions", "ctr", "avg_position", "window_days", "window_end"],
+  OF_GscPages: ["project_id", "slug", "page", "clicks", "impressions", "ctr", "avg_position", "window_days", "window_end"],
   OF_SyncStatus: ["project_id", "slug", "source", "status", "finished_at", "latest_data_date"],
 } as const;
+
+const GSC_WINDOW_DAYS = 28;
+const GSC_TOP_QUERIES_PER_PROJECT = 500;
+const GSC_TOP_PAGES_PER_PROJECT = 200;
+// Tabs ranked "best first" within each project: column index of the ranking value.
+const RANKED_TABS: Partial<Record<keyof typeof OF_SHEET_HEADERS, number>> = {
+  OF_Opportunities: 4, OF_GscQueries: 5, OF_GscPages: 4,
+};
 
 type Tab = keyof typeof OF_SHEET_HEADERS;
 type Cell = string | number | boolean | null;
@@ -45,7 +57,8 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
   const byId = new Map(data.projects.map((p) => [p.id, p]));
   const slug = (id: string) => byId.get(id)?.slug ?? "(deleted)";
   const out: ExportProjection = {
-    OF_Projects: [], OF_DailyMetrics: [], OF_Revenue: [], OF_AppMetrics: [], OF_Opportunities: [], OF_SyncStatus: [],
+    OF_Projects: [], OF_DailyMetrics: [], OF_Revenue: [], OF_AppMetrics: [], OF_Opportunities: [],
+    OF_GscDaily: [], OF_GscQueries: [], OF_GscPages: [], OF_SyncStatus: [],
   };
 
   for (const p of data.projects) {
@@ -57,8 +70,12 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
   }
   for (const r of data.metricSnapshots) {
     if (!dateWithin(r.date, days, today) || !byId.has(r.projectId)) continue;
-    // Apps Script is the sole owner of GSC rows in its own tabs.
-    if (r.source === "gsc") continue;
+    // GSC never goes in OF_DailyMetrics: the Apps Script owns its own GSC tabs and
+    // OpenFindability's copy lives in the dedicated OF_Gsc* tabs.
+    if (r.source === "gsc") {
+      out.OF_GscDaily.push([r.projectId, slug(r.projectId), r.date, r.clicks ?? 0, r.impressions ?? 0, r.ctr ?? null, r.avgPosition ?? null]);
+      continue;
+    }
     if (["ga4", "umami", "adsense"].includes(r.source)) {
       out.OF_DailyMetrics.push([
         r.projectId, slug(r.projectId), r.source, r.date,
@@ -118,6 +135,24 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
     ]);
   }
 
+  // Top queries/pages over the last 28 days of true daily rows (impression-weighted
+  // position). These are Google's top rows, not an exhaustive query inventory.
+  const gsc = recentGscDetails(data, GSC_WINDOW_DAYS);
+  const topPerProject = <T extends { projectId: string; impressions: number }>(rows: T[], limit: number): T[] => {
+    const seen = new Map<string, number>();
+    return [...rows].sort((a, b) => b.impressions - a.impressions).filter((row) => {
+      const count = seen.get(row.projectId) ?? 0;
+      seen.set(row.projectId, count + 1);
+      return byId.has(row.projectId) && count < limit;
+    });
+  };
+  for (const q of topPerProject(gsc.queries, GSC_TOP_QUERIES_PER_PROJECT)) {
+    out.OF_GscQueries.push([q.projectId, slug(q.projectId), q.query, q.page ?? "", q.clicks, q.impressions, q.ctr, q.avgPosition, GSC_WINDOW_DAYS, q.date]);
+  }
+  for (const p of topPerProject(gsc.pages, GSC_TOP_PAGES_PER_PROJECT)) {
+    out.OF_GscPages.push([p.projectId, slug(p.projectId), p.page, p.clicks, p.impressions, p.ctr, p.avgPosition, GSC_WINDOW_DAYS, p.date]);
+  }
+
   const latestRuns = new Map<string, (typeof data.connectorRuns)[number]>();
   for (const r of data.connectorRuns) {
     if (!r.projectId || !byId.has(r.projectId)) continue;
@@ -143,8 +178,9 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
   }
   for (const tab of Object.keys(out) as Tab[]) {
     out[tab].sort((a, b) => a.map(String).join("|").localeCompare(b.map(String).join("|")));
-    // Highest score first within each project, so the top of the tab is what to work on.
-    if (tab === "OF_Opportunities") out[tab].sort((a, b) => String(a[1]).localeCompare(String(b[1])) || Number(b[4]) - Number(a[4]));
+    // Highest value first within each project, so the top of the tab is what to work on.
+    const rank = RANKED_TABS[tab];
+    if (rank !== undefined) out[tab].sort((a, b) => String(a[1]).localeCompare(String(b[1])) || Number(b[rank]) - Number(a[rank]));
     if (out[tab].length > 20000) throw new Error(`Sheet export for ${tab} exceeds safety limit (20k rows).`);
   }
   return out;
