@@ -352,7 +352,7 @@ export type ConnectorRun = {
   id: string;
   source: ConnectorSource;
   projectId?: string;
-  status: "success" | "failed" | "skipped";
+  status: "success" | "partial" | "no_data" | "failed" | "skipped";
   startedAt: string;
   finishedAt: string;
   errorMessage?: string;
@@ -390,7 +390,7 @@ export type SyncOptions = {
 export type SyncResult = {
   source: SourceType;
   projectId: string;
-  status: "success" | "failed" | "skipped";
+  status: "success" | "partial" | "no_data" | "failed" | "skipped";
   message: string;
   inserted: {
     snapshots: number;
