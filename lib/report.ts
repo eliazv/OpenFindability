@@ -11,6 +11,7 @@ import type {
 } from "@/lib/types";
 import { getIndexIssueRecommendation } from "@/lib/gsc-index-audit";
 import { getAdmobRevenueRows } from "@/lib/insights";
+import { dailyGscPages, dailyGscQueries } from "@/lib/gsc-detail";
 
 export type AggregatedRow = {
   key: string;
@@ -47,11 +48,11 @@ function aggregate<T extends { clicks: number; impressions: number; avgPosition:
 }
 
 export function aggregatePagesByUrl(pages: PageMetric[]): AggregatedRow[] {
-  return aggregate(pages, (row) => row.page);
+  return aggregate(dailyGscPages(pages), (row) => row.page);
 }
 
 export function aggregateQueriesByText(queries: SearchQueryMetric[]): AggregatedRow[] {
-  return aggregate(queries, (row) => row.query);
+  return aggregate(dailyGscQueries(queries), (row) => row.query);
 }
 
 export function buildGscIndexAuditReportMarkdown(
@@ -235,8 +236,8 @@ export function buildGscReportMarkdown(
   const topPages = options.topPages ?? 20;
   const topQueries = options.topQueries ?? 30;
 
-  const queries = data.searchQueries.filter((row) => row.projectId === project.id);
-  const pages = data.pageMetrics.filter((row) => row.projectId === project.id);
+  const queries = dailyGscQueries(data.searchQueries.filter((row) => row.projectId === project.id));
+  const pages = dailyGscPages(data.pageMetrics.filter((row) => row.projectId === project.id));
   const snapshots = data.metricSnapshots.filter((row) => row.projectId === project.id && row.source === "gsc");
 
   const dates = [...new Set([...queries, ...pages].map((row) => row.date))].sort();
