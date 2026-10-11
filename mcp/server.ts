@@ -14,6 +14,7 @@ import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { buildOpportunities } from "@/lib/insights";
 import { aggregateDailyQueryRows, aggregateDailyPageRows } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
+import { getGrowthSnapshot } from "@/lib/analytics/growth-snapshot";
 import type { AppData, Project, ProjectType } from "@/lib/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -95,6 +96,24 @@ server.tool(
       playConsole: !!p.playConsolePackageName,
     }));
     return { content: [{ type: "text", text: JSON.stringify(list, null, 2) }] };
+  },
+);
+
+server.tool(
+  "get_growth_snapshot",
+  "Get a read-only, cached cross-provider health snapshot for a project from OpenFindability SQLite. Includes GSC, Umami, AdMob, RevenueCat, Android installs/vitals, iOS downloads, top opportunities, coverage and freshness. Does NOT make provider API calls or publish any store changes.",
+  {
+    slug: z.string().describe("Project slug"),
+    days: z.union([z.literal(7), z.literal(28), z.literal(90)]).default(28).describe("Source-relative metric window in days (7, 28 or 90)"),
+  },
+  async ({ slug, days }) => {
+    const data = await readStoredData();
+    const project = findProject(data.projects, slug);
+    if (!project) {
+      return { content: [{ type: "text", text: `Project "${slug}" not found.` }] };
+    }
+    const snapshot = getGrowthSnapshot(data, project.id, days);
+    return { content: [{ type: "text", text: JSON.stringify(snapshot, null, 2) }] };
   },
 );
 
