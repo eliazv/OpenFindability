@@ -5,7 +5,7 @@ import type { AppData } from "@/lib/types";
 
 export const OF_SHEET_HEADERS = {
   OF_Projects: ["project_id", "slug", "name", "type", "website", "play_package", "app_store_id", "ga4_property", "updated_at"],
-  OF_DailyMetrics: ["project_id", "slug", "source", "date", "visitors", "pageviews", "clicks", "impressions", "revenue", "currency", "grain"],
+  OF_DailyMetrics: ["project_id", "slug", "source", "date", "visitors", "sessions", "pageviews", "key_events", "clicks", "impressions", "revenue", "currency", "grain"],
   OF_Revenue: ["project_id", "slug", "source", "date", "metric", "value", "currency", "grain"],
   OF_AppMetrics: ["project_id", "slug", "platform", "date", "metric", "value", "grain"],
   OF_SyncStatus: ["project_id", "slug", "source", "status", "finished_at", "latest_data_date"],
@@ -39,11 +39,14 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
     if (!dateWithin(r.date, days, today) || !byId.has(r.projectId)) continue;
     // Apps Script is the sole owner of GSC rows in its own tabs.
     if (r.source === "gsc") continue;
-    if (["ga4", "umami", "adsense", "admob"].includes(r.source)) {
+    if (["ga4", "umami", "adsense"].includes(r.source)) {
       out.OF_DailyMetrics.push([
         r.projectId, slug(r.projectId), r.source, r.date,
-        r.visitors ?? null, r.pageviews ?? null, r.clicks ?? null,
-        r.impressions ?? null, r.revenue ?? null, r.currency ?? "", "daily",
+        r.visitors ?? null,
+        r.source === "ga4" ? (r.rawJson as { sessions?: number } | undefined)?.sessions ?? null : null,
+        r.pageviews ?? null,
+        r.source === "ga4" ? (r.rawJson as { keyEvents?: number } | undefined)?.keyEvents ?? null : null,
+        r.clicks ?? null, r.impressions ?? null, r.revenue ?? null, r.currency ?? "", "daily",
       ]);
     }
     if (r.source === "revenuecat") {
