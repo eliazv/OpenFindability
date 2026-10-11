@@ -36,6 +36,8 @@
     "asc:apps": "tsx scripts/asc-apps.ts",
     "store:status": "tsx scripts/store-status.ts",
     "mcp:start": "node scripts/mcp-launch.mjs",
+    "audit:secrets": "node scripts/audit-public-repo.mjs",
+    "audit:secrets:history": "node scripts/audit-public-repo.mjs --history",
     "aso:pull-copy": "tsx scripts/asc-metadata.ts pull",
     "aso:push-copy": "tsx scripts/asc-metadata.ts push",
     "asc:experiments": "tsx scripts/asc-experiments.ts",
