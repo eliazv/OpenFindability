@@ -168,7 +168,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         {gscSnapshots.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Google Search Console</CardTitle>
+              <CardTitle>Google Search Console · 28 giorni {summary.gscLatestDate ? `(al ${summary.gscLatestDate})` : ""}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid grid-cols-2 gap-3">
@@ -191,7 +191,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         {umamiSnapshots.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Umami</CardTitle>
+              <CardTitle>Umami · 28 giorni {summary.umamiLatestDate ? `(al ${summary.umamiLatestDate})` : ""}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid grid-cols-2 gap-3">
@@ -218,11 +218,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         {admobSnapshots.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>AdMob</CardTitle>
+              <CardTitle>AdMob · 28 giorni {summary.admobLatestDate ? `(al ${summary.admobLatestDate})` : ""}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div>
-                <span className="text-sm text-muted-foreground">Ricavi totali</span>
+                <span className="text-sm text-muted-foreground">Ricavi negli ultimi 28 giorni disponibili</span>
                 <strong className="block text-2xl font-extrabold">
                   {formatCurrency(summary.adRevenue, summary.adCurrency)}
                 </strong>
