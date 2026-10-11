@@ -112,7 +112,12 @@ function ofApi_(property, dateStart, dateEnd, dimensions, limit, searchType) {
       return data.rows || [];
     }
     if (status !== 429 && status < 500) {
-      throw new Error("GSC HTTP " + status + " for " + property + " (" + dimensions.join(",") + "). Verify access/scopes.");
+      // Surface Google's own reason: "API has not been used in project N" (enable the Search
+      // Console API in the script's Cloud project) and "User does not have sufficient permission
+      // for site" (this Google account is not a user of the property) are both 403s.
+      var reason = "";
+      try { reason = JSON.parse(response.getContentText()).error.message; } catch (e) { reason = response.getContentText(); }
+      throw new Error("GSC HTTP " + status + " for " + property + " (" + dimensions.join(",") + "): " + String(reason).slice(0, 300));
     }
     Utilities.sleep(delay);
     delay *= 2;
