@@ -33,6 +33,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
   const gscSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "gsc");
   const umamiSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "umami");
+  const ga4Snapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "ga4");
   const admobSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "admob");
   const revenuecatSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "revenuecat");
   const playConsoleSnapshots = data.metricSnapshots.filter(
@@ -63,6 +64,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
   const clicksTrend = getProjectMetricTrend(data, project.id, "gsc", "clicks");
   const visitorsTrend = getProjectMetricTrend(data, project.id, "umami", "visitors");
+  const ga4Trend = getProjectMetricTrend(data, project.id, "ga4", "visitors");
   const admobTrend = getProjectMetricTrend(data, project.id, "admob", "revenue");
   const mrrTrend = getProjectMetricTrend(data, project.id, "revenuecat", "mrr");
 
@@ -184,6 +186,31 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                 </div>
               </div>
               {clicksTrend.length > 1 && <MetricTrendChart data={clicksTrend} label="Click" color="var(--chart-1)" />}
+            </CardContent>
+          </Card>
+        )}
+
+        {ga4Snapshots.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Google Analytics 4 · ultime 4 settimane {summary.ga4LatestDate ? `(al ${summary.ga4LatestDate})` : ""}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-sm text-muted-foreground">Somma utenti attivi giornalieri</span>
+                  <strong className="block text-2xl font-extrabold">{summary.ga4DailyActiveUsersSum.toLocaleString("it-IT")}</strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Visualizzazioni</span>
+                  <strong className="block text-2xl font-extrabold">{summary.ga4Pageviews.toLocaleString("it-IT")}</strong>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Gli utenti attivi giornalieri sommati non equivalgono agli utenti unici su 28 giorni.
+                GA4 e Umami sono fonti distinte: non sommare i rispettivi utenti.
+              </p>
+              {ga4Trend.length > 1 && <MetricTrendChart data={ga4Trend} label="Utenti attivi/giorno" color="var(--chart-2)" />}
             </CardContent>
           </Card>
         )}
