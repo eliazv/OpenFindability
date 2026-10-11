@@ -35,6 +35,12 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
+function validatePlayListing(label: string, value: string | undefined, limit: number) {
+  if (value === undefined) return;
+  const length = [...value].length;
+  if (length > limit) throw new Error(`${label} exceeds Google Play limit of ${limit} characters (${length}).`);
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2).filter((token) => token !== "--");
   if (command !== "pull" && command !== "push") {
@@ -75,6 +81,10 @@ async function main() {
     throw new Error("Nothing to push — pass at least one of --title --short-description --full-description[-file].");
   }
 
+  validatePlayListing("title", args.title, 30);
+  validatePlayListing("short description", args.shortDescription, 80);
+  validatePlayListing("full description", fullDescription, 4000);
+
   const current = await getPlayStoreListing(packageName, language);
 
   console.log(`Dry run for "${project.slug}" / ${language}${args.apply ? " (APPLYING)" : " (pass --apply to write)"}:\n`);
@@ -94,7 +104,7 @@ async function main() {
     fullDescription: fullDescription ?? current?.fullDescription ?? undefined,
   });
 
-  console.log("\nApplied. Play Store listings go live within a few hours, no review needed.");
+  console.log("\nMetadata edit committed to Google Play. It may require review or Managed publishing before it appears publicly; verify the publishing status in Play Console.");
 }
 
 main().catch((error) => {
