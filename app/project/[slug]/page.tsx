@@ -38,8 +38,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const playConsoleSnapshots = data.metricSnapshots.filter(
     (m) => m.projectId === project.id && m.source === "play_console",
   );
-  const queries = data.searchQueries.filter((row) => row.projectId === project.id);
-  const pages = data.pageMetrics.filter((row) => row.projectId === project.id);
+  // Top pages/queries use the same last-28-finalized-days window as GSC reports.
+  // The aggregation helpers exclude legacy multi-day rows that were labeled as one day.
+  const latestGscDay = gscSnapshots.reduce((max, row) => row.date > max ? row.date : max, "");
+  const cutoff = latestGscDay ? new Date(`${latestGscDay}T00:00:00Z`) : undefined;
+  cutoff?.setUTCDate(cutoff.getUTCDate() - 27);
+  const firstGscDay = cutoff?.toISOString().slice(0, 10);
+  const isRecent = (date: string) => Boolean(firstGscDay && date >= firstGscDay && date <= latestGscDay);
+  const queries = data.searchQueries.filter((row) => row.projectId === project.id && isRecent(row.date));
+  const pages = data.pageMetrics.filter((row) => row.projectId === project.id && isRecent(row.date));
   const reviews = data.appReviews
     .filter((row) => row.projectId === project.id)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
