@@ -23,7 +23,11 @@ export function SyncButton({ sidebar = false }: { sidebar?: boolean }) {
       const payload = await response.json() as { error?: string; results?: Array<{ status: string }> };
       if (!response.ok && response.status !== 207) throw new Error(payload.error ?? "Sincronizzazione non riuscita.");
       const failures = payload.results?.filter((result) => result.status === "failed").length ?? 0;
-      setFeedback(failures ? `Sync terminata con ${failures} errori. Controlla il registro.` : "Sync completata.");
+      const partial = payload.results?.filter((result) => result.status === "partial").length ?? 0;
+      const missing = payload.results?.filter((result) => result.status === "no_data").length ?? 0;
+      setFeedback(failures || partial || missing
+        ? `Sync terminata: ${failures} errori, ${partial} parziali, ${missing} senza nuovi dati. Controlla il registro.`
+        : "Sync completata.");
       router.refresh();
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Errore di sincronizzazione.");
