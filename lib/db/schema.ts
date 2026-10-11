@@ -251,6 +251,7 @@ export const connectorRuns = sqliteTable(
       enum: [
         "gsc",
         "gsc_index",
+        "ga4",
         "umami",
         "play_console",
         "aso",
