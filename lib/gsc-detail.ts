@@ -39,18 +39,10 @@ function latestGscDayByProject(data: AppData): Map<string, string> {
   return latest;
 }
 
-function aggregateRecent<T extends GscDetailRow>(
-  data: AppData,
-  rows: T[],
-  keyOf: (row: T) => string,
-  days: number,
-): T[] {
-  const latest = latestGscDayByProject(data);
+function aggregateRows<T extends GscDetailRow>(rows: T[], keyOf: (row: T) => string): T[] {
   const buckets = new Map<string, { template: T; clicks: number; impressions: number; weightedPosition: number }>();
   for (const row of rows) {
     if (!isDailyGscDetail(row)) continue;
-    const lastDay = latest.get(row.projectId);
-    if (!lastDay || row.date < cutoffFromDay(lastDay, days) || row.date > lastDay) continue;
     const key = `${row.projectId}\u0000${keyOf(row)}`;
     const current = buckets.get(key) ?? { template: row, clicks: 0, impressions: 0, weightedPosition: 0 };
     current.clicks += row.clicks;
@@ -64,8 +56,32 @@ function aggregateRecent<T extends GscDetailRow>(
     impressions,
     ctr: impressions > 0 ? clicks / impressions : 0,
     avgPosition: impressions > 0 ? weightedPosition / impressions : 0,
-    rawJson: { _openfindability: { grain: "derived_window", days }, latestDetail: template.rawJson },
+    rawJson: { _openfindability: { grain: "derived_window" }, latestDetail: template.rawJson },
   }));
+}
+
+export function aggregateDailyQueryRows(rows: SearchQueryMetric[]): SearchQueryMetric[] {
+  return aggregateRows(rows, (row) => `${row.query}\u0000${row.page ?? ""}`);
+}
+
+export function aggregateDailyPageRows(rows: PageMetric[]): PageMetric[] {
+  return aggregateRows(rows, (row) => row.page);
+}
+
+function aggregateRecent<T extends GscDetailRow>(
+  data: AppData,
+  rows: T[],
+  keyOf: (row: T) => string,
+  days: number,
+): T[] {
+  const latest = latestGscDayByProject(data);
+  return aggregateRows(
+    rows.filter((row) => {
+      const lastDay = latest.get(row.projectId);
+      return lastDay !== undefined && row.date >= cutoffFromDay(lastDay, days) && row.date <= lastDay;
+    }),
+    keyOf,
+  );
 }
 
 // These aggregates are ONLY for reports/opportunity scoring: never store their
