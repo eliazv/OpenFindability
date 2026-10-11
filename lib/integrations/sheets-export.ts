@@ -159,7 +159,7 @@ export async function exportGoogleSheet(data: AppData, spreadsheetId: string, da
   const auth = new google.auth.GoogleAuth({ credentials, scopes: ["https://www.googleapis.com/auth/spreadsheets"] });
   const sheets = google.sheets({ version: "v4", auth });
   const projection = buildSheetProjection(data, new Date(), days);
-  const metadata = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets(properties(title,gridProperties))" });
+  const metadata = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets(properties(sheetId,title,gridProperties))" });
   const titles = new Set((metadata.data.sheets ?? []).map((sheet) => sheet.properties?.title));
   const missing = (Object.keys(projection) as Tab[]).filter((tab) => !titles.has(tab));
   if (missing.length) {
@@ -167,6 +167,19 @@ export async function exportGoogleSheet(data: AppData, spreadsheetId: string, da
       spreadsheetId, requestBody: { requests: missing.map((title) => ({ addSheet: { properties: { title, gridProperties: { frozenRowCount: 1 } } } })) },
     });
   }
+  // values.batchUpdate rejects a range beyond the tab's grid, and new tabs start
+  // at 1000 rows, so grow any tab that is too short before writing.
+  const grids = missing.length
+    ? (await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets(properties(sheetId,title,gridProperties))" })).data.sheets ?? []
+    : metadata.data.sheets ?? [];
+  const growRequests = (Object.keys(projection) as Tab[]).flatMap((tab) => {
+    const properties = grids.find((sheet) => sheet.properties?.title === tab)?.properties;
+    const shortBy = projection[tab].length + 1 - (properties?.gridProperties?.rowCount ?? 0);
+    return properties?.sheetId != null && shortBy > 0
+      ? [{ appendDimension: { sheetId: properties.sheetId, dimension: "ROWS", length: shortBy } }]
+      : [];
+  });
+  if (growRequests.length) await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: growRequests } });
   // A single values.batchUpdate applies the desired rows. The exporter owns
   // ONLY OF_ tabs: GSC Apps Script tabs stay untouched.
   const dataToWrite = (Object.keys(projection) as Tab[]).map((tab) => ({
