@@ -201,6 +201,49 @@ export function readDataWith(database: AppDb): AppData {
   })();
 }
 
+type GscDetail = SearchQueryMetric | PageMetric;
+
+function writeGscRowDelta(
+  database: AppDb,
+  name: "search_queries" | "page_metrics",
+  before: GscDetail[],
+  after: GscDetail[],
+): void {
+  // Stable ID-based diff: a refetched GSC day gets new IDs, so obsolete rows
+  // must be deleted before replacement inserts to respect natural-key indexes.
+  // All statements run inside writeDataWith's transaction.
+  const sqlite = getSqliteHandle(database);
+  const previous = new Map(before.map((row) => [row.id, row]));
+  const nextIds = new Set(after.map((row) => row.id));
+  const columns = name === "search_queries"
+    ? ["project_id", "date", "query", "page", "clicks", "impressions", "ctr", "avg_position", "raw_json"]
+    : ["project_id", "date", "page", "clicks", "impressions", "ctr", "avg_position", "raw_json"];
+  const encode = (row: GscDetail): unknown[] => name === "search_queries"
+    ? [
+        row.projectId, row.date, (row as SearchQueryMetric).query, (row as SearchQueryMetric).page ?? null,
+        row.clicks, row.impressions, row.ctr, row.avgPosition,
+        row.rawJson === undefined ? null : JSON.stringify(row.rawJson),
+      ]
+    : [
+        row.projectId, row.date, (row as PageMetric).page,
+        row.clicks, row.impressions, row.ctr, row.avgPosition,
+        row.rawJson === undefined ? null : JSON.stringify(row.rawJson),
+      ];
+  const remove = sqlite.prepare(`DELETE FROM ${name} WHERE id = ?`);
+  const insert = sqlite.prepare(`INSERT INTO ${name} (id, ${columns.join(", ")})
+    VALUES (${["?", ...columns.map(() => "?")].join(", ")})`);
+  const update = sqlite.prepare(`UPDATE ${name} SET ${columns.map((c) => c + " = ?").join(", ")} WHERE id = ?`);
+
+  for (const row of before) {
+    if (!nextIds.has(row.id)) remove.run(row.id);
+  }
+  for (const row of after) {
+    const old = previous.get(row.id);
+    if (old === undefined) insert.run(row.id, ...encode(row));
+    else if (JSON.stringify(old) !== JSON.stringify(row)) update.run(...encode(row), row.id);
+  }
+}
+
 export function writeDataWith(database: AppDb, data: AppData): void {
   const expectedRevision = snapshotRevisions.get(data);
   if (expectedRevision === undefined) {
@@ -223,6 +266,20 @@ export function writeDataWith(database: AppDb, data: AppData): void {
       for (const name of Object.keys(data)) changed.add(name);
     } else if (changed.has("ascExperiments")) {
       changed.add("ascExperimentTreatments");
+    }
+
+    // Historical GSC query/page datasets grow quickly; only apply the row delta.
+    // Keep full-table replacement for explicit project resets/migrations.
+    if (baseline && !changed.has("projects")) {
+      for (const [key, table] of [
+        ["searchQueries", "search_queries"],
+        ["pageMetrics", "page_metrics"],
+      ] as const) {
+        if (changed.has(key)) {
+          writeGscRowDelta(database, table, JSON.parse(baseline.get(key) ?? "[]") as GscDetail[], data[key]);
+          changed.delete(key);
+        }
+      }
     }
 
     if (changed.has("searchQueries")) tx.delete(searchQueriesTable).run();
