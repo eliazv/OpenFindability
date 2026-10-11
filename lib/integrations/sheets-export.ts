@@ -151,7 +151,7 @@ export async function exportGoogleSheet(data: AppData, spreadsheetId: string, da
     const newEnd = projection[tab].length + 1;
     if (old > newEnd) {
       await sheets.spreadsheets.values.clear({
-        spreadsheetId, range: `'${tab}'!A${newEnd + 1}:K${old}`, requestBody: {},
+        spreadsheetId, range: `'${tab}'!A${newEnd + 1}:${String.fromCharCode(64 + OF_SHEET_HEADERS[tab].length)}${old}`, requestBody: {},
       });
     }
   }
