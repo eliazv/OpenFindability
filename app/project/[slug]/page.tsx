@@ -435,7 +435,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                   {index > 0 && <Separator className="mb-1.5" />}
                   <div className="flex items-center justify-between gap-3">
                     <strong className="text-sm">{run.source}</strong>
-                    <Badge variant={run.status === "failed" ? "destructive" : "success"}>{run.status}</Badge>
+                    <Badge variant={run.status === "success" ? "success" : run.status === "failed" ? "destructive" : "warning"}>{run.status}</Badge>
                   </div>
                   <span className="font-mono text-xs text-muted-foreground">
                     {new Date(run.finishedAt).toLocaleString("it-IT")}
