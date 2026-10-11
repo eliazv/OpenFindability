@@ -56,13 +56,39 @@ function setupGscSync() {
 }
 
 function ofDates_(days) {
+  // Use calendar arithmetic in the report timezone, not 24h-ms subtraction,
+  // otherwise DST transitions can skip/duplicate one reporting day.
+  var today = Utilities.formatDate(new Date(), OF_GSC.tz, "yyyy-MM-dd");
   var values = [];
-  var now = new Date();
   for (var offset = days + 1; offset >= 2; offset--) {
-    var day = new Date(now.getTime() - offset * 86400000);
-    values.push(Utilities.formatDate(day, OF_GSC.tz, "yyyy-MM-dd"));
+    var day = new Date(today + "T12:00:00Z");
+    day.setUTCDate(day.getUTCDate() - offset);
+    values.push(Utilities.formatDate(day, "GMT", "yyyy-MM-dd"));
   }
   return values;
+}
+
+/** Optional one-time daily-total backfill (no expensive query/page history). */
+function backfillGscDaily() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) throw new Error("A GSC sync is already running.");
+  try {
+    var ss = ofWorkbook_();
+    var props = ofProperties_(ofEnsure_(ss, "Properties"));
+    var dailySheet = ofEnsure_(ss, "Daily");
+    var days = ofDates_(90);
+    var now = new Date().toISOString();
+    props.forEach(function(prop) {
+      var result = ofApi_(prop.property, days[0], days[days.length - 1], ["date"], 25000, prop.searchType);
+      var rows = result.map(function(r) {
+        return [prop.property, r.keys[0], r.clicks || 0, r.impressions || 0, r.ctr || 0, r.position || 0, now];
+      });
+      ofReplaceWindow_(dailySheet, prop.property, days, rows, 2);
+    });
+    ofOverview_(ofEnsure_(ss, "SEO_Overview"), dailySheet, props, now);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function ofApi_(property, dateStart, dateEnd, dimensions, limit, searchType) {
