@@ -1,4 +1,4 @@
-import { db, type AppDb } from "@/lib/db/client";
+import { db, getSqliteHandle, type AppDb } from "@/lib/db/client";
 import {
   admobMediationMetrics as admobMediationMetricsTable,
   appKeywords as appKeywordsTable,
@@ -49,6 +49,23 @@ export { getDbFilePath as getDataFilePath } from "@/lib/db/client";
 
 const INSERT_CHUNK_SIZE = 50;
 
+// Revision is attached to the exact snapshot returned by readData().
+const snapshotRevisions = new WeakMap<AppData, number>();
+
+export class StaleStoreSnapshotError extends Error {
+  constructor(expected: number, actual: number) {
+    super(`OpenFindability data changed since it was read (revision ${expected} -> ${actual}). Retry the operation; no data was overwritten.`);
+    this.name = "StaleStoreSnapshotError";
+  }
+}
+
+function storeRevision(database: AppDb): number {
+  const row = getSqliteHandle(database)
+    .prepare("SELECT revision FROM _openfindability_store_revision WHERE id = 1")
+    .get() as { revision: number };
+  return row.revision;
+}
+
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -70,6 +87,10 @@ function denull<T extends Record<string, unknown>>(row: T): T {
 // Parameterized by db instance so callers with their own connection (e.g. mcp/server.ts,
 // which runs with an arbitrary cwd from other repos) can reuse the same read/write logic.
 export function readDataWith(database: AppDb): AppData {
+  const native = getSqliteHandle(database);
+  // Read all tables and their revision in a consistent SQLite transaction.
+  return native.transaction(() => {
+  const revision = storeRevision(database);
   const projects = database.select().from(projectsTable).all().map(denull) as Project[];
   const metricSnapshots = database.select().from(metricSnapshotsTable).all().map(denull) as MetricSnapshot[];
   const searchQueries = database.select().from(searchQueriesTable).all().map(denull) as SearchQueryMetric[];
@@ -145,7 +166,7 @@ export function readDataWith(database: AppDb): AppData {
     .all()
     .map(denull) as AscAnalyticsMetric[];
 
-  return {
+  const snapshot: AppData = {
     projects,
     metricSnapshots,
     searchQueries,
@@ -167,10 +188,18 @@ export function readDataWith(database: AppDb): AppData {
     playInstallStats,
     ascAnalyticsMetrics,
   };
+  snapshotRevisions.set(snapshot, revision);
+  return snapshot;
+  })();
 }
 
 export function writeDataWith(database: AppDb, data: AppData): void {
-  database.transaction((tx) => {
+  const expectedRevision = snapshotRevisions.get(data);
+  const revision = database.transaction((tx) => {
+    const actualRevision = storeRevision(database);
+    if (expectedRevision !== undefined && expectedRevision !== actualRevision) {
+      throw new StaleStoreSnapshotError(expectedRevision, actualRevision);
+    }
     tx.delete(searchQueriesTable).run();
     tx.delete(pageMetricsTable).run();
     tx.delete(opportunitiesTable).run();
@@ -256,7 +285,12 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     for (const batch of chunk(data.ascAnalyticsMetrics, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(ascAnalyticsMetricsTable).values(batch).run();
     }
+    getSqliteHandle(database)
+      .prepare("UPDATE _openfindability_store_revision SET revision = revision + 1 WHERE id = 1")
+      .run();
+    return actualRevision + 1;
   });
+  snapshotRevisions.set(data, revision);
 }
 
 export async function readData(): Promise<AppData> {
@@ -268,8 +302,17 @@ export async function writeData(data: AppData): Promise<void> {
 }
 
 export async function updateData(mutator: (data: AppData) => AppData | void): Promise<AppData> {
-  const data = await readData();
-  const next = mutator(data) ?? data;
-  await writeData(next);
-  return next;
+  // Retry the synchronous mutation against a fresh snapshot after a conflict.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const data = await readData();
+    const next = mutator(data) ?? data;
+    if (next !== data) snapshotRevisions.set(next, snapshotRevisions.get(data)!);
+    try {
+      await writeData(next);
+      return next;
+    } catch (error) {
+      if (!(error instanceof StaleStoreSnapshotError) || attempt === 2) throw error;
+    }
+  }
+  throw new Error("Unreachable store retry state.");
 }
