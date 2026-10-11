@@ -387,7 +387,7 @@ server.tool(
     data.appReviews = data.appReviews.filter((x) => x.projectId !== id);
     data.connectorRuns = data.connectorRuns.filter((x) => x.projectId !== id);
     data.appKeywords = data.appKeywords.filter((x) => x.projectId !== id);
-    data.asoKeywordSnapshots = data.asoKeywordSnapshots.filter((x) => x.projectId !== id);
+    // asoKeywordSnapshots is a shared keyword cache without projectId; retain it.
     data.asoAppRankSnapshots = data.asoAppRankSnapshots.filter((x) => x.projectId !== id);
     data.gscDimensionBreakdowns = data.gscDimensionBreakdowns.filter((x) => x.projectId !== id);
     data.gscSitemaps = data.gscSitemaps.filter((x) => x.projectId !== id);
