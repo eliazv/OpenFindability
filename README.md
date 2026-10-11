@@ -169,39 +169,24 @@ OpenFindability exposes an MCP server so Claude Code can query your analytics li
 
 ### Setup (once)
 
-Install tsx globally:
+Run `pnpm install` once in OpenFindability, then configure the **portable Node launcher** in your MCP client. This launcher selects the OpenFindability working directory and TypeScript config, including when called from a different repository.
 
-```bash
-npm install -g tsx
-```
-
-Add to `~/.claude/settings.json`:
+Windows example (`~/.claude/settings.json`):
 
 ```json
 {
   "mcpServers": {
     "openfindability": {
-      "command": "tsx",
-      "args": ["/absolute/path/to/OpenFindability/mcp/server.ts"]
+      "command": "node",
+      "args": ["C:\\path\\to\\OpenFindability\\scripts\\mcp-launch.mjs"]
     }
   }
 }
 ```
 
-On Windows use the full path to `tsx.cmd`:
+macOS/Linux: `"command": "node"` and `"args": ["/path/to/OpenFindability/scripts/mcp-launch.mjs"]`.
 
-```json
-{
-  "mcpServers": {
-    "openfindability": {
-      "command": "C:\\Users\\<user>\\AppData\\Roaming\\npm\\tsx.cmd",
-      "args": ["C:\\path\\to\\OpenFindability\\mcp\\server.ts"]
-    }
-  }
-}
-```
-
-Restart Claude Code. The server starts automatically — no process to keep running.
+Restart the MCP client. This is a **local stdio** integration, not an always-on ChatGPT Mobile connection.
 
 ### Available tools
 
