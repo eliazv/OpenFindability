@@ -1,6 +1,7 @@
 import { access } from "node:fs/promises";
 import { getDataFilePath, readData } from "@/lib/store";
 import type { AppData } from "@/lib/types";
+import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
 
 const STALE_AFTER_DAYS = 3;
 
@@ -106,6 +107,12 @@ export async function getDoctorReport() {
       detail: describeFreshness(data, STALE_AFTER_DAYS),
     },
     {
+      name: "Incomplete or failed latest syncs",
+      status: getLatestSyncProblems(data).length === 0,
+      required: false,
+      detail: getLatestSyncProblems(data).join("; ") || "no recent partial, no-data or failed runs",
+    },
+    {
       name: "ASO projects",
       status: data.projects.some((p) => Boolean(p.asoKeywords?.length)),
       required: false,
@@ -156,13 +163,31 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
       }
 
       const ageDays = (Date.now() - new Date(lastRun.finishedAt).getTime()) / 86_400_000;
-      if (ageDays > staleAfterDays) {
+      if (ageDays > Math.max(staleAfterDays, CONNECTOR_CATALOG[source].staleAfterDays)) {
         stale.push({ slug: project.slug, source, ageDays });
       }
     }
   }
 
   return stale;
+}
+
+function getLatestSyncProblems(data: AppData): string[] {
+  const last = new Map<string, (typeof data.connectorRuns)[number]>();
+  for (const run of data.connectorRuns) {
+    if (!run.projectId) continue;
+    const key = `${run.projectId}:${run.source}`;
+    const previous = last.get(key);
+    if (!previous || (run.finishedAt ?? run.startedAt) > (previous.finishedAt ?? previous.startedAt)) {
+      last.set(key, run);
+    }
+  }
+  return [...last.values()]
+    .filter((run) => ["partial", "no_data", "failed"].includes(run.status))
+    .map((run) => {
+      const project = data.projects.find((item) => item.id === run.projectId);
+      return `${project?.slug ?? run.projectId}/${run.source}: ${run.status} at ${run.finishedAt ?? run.startedAt}`;
+    });
 }
 
 function describeFreshness(data: AppData, staleAfterDays: number): string {
