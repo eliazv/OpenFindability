@@ -19,6 +19,10 @@ export const CONNECTOR_CATALOG = {
     label: "Google Search Console", category: "seo", grain: "daily",
     typicalLagDays: 2, staleAfterDays: 4, syncSafety: "read_only", docs: "docs/guide/gsc-google-sheets-appscript-integration.md",
   },
+  ga4: {
+    label: "Google Analytics 4", category: "web_analytics", grain: "daily",
+    typicalLagDays: 2, staleAfterDays: 4, syncSafety: "read_only", docs: "docs/guide/ga4-setup.md",
+  },
   umami: {
     label: "Umami", category: "web_analytics", grain: "daily",
     typicalLagDays: 1, staleAfterDays: 3, syncSafety: "read_only", docs: "docs/guide/struttura-progetto.md",
