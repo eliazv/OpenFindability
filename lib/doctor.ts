@@ -28,6 +28,12 @@ export async function getDoctorReport() {
       detail: "GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE",
     },
     {
+      name: "GA4 projects",
+      status: data.projects.some((project) => Boolean(project.ga4PropertyId)),
+      required: false,
+      detail: `${data.projects.filter((project) => project.ga4PropertyId).length} GA4 properties configured (service account needs Analytics Viewer role)`,
+    },
+    {
       name: "Umami credentials",
       status: Boolean(process.env.UMAMI_API_KEY),
       required: false,
@@ -143,8 +149,9 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
   const stale: { slug: string; source: string; ageDays: number | null }[] = [];
 
   for (const project of data.projects) {
-    const sources: ("gsc" | "umami" | "revenuecat" | "admob" | "adsense" | "play_vitals" | "play_stats" | "asc_analytics")[] = [];
+    const sources: ("gsc" | "ga4" | "umami" | "revenuecat" | "admob" | "adsense" | "play_vitals" | "play_stats" | "asc_analytics")[] = [];
     if (project.gscProperty) sources.push("gsc");
+    if (project.ga4PropertyId) sources.push("ga4");
     if (project.umamiWebsiteId) sources.push("umami");
     if (project.revenueCatProjectId) sources.push("revenuecat");
     if (project.admobAppId || project.admobAppIdIos) sources.push("admob");
