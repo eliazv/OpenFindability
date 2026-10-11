@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `ga4_property_id` text;
