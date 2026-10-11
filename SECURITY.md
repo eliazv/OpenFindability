@@ -26,4 +26,4 @@ Please do **not** open a public GitHub issue containing a real token, credential
 
 ## Repository visibility
 
-Public source code is compatible with private analytics **only when credentials and runtime data remain outside Git**. If project notes, client lists or financial metrics are commercially sensitive, keep them in ignored private workspaces. The README, `docs/`, `AGENTS.md` and `CLAUDE.md` are public.
+Public source code is compatible with private analytics **only when credentials and runtime data remain outside Git**. If project notes, client lists or financial metrics are commercially sensitive, keep them in ignored private workspaces. The README, `docs/`, `AGENTS.md` and `CLAUDE.md` are public. The Next.js dev/start commands bind to `127.0.0.1` by default; use a separate authenticated deployment if remote access is needed.
