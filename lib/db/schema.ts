@@ -8,6 +8,7 @@ export const projects = sqliteTable("projects", {
   category: text("category"),
   websiteUrl: text("website_url"),
   gscProperty: text("gsc_property"),
+  ga4PropertyId: text("ga4_property_id"),
   umamiWebsiteId: text("umami_website_id"),
   playConsolePackageName: text("play_console_package_name"),
   appStoreTrackId: integer("app_store_track_id"),
@@ -35,6 +36,7 @@ export const metricSnapshots = sqliteTable(
     source: text("source", {
       enum: [
         "gsc",
+        "ga4",
         "umami",
         "play_console",
         "aso",
@@ -220,6 +222,7 @@ export const opportunities = sqliteTable(
     type: text("type", {
       enum: [
         "low_ctr_query",
+        "low_ctr_page",
         "striking_distance_query",
         "declining_page",
         "growing_page",
@@ -265,7 +268,7 @@ export const connectorRuns = sqliteTable(
       ],
     }).notNull(),
     projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
-    status: text("status", { enum: ["success", "failed", "skipped"] }).notNull(),
+    status: text("status", { enum: ["success", "partial", "no_data", "failed", "skipped"] }).notNull(),
     startedAt: text("started_at").notNull(),
     finishedAt: text("finished_at").notNull(),
     errorMessage: text("error_message"),

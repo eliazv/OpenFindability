@@ -12,7 +12,9 @@ import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { buildOpportunities } from "@/lib/insights";
+import { aggregateDailyQueryRows, aggregateDailyPageRows } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
+import { getGrowthSnapshot } from "@/lib/analytics/growth-snapshot";
 import type { AppData, Project, ProjectType } from "@/lib/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +100,24 @@ server.tool(
 );
 
 server.tool(
+  "get_growth_snapshot",
+  "Get a read-only, cached cross-provider health snapshot for a project from OpenFindability SQLite. Includes GSC, Umami, AdMob, RevenueCat, Android installs/vitals, iOS downloads, top opportunities, coverage and freshness. Does NOT make provider API calls or publish any store changes.",
+  {
+    slug: z.string().describe("Project slug"),
+    days: z.union([z.literal(7), z.literal(28), z.literal(90)]).default(28).describe("Source-relative metric window in days (7, 28 or 90)"),
+  },
+  async ({ slug, days }) => {
+    const data = await readStoredData();
+    const project = findProject(data.projects, slug);
+    if (!project) {
+      return { content: [{ type: "text", text: `Project "${slug}" not found.` }] };
+    }
+    const snapshot = getGrowthSnapshot(data, project.id, days);
+    return { content: [{ type: "text", text: JSON.stringify(snapshot, null, 2) }] };
+  },
+);
+
+server.tool(
   "get_gsc_stats",
   "Fetch LIVE Google Search Console data for a project (calls GSC API in real time, no cache). Returns: { summary: { totalClicks, totalImpressions, avgCtrPercent, avgPosition }, topQueries: [{ query, page, clicks, impressions, ctr, avgPosition }], topPages: [{ page, clicks, impressions, ctr, avgPosition }], dailySnapshots: [{ date, clicks, impressions, ctr, avgPosition }] }. Use 'days' to control range (default 30, max 90).",
   {
@@ -115,8 +135,9 @@ server.tool(
       return { content: [{ type: "text", text: `Project "${slug}" has no GSC property configured.` }] };
     }
 
-    const endDate = yesterday();
-    const startDate = daysAgo(days);
+    // GSC finalized data is generally delayed: use the last 30 completed days ending D-2.
+    const endDate = daysAgo(2);
+    const startDate = daysAgo(days + 1);
 
     const { result, snapshots, queries, pages } = await syncGscProject(project, startDate, endDate);
 
@@ -127,10 +148,9 @@ server.tool(
     const totalClicks = snapshots.reduce((s, r) => s + (r.clicks ?? 0), 0);
     const totalImpressions = snapshots.reduce((s, r) => s + (r.impressions ?? 0), 0);
     const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
-    const avgPosition =
-      snapshots.length > 0
-        ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0), 0) / snapshots.length
-        : 0;
+    const avgPosition = totalImpressions > 0
+      ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0) * (r.impressions ?? 0), 0) / totalImpressions
+      : 0;
 
     const output = {
       project: project.name,
@@ -142,10 +162,10 @@ server.tool(
         avgPosition: parseFloat(avgPosition.toFixed(1)),
       },
       topQueries: stripRaw(
-        [...queries].sort((a, b) => b.clicks - a.clicks).slice(0, limit),
+        aggregateDailyQueryRows(queries).sort((a, b) => b.clicks - a.clicks).slice(0, limit),
       ),
       topPages: stripRaw(
-        [...pages].sort((a, b) => b.clicks - a.clicks).slice(0, limit),
+        aggregateDailyPageRows(pages).sort((a, b) => b.clicks - a.clicks).slice(0, limit),
       ),
       dailySnapshots: stripRaw(
         [...snapshots].sort((a, b) => a.date.localeCompare(b.date)),
@@ -260,12 +280,13 @@ server.tool(
     type: z.enum(["web", "app", "web_app"]).default("web").describe("Project type"),
     websiteUrl: z.string().optional().describe("Website URL, e.g. https://example.com"),
     gscProperty: z.string().optional().describe("GSC property URL (e.g. sc-domain:example.com or https://example.com/)"),
+    ga4PropertyId: z.string().optional().describe("Numeric GA4 property id"),
     umamiWebsiteId: z.string().optional().describe("Umami website UUID"),
     playConsolePackageName: z.string().optional().describe("Android package name, e.g. com.example.app"),
     category: z.string().optional().describe("Optional category label"),
     notes: z.string().optional().describe("Optional notes"),
   },
-  async ({ name, slug, type, websiteUrl, gscProperty, umamiWebsiteId, playConsolePackageName, category, notes }) => {
+  async ({ name, slug, type, websiteUrl, gscProperty, ga4PropertyId, umamiWebsiteId, playConsolePackageName, category, notes }) => {
     const data = await readStoredData();
 
     if (data.projects.some((p) => p.slug === slug)) {
@@ -280,6 +301,7 @@ server.tool(
       type: type as ProjectType,
       websiteUrl,
       gscProperty,
+      ga4PropertyId,
       umamiWebsiteId,
       playConsolePackageName,
       category,
@@ -314,6 +336,7 @@ server.tool(
     type: z.enum(["web", "app", "web_app"]).optional(),
     websiteUrl: z.string().optional(),
     gscProperty: z.string().optional().describe("Set to empty string to remove"),
+    ga4PropertyId: z.string().optional().describe("Numeric GA4 property id; empty to remove"),
     umamiWebsiteId: z.string().optional().describe("Set to empty string to remove"),
     playConsolePackageName: z.string().optional().describe("Android package name. Set to empty string to remove."),
     category: z.string().optional(),
@@ -333,6 +356,7 @@ server.tool(
       ...(fields.type !== undefined && { type: fields.type as ProjectType }),
       ...(fields.websiteUrl !== undefined && { websiteUrl: fields.websiteUrl || undefined }),
       ...(fields.gscProperty !== undefined && { gscProperty: fields.gscProperty || undefined }),
+      ...(fields.ga4PropertyId !== undefined && { ga4PropertyId: fields.ga4PropertyId || undefined }),
       ...(fields.umamiWebsiteId !== undefined && { umamiWebsiteId: fields.umamiWebsiteId || undefined }),
       ...(fields.playConsolePackageName !== undefined && { playConsolePackageName: fields.playConsolePackageName || undefined }),
       ...(fields.category !== undefined && { category: fields.category || undefined }),
@@ -349,7 +373,7 @@ server.tool(
 
 server.tool(
   "delete_project",
-  "Permanently remove a project and ALL its stored data (snapshots, queries, pages, opportunities) from the local JSON store. Irreversible — no backup. Requires confirm: true. Returns a count of deleted records per type.",
+  "Permanently remove a project and its linked SQLite records (all connector tables). Destructive: take a local backup first. Requires confirm: true. Returns a record count summary.",
   {
     slug: z.string().describe("Project slug to delete"),
     confirm: z.boolean().describe("Must be true to confirm deletion"),
@@ -374,12 +398,30 @@ server.tool(
       reviews: data.appReviews.filter((x) => x.projectId === id).length,
     };
 
+    // Remove ALL project-scoped tables, not just the original six.
+    // Deleting only the project row would leave orphaned analytics and store
+    // records (and foreign key constraints can then reject the transaction).
+    const ownedExperimentIds = new Set(data.ascExperiments.filter((x) => x.projectId === id).map((x) => x.id));
     data.projects = data.projects.filter((p) => p.id !== id);
     data.metricSnapshots = data.metricSnapshots.filter((x) => x.projectId !== id);
     data.searchQueries = data.searchQueries.filter((x) => x.projectId !== id);
     data.pageMetrics = data.pageMetrics.filter((x) => x.projectId !== id);
     data.opportunities = data.opportunities.filter((x) => x.projectId !== id);
     data.appReviews = data.appReviews.filter((x) => x.projectId !== id);
+    data.connectorRuns = data.connectorRuns.filter((x) => x.projectId !== id);
+    data.appKeywords = data.appKeywords.filter((x) => x.projectId !== id);
+    // asoKeywordSnapshots is a shared keyword cache without projectId; retain it.
+    data.asoAppRankSnapshots = data.asoAppRankSnapshots.filter((x) => x.projectId !== id);
+    data.gscDimensionBreakdowns = data.gscDimensionBreakdowns.filter((x) => x.projectId !== id);
+    data.gscSitemaps = data.gscSitemaps.filter((x) => x.projectId !== id);
+    data.gscIndexInspections = data.gscIndexInspections.filter((x) => x.projectId !== id);
+    data.admobMediationMetrics = data.admobMediationMetrics.filter((x) => x.projectId !== id);
+    data.ascMetadataSnapshots = data.ascMetadataSnapshots.filter((x) => x.projectId !== id);
+    data.ascExperimentTreatments = data.ascExperimentTreatments.filter((x) => !ownedExperimentIds.has(x.experimentId));
+    data.ascExperiments = data.ascExperiments.filter((x) => x.projectId !== id);
+    data.playVitalsMetrics = data.playVitalsMetrics.filter((x) => x.projectId !== id);
+    data.playInstallStats = data.playInstallStats.filter((x) => x.projectId !== id);
+    data.ascAnalyticsMetrics = data.ascAnalyticsMetrics.filter((x) => x.projectId !== id);
 
     await writeStoredData(data);
 
@@ -466,8 +508,9 @@ server.tool(
       return { content: [{ type: "text", text: `Project "${slug}" not found. Use list_projects to see options.` }] };
     }
 
-    const endDate = yesterday();
-    const startDate = daysAgo(days);
+    // GSC finalized data is generally delayed: use the last 30 completed days ending D-2.
+    const endDate = daysAgo(2);
+    const startDate = daysAgo(days + 1);
     const summary: Record<string, unknown> = { project: project.name, slug: project.slug, url: project.websiteUrl };
 
     if (project.gscProperty) {
@@ -476,8 +519,8 @@ server.tool(
         const totalClicks = snapshots.reduce((s, r) => s + (r.clicks ?? 0), 0);
         const totalImpressions = snapshots.reduce((s, r) => s + (r.impressions ?? 0), 0);
         const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
-        const avgPosition = snapshots.length > 0
-          ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0), 0) / snapshots.length
+        const avgPosition = totalImpressions > 0
+          ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0) * (r.impressions ?? 0), 0) / totalImpressions
           : 0;
 
         summary.gsc = {
@@ -486,8 +529,8 @@ server.tool(
           totalImpressions,
           avgCtrPercent: parseFloat((avgCtr * 100).toFixed(2)),
           avgPosition: parseFloat(avgPosition.toFixed(1)),
-          topQueries: stripRaw([...queries].sort((a, b) => b.clicks - a.clicks).slice(0, 10)),
-          topPages: stripRaw([...pages].sort((a, b) => b.clicks - a.clicks).slice(0, 10)),
+          topQueries: stripRaw(aggregateDailyQueryRows(queries).sort((a, b) => b.clicks - a.clicks).slice(0, 10)),
+          topPages: stripRaw(aggregateDailyPageRows(pages).sort((a, b) => b.clicks - a.clicks).slice(0, 10)),
         };
       } else {
         summary.gsc = { error: result.message };
@@ -560,15 +603,16 @@ server.tool(
       return { content: [{ type: "text", text: `Project "${slug}" has no GSC property configured.` }] };
     }
 
-    const endDate = yesterday();
-    const startDate = daysAgo(days);
+    // GSC finalized data is generally delayed: use the last 30 completed days ending D-2.
+    const endDate = daysAgo(2);
+    const startDate = daysAgo(days + 1);
     const { result, queries } = await syncGscProject(project, startDate, endDate);
 
     if (result.status !== "success") {
       return { content: [{ type: "text", text: `GSC failed: ${result.message}` }] };
     }
 
-    const filtered = queries
+    const filtered = aggregateDailyQueryRows(queries)
       .filter((q) => q.page && q.page.includes(pageUrl) && q.impressions >= minImpressions)
       .sort((a, b) => b.impressions - a.impressions);
 
@@ -603,22 +647,22 @@ server.tool(
       return { content: [{ type: "text", text: `Project "${slug}" has no GSC property configured.` }] };
     }
 
-    const currentEnd = yesterday();
-    const currentStart = daysAgo(days);
-    const previousEnd = daysAgo(days + 1);
+    const currentEnd = daysAgo(2);
+    const currentStart = daysAgo(days + 1);
+    const previousEnd = daysAgo(days + 2);
     const previousStart = daysAgo(days * 2 + 1);
 
     const [current, previous] = await Promise.all([
-      syncGscProject(project, currentStart, currentEnd),
-      syncGscProject(project, previousStart, previousEnd),
+      syncGscProject(project, currentStart, currentEnd, { details: false }),
+      syncGscProject(project, previousStart, previousEnd, { details: false }),
     ]);
 
     function periodMetrics(snapshots: typeof current.snapshots) {
       const clicks = snapshots.reduce((s, r) => s + (r.clicks ?? 0), 0);
       const impressions = snapshots.reduce((s, r) => s + (r.impressions ?? 0), 0);
       const avgCtr = impressions > 0 ? clicks / impressions : 0;
-      const avgPosition = snapshots.length > 0
-        ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0), 0) / snapshots.length
+      const avgPosition = impressions > 0
+        ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0) * (r.impressions ?? 0), 0) / impressions
         : 0;
       return { clicks, impressions, avgCtrPercent: parseFloat((avgCtr * 100).toFixed(2)), avgPosition: parseFloat(avgPosition.toFixed(1)) };
     }

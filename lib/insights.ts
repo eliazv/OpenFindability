@@ -1,5 +1,6 @@
 import { createId } from "@/lib/id";
-import type { AppData, GscIndexInspection, MetricSnapshot, Opportunity, SourceType } from "@/lib/types";
+import { recentGscDetails } from "@/lib/gsc-detail";
+import type { AppData, GscIndexInspection, MetricSnapshot, Opportunity, SearchQueryMetric, SourceType } from "@/lib/types";
 
 export function getLatestGscIndexInspections(
   data: AppData,
@@ -19,8 +20,9 @@ export function getLatestGscIndexInspections(
 export function buildOpportunities(data: AppData): Opportunity[] {
   const detectedAt = new Date().toISOString();
   const opportunities: Opportunity[] = [];
+  const { queries: recentQueries, pages: recentPages } = recentGscDetails(data, 28);
 
-  for (const query of data.searchQueries) {
+  for (const query of recentQueries) {
     const ctrPercent = query.ctr * 100;
     const potentialClicks = computePotentialClicks(query.impressions, ctrPercent, query.avgPosition);
 
@@ -85,12 +87,12 @@ export function buildOpportunities(data: AppData): Opportunity[] {
     }
   }
 
-  for (const page of data.pageMetrics) {
+  for (const page of recentPages) {
     if (page.impressions >= 3000 && page.ctr < 0.01) {
       opportunities.push({
         id: createId("opp"),
         projectId: page.projectId,
-        type: "declining_page",
+        type: "low_ctr_page",
         title: `Pagina con visibilita' ma pochi click: ${page.page}`,
         description: `${page.impressions.toLocaleString("it-IT")} impression e CTR ${(page.ctr * 100).toFixed(1)}%. Controlla snippet, search intent e copertura query.`,
         severity: "medium",
@@ -102,21 +104,47 @@ export function buildOpportunities(data: AppData): Opportunity[] {
     }
   }
 
-  opportunities.push(...buildCannibalizationOpportunities(data, detectedAt));
+  opportunities.push(...buildCannibalizationOpportunities(recentQueries, detectedAt));
 
-  return opportunities.sort((a, b) => b.score - a.score).slice(0, 50);
+  // Keep a fair shortlist for every configured project: one high-volume site
+  // must not monopolize all 50 slots and hide the smaller projects entirely.
+  const byProject = new Map<string, Opportunity[]>();
+  for (const row of opportunities.sort((a, b) => b.score - a.score)) {
+    const rows = byProject.get(row.projectId) ?? [];
+    if (rows.length < 30) rows.push(row);
+    byProject.set(row.projectId, rows);
+  }
+  return [...byProject.values()].flat().sort((a, b) => b.score - a.score);
+}
+
+function lastAvailableDays<T extends { date: string }>(rows: T[], days = 28): T[] {
+  if (rows.length === 0) return [];
+  const end = rows.reduce((latest, row) => row.date > latest ? row.date : latest, "");
+  const start = new Date(`${end}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - days + 1);
+  const cutoff = start.toISOString().slice(0, 10);
+  return rows.filter((row) => row.date >= cutoff && row.date <= end).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function summarizeProject(data: AppData, projectId: string) {
   const snapshots = data.metricSnapshots.filter((metric) => metric.projectId === projectId);
-  const gsc = snapshots.filter((metric) => metric.source === "gsc");
-  const umami = snapshots.filter((metric) => metric.source === "umami");
-  const admob = getAdmobRevenueRows(data, projectId);
+  // Each source reports its latest 28 available calendar days, never its
+  // entire lifetime. Expose the endpoint so stale data is not disguised.
+  const gsc = lastAvailableDays(snapshots.filter((metric) => metric.source === "gsc"));
+  const umami = lastAvailableDays(snapshots.filter((metric) => metric.source === "umami"));
+  const ga4 = lastAvailableDays(snapshots.filter((metric) => metric.source === "ga4"));
+  const admob = lastAvailableDays(getAdmobRevenueRows(data, projectId));
   const revenuecat = snapshots.filter((metric) => metric.source === "revenuecat");
   const latestRevenueCat = latestByDate(revenuecat);
-  const opportunities = data.opportunities.filter((opportunity) => opportunity.projectId === projectId);
+  const opportunities = data.opportunities.filter((opportunity) => opportunity.projectId === projectId && opportunity.status === "open");
 
   return {
+    gscLatestDate: gsc.at(-1)?.date,
+    umamiLatestDate: umami.at(-1)?.date,
+    ga4LatestDate: ga4.at(-1)?.date,
+    ga4DailyActiveUsersSum: sum(ga4, "visitors"),
+    ga4Pageviews: sum(ga4, "pageviews"),
+    admobLatestDate: admob.at(-1)?.date,
     clicks: sum(gsc, "clicks"),
     impressions: sum(gsc, "impressions"),
     visitors: sum(umami, "visitors"),
@@ -333,10 +361,10 @@ function computePotentialClicks(impressions: number, actualCtrPercent: number, p
   return Math.round((impressions * ctrGap) / 100);
 }
 
-function buildCannibalizationOpportunities(data: AppData, detectedAt: string): Opportunity[] {
-  const byProjectAndQuery = new Map<string, typeof data.searchQueries>();
+function buildCannibalizationOpportunities(queries: SearchQueryMetric[], detectedAt: string): Opportunity[] {
+  const byProjectAndQuery = new Map<string, SearchQueryMetric[]>();
 
-  for (const row of data.searchQueries) {
+  for (const row of queries) {
     if (!row.page || row.impressions < 60) continue;
     const key = `${row.projectId}::${row.query.toLowerCase().trim()}`;
     const current = byProjectAndQuery.get(key) ?? [];

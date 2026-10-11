@@ -1,14 +1,14 @@
 import Link from "next/link";
 
 import {
-  buildOpportunities,
   getAdmobRevenueTrend,
   getLatestGscIndexInspections,
   getRevenueCatMrrTrend,
   summarizeMonetization,
   summarizeProject,
 } from "@/lib/insights";
-import { readData, writeData } from "@/lib/store";
+import { readData } from "@/lib/store";
+import { SyncButton } from "@/components/sync-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,10 +27,6 @@ const severityVariant = {
 
 export default async function HomePage() {
   const data = await readData();
-  if (data.opportunities.length === 0 && (data.searchQueries.length > 0 || data.pageMetrics.length > 0)) {
-    data.opportunities = buildOpportunities(data);
-    await writeData(data);
-  }
 
   const totals = data.projects.reduce(
     (acc, project) => {
@@ -78,9 +74,7 @@ export default async function HomePage() {
           <Button variant="outline" asChild>
             <a href="/api/doctor">Doctor</a>
           </Button>
-          <Button asChild>
-            <a href="/api/sync">Sync manuale</a>
-          </Button>
+          <SyncButton />
         </div>
       </header>
 
@@ -93,13 +87,13 @@ export default async function HomePage() {
         </Card>
         <Card>
           <CardContent className="grid gap-1.5">
-            <span className="text-sm text-muted-foreground">Click GSC</span>
+            <span className="text-sm text-muted-foreground">Click GSC · ultimi 28 gg disponibili</span>
             <strong className="text-3xl font-extrabold">{totals.clicks.toLocaleString("it-IT")}</strong>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="grid gap-1.5">
-            <span className="text-sm text-muted-foreground">Visitatori Umami</span>
+            <span className="text-sm text-muted-foreground">Visitatori Umami · ultimi 28 gg disponibili</span>
             <strong className="text-3xl font-extrabold">{totals.visitors.toLocaleString("it-IT")}</strong>
           </CardContent>
         </Card>
@@ -295,7 +289,7 @@ export default async function HomePage() {
                   {index > 0 && <Separator className="mb-1.5" />}
                   <div className="flex items-center justify-between gap-3">
                     <strong className="text-sm">{run.source}</strong>
-                    <Badge variant={run.status === "failed" ? "destructive" : "success"}>{run.status}</Badge>
+                    <Badge variant={run.status === "success" ? "success" : run.status === "failed" ? "destructive" : "warning"}>{run.status}</Badge>
                   </div>
                   <span className="font-mono text-xs text-muted-foreground">
                     {new Date(run.finishedAt).toLocaleString("it-IT")}

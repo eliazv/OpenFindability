@@ -33,13 +33,21 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
   const gscSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "gsc");
   const umamiSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "umami");
+  const ga4Snapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "ga4");
   const admobSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "admob");
   const revenuecatSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "revenuecat");
   const playConsoleSnapshots = data.metricSnapshots.filter(
     (m) => m.projectId === project.id && m.source === "play_console",
   );
-  const queries = data.searchQueries.filter((row) => row.projectId === project.id);
-  const pages = data.pageMetrics.filter((row) => row.projectId === project.id);
+  // Top pages/queries use the same last-28-finalized-days window as GSC reports.
+  // The aggregation helpers exclude legacy multi-day rows that were labeled as one day.
+  const latestGscDay = gscSnapshots.reduce((max, row) => row.date > max ? row.date : max, "");
+  const cutoff = latestGscDay ? new Date(`${latestGscDay}T00:00:00Z`) : undefined;
+  cutoff?.setUTCDate(cutoff.getUTCDate() - 27);
+  const firstGscDay = cutoff?.toISOString().slice(0, 10);
+  const isRecent = (date: string) => Boolean(firstGscDay && date >= firstGscDay && date <= latestGscDay);
+  const queries = data.searchQueries.filter((row) => row.projectId === project.id && isRecent(row.date));
+  const pages = data.pageMetrics.filter((row) => row.projectId === project.id && isRecent(row.date));
   const reviews = data.appReviews
     .filter((row) => row.projectId === project.id)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -56,6 +64,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
   const clicksTrend = getProjectMetricTrend(data, project.id, "gsc", "clicks");
   const visitorsTrend = getProjectMetricTrend(data, project.id, "umami", "visitors");
+  const ga4Trend = getProjectMetricTrend(data, project.id, "ga4", "visitors");
   const admobTrend = getProjectMetricTrend(data, project.id, "admob", "revenue");
   const mrrTrend = getProjectMetricTrend(data, project.id, "revenuecat", "mrr");
 
@@ -161,7 +170,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         {gscSnapshots.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Google Search Console</CardTitle>
+              <CardTitle>Google Search Console · 28 giorni {summary.gscLatestDate ? `(al ${summary.gscLatestDate})` : ""}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid grid-cols-2 gap-3">
@@ -181,10 +190,35 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
           </Card>
         )}
 
+        {ga4Snapshots.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Google Analytics 4 · ultime 4 settimane {summary.ga4LatestDate ? `(al ${summary.ga4LatestDate})` : ""}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-sm text-muted-foreground">Somma utenti attivi giornalieri</span>
+                  <strong className="block text-2xl font-extrabold">{summary.ga4DailyActiveUsersSum.toLocaleString("it-IT")}</strong>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">Visualizzazioni</span>
+                  <strong className="block text-2xl font-extrabold">{summary.ga4Pageviews.toLocaleString("it-IT")}</strong>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Gli utenti attivi giornalieri sommati non equivalgono agli utenti unici su 28 giorni.
+                GA4 e Umami sono fonti distinte: non sommare i rispettivi utenti.
+              </p>
+              {ga4Trend.length > 1 && <MetricTrendChart data={ga4Trend} label="Utenti attivi/giorno" color="var(--chart-2)" />}
+            </CardContent>
+          </Card>
+        )}
+
         {umamiSnapshots.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Umami</CardTitle>
+              <CardTitle>Umami · 28 giorni {summary.umamiLatestDate ? `(al ${summary.umamiLatestDate})` : ""}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid grid-cols-2 gap-3">
@@ -211,11 +245,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         {admobSnapshots.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>AdMob</CardTitle>
+              <CardTitle>AdMob · 28 giorni {summary.admobLatestDate ? `(al ${summary.admobLatestDate})` : ""}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div>
-                <span className="text-sm text-muted-foreground">Ricavi totali</span>
+                <span className="text-sm text-muted-foreground">Ricavi negli ultimi 28 giorni disponibili</span>
                 <strong className="block text-2xl font-extrabold">
                   {formatCurrency(summary.adRevenue, summary.adCurrency)}
                 </strong>
@@ -428,7 +462,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                   {index > 0 && <Separator className="mb-1.5" />}
                   <div className="flex items-center justify-between gap-3">
                     <strong className="text-sm">{run.source}</strong>
-                    <Badge variant={run.status === "failed" ? "destructive" : "success"}>{run.status}</Badge>
+                    <Badge variant={run.status === "success" ? "success" : run.status === "failed" ? "destructive" : "warning"}>{run.status}</Badge>
                   </div>
                   <span className="font-mono text-xs text-muted-foreground">
                     {new Date(run.finishedAt).toLocaleString("it-IT")}

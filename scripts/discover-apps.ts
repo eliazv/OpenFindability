@@ -18,6 +18,7 @@ import type { Project } from "@/lib/types";
 // API calls happen first here and only the in-memory project-list mutation goes through
 // readData/writeData directly.
 async function main() {
+  const apply = process.argv.slice(2).includes("--apply");
   let playApps: PlayVitalsApp[] = [];
   try {
     playApps = await listPlayVitalsApps();
@@ -88,12 +89,16 @@ async function main() {
     const fuzzyMatch = exactMatch
       ? undefined
       : bestFuzzyMatch(data.projects.filter((p) => !p.appStoreTrackId), nameGuess);
-    const sameApp = exactMatch ?? fuzzyMatch;
-    if (sameApp) {
-      sameApp.appStoreTrackId = appId;
-      sameApp.updatedAt = nowIso();
-      const tag = exactMatch ? "" : " (fuzzy match — verify this is correct)";
-      console.log(`Linked App Store id ${appId} to existing project "${sameApp.slug}"${tag}.`);
+    // A fuzzy name match is a suggestion, never sufficient evidence to bind
+    // an Apple app id to a Google Play/RevenueCat project automatically.
+    if (!exactMatch && fuzzyMatch) {
+      console.warn(`REVIEW REQUIRED: App Store "${nameGuess}" (${appId}) might be "${fuzzyMatch.slug}". Link manually with project:update after checking the bundle/package IDs.`);
+      continue;
+    }
+    if (exactMatch) {
+      exactMatch.appStoreTrackId = appId;
+      exactMatch.updatedAt = nowIso();
+      console.log(`Matched App Store id ${appId} to project "${exactMatch.slug}" (exact name). ${apply ? "Applying" : "Proposed only"}.`);
       linked += 1;
       continue;
     }
@@ -115,6 +120,10 @@ async function main() {
     created += 1;
   }
 
+  if (!apply) {
+    console.log("\nDRY RUN: no project records changed. Verify matches and pass --apply to persist.");
+    return;
+  }
   await writeData(data);
 
   for (const slug of newProjectSlugs) {

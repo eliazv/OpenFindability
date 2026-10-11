@@ -1,5 +1,6 @@
 export type SourceType =
   | "gsc"
+  | "ga4"
   | "umami"
   | "play_console"
   | "aso"
@@ -20,6 +21,7 @@ export type Project = {
   category?: string;
   websiteUrl?: string;
   gscProperty?: string;
+  ga4PropertyId?: string;
   umamiWebsiteId?: string;
   playConsolePackageName?: string;
   appStoreTrackId?: number;
@@ -323,6 +325,7 @@ export type OpportunityType =
   | "low_ctr_query"
   | "striking_distance_query"
   | "declining_page"
+  | "low_ctr_page"
   | "growing_page"
   | "analytics_spike"
   | "page_two_query"
@@ -355,7 +358,7 @@ export type ConnectorRun = {
   id: string;
   source: ConnectorSource;
   projectId?: string;
-  status: "success" | "failed" | "skipped";
+  status: "success" | "partial" | "no_data" | "failed" | "skipped";
   startedAt: string;
   finishedAt: string;
   errorMessage?: string;
@@ -393,7 +396,7 @@ export type SyncOptions = {
 export type SyncResult = {
   source: SourceType;
   projectId: string;
-  status: "success" | "failed" | "skipped";
+  status: "success" | "partial" | "no_data" | "failed" | "skipped";
   message: string;
   inserted: {
     snapshots: number;

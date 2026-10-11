@@ -1,7 +1,9 @@
 import { daysAgo, nowIso } from "@/lib/dates";
 import { buildOpportunities } from "@/lib/insights";
+import { isDailyGscDetail } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
 import { syncGscProject } from "@/lib/connectors/gsc";
+import { syncGa4Project } from "@/lib/connectors/ga4";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { syncAsoProject } from "@/lib/connectors/aso";
@@ -100,8 +102,15 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
       try {
         const synced = await syncGscProject(project, daysAgo(backfillDays), daysAgo(2));
         data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        data.searchQueries = upsertQueries(data.searchQueries, synced.queries);
-        data.pageMetrics = upsertPages(data.pageMetrics, synced.pages);
+        // A successful refetch is an authoritative snapshot of each covered day.
+        // Remove previous *daily* rows for these days first, including keywords
+        // Google no longer returns. Preserve all legacy multi-day aggregates for
+        // audit/migration (they lack the v2 daily grain marker).
+        const coveredDays = new Set(synced.snapshots.map((snapshot) => snapshot.date));
+        const keepUncovered = (row: SearchQueryMetric | PageMetric) =>
+          row.projectId !== project.id || !coveredDays.has(row.date) || !isDailyGscDetail(row);
+        data.searchQueries = upsertQueries(data.searchQueries.filter(keepUncovered), synced.queries);
+        data.pageMetrics = upsertPages(data.pageMetrics.filter(keepUncovered), synced.pages);
         data.gscDimensionBreakdowns = upsertBreakdowns(data.gscDimensionBreakdowns, synced.breakdowns);
         data.gscSitemaps = upsertSitemaps(data.gscSitemaps, synced.sitemaps);
         results.push(synced.result);
@@ -110,6 +119,19 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
         const result = failed("gsc", project.id, error);
         results.push(result);
         data.connectorRuns.push(toRun("gsc", project.id, startedAt, result));
+      }
+    }
+
+    if (!source || source === "ga4") {
+      try {
+        const synced = await syncGa4Project(project, daysAgo(backfillDays), daysAgo(2));
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
+        results.push(synced.result);
+        data.connectorRuns.push(toRun("ga4", project.id, startedAt, synced.result));
+      } catch (error) {
+        const result = failed("ga4", project.id, error);
+        results.push(result);
+        data.connectorRuns.push(toRun("ga4", project.id, startedAt, result));
       }
     }
 
@@ -245,7 +267,18 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
     }
   }
 
-  data.opportunities = buildOpportunities(data);
+  // Recomputing opportunities must not erase a user's ignored/done decisions.
+  // Match on a stable semantic identity rather than the generated random ID.
+  const prior = new Map(data.opportunities.map((item) => [
+    `${item.projectId}\u0000${item.type}\u0000${item.title}`,
+    item,
+  ] as const));
+  data.opportunities = buildOpportunities(data).map((item) => {
+    const previous = prior.get(`${item.projectId}\u0000${item.type}\u0000${item.title}`);
+    return previous
+      ? { ...item, id: previous.id, status: previous.status, detectedAt: previous.detectedAt }
+      : item;
+  });
   await writeData(data);
   return results;
 }

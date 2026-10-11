@@ -51,6 +51,19 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
+class PartialStoreUpdateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PartialStoreUpdateError";
+  }
+}
+
+function validateAppStoreCopy(label: string, value: string | undefined, limit: number) {
+  if (value === undefined) return;
+  const length = [...value].length;
+  if (length > limit) throw new Error(`${label} exceeds App Store limit of ${limit} characters (${length}).`);
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2).filter((token) => token !== "--");
   if (command !== "pull" && command !== "push") {
@@ -78,7 +91,7 @@ async function main() {
     }
     await recordRun(project.id, startedAt, "success");
   } catch (error) {
-    await recordRun(project.id, startedAt, "failed", error instanceof Error ? error.message : String(error));
+    await recordRun(project.id, startedAt, error instanceof PartialStoreUpdateError ? "partial" : "failed", error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
@@ -159,6 +172,13 @@ async function runPush(appId: string, project: { id: string; slug: string }, arg
     promotionalText: args.promotionalText,
     whatsNew: args.whatsNew,
   };
+  validateAppStoreCopy("name", args.name, 30);
+  validateAppStoreCopy("subtitle", args.subtitle, 30);
+  validateAppStoreCopy("keywords", args.keywords, 100);
+  validateAppStoreCopy("description", description, 4000);
+  validateAppStoreCopy("promotional text", args.promotionalText, 170);
+  validateAppStoreCopy("what's new", args.whatsNew, 4000);
+
   const hasAppInfoChange = Object.values(appInfoFields).some((v) => v !== undefined);
   const hasVersionChange = Object.values(versionFields).some((v) => v !== undefined);
   if (!hasAppInfoChange && !hasVersionChange) {
@@ -205,19 +225,30 @@ async function runPush(appId: string, project: { id: string; slug: string }, arg
     return;
   }
 
-  if (hasAppInfoChange && appInfoLoc) {
-    await updateAppInfoLocalization(appInfoLoc.id, {
-      name: args.name ?? appInfoLoc.name,
-      subtitle: args.subtitle ?? appInfoLoc.subtitle,
-    });
-  }
-  if (hasVersionChange && versionLoc) {
-    await updateAppStoreVersionLocalization(versionLoc.id, {
-      keywords: args.keywords ?? versionLoc.keywords,
-      description: description ?? versionLoc.description,
-      promotionalText: args.promotionalText ?? versionLoc.promotionalText,
-      whatsNew: args.whatsNew ?? versionLoc.whatsNew,
-    });
+  let appInfoApplied = false;
+  try {
+    if (hasAppInfoChange && appInfoLoc) {
+      await updateAppInfoLocalization(appInfoLoc.id, {
+        name: args.name ?? appInfoLoc.name,
+        subtitle: args.subtitle ?? appInfoLoc.subtitle,
+      });
+      appInfoApplied = true;
+    }
+    if (hasVersionChange && versionLoc) {
+      await updateAppStoreVersionLocalization(versionLoc.id, {
+        keywords: args.keywords ?? versionLoc.keywords,
+        description: description ?? versionLoc.description,
+        promotionalText: args.promotionalText ?? versionLoc.promotionalText,
+        whatsNew: args.whatsNew ?? versionLoc.whatsNew,
+      });
+    }
+  } catch (error) {
+    if (appInfoApplied) {
+      throw new PartialStoreUpdateError(
+        `App Store metadata partially applied: app info was saved but version metadata failed. Verify and reconcile in App Store Connect. Cause: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    throw error;
   }
 
   const row: AscMetadataSnapshot = {
@@ -239,7 +270,7 @@ async function runPush(appId: string, project: { id: string; slug: string }, arg
     d.ascMetadataSnapshots.push(row);
   });
 
-  console.log("\nApplied. Changes land on the App Store after Apple review of the current draft version.");
+  console.log("\nMetadata update accepted. Verify the draft in App Store Connect; visibility depends on review and release state.");
 }
 
 async function recordRun(projectId: string, startedAt: string, status: ConnectorRun["status"], errorMessage?: string) {

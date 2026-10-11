@@ -9,6 +9,8 @@ No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app b
 ## What it does
 
 - **Local dashboard** — sidebar with every project, a homepage overview and a per-project page (SEO, analytics, Play Store reviews, ASO keywords, ad/subscription revenue, opportunities, sync log)
+- **Google Analytics 4** — separate GA4 Data API daily active users, sessions, page views and key events, never conflated with Umami or GSC — see [`docs/guide/ga4-setup.md`](docs/guide/ga4-setup.md)
+- **Google Sheets + ChatGPT Mobile bridge** — daily GSC collector through bound Apps Script and dry-run-first export of non-GSC KPI snapshots; see [`docs/guide/google-sheets-live-setup.md`](docs/guide/google-sheets-live-setup.md)
 - **SEO opportunities** — automated detection of low-CTR queries, striking-distance keywords, cannibalization, declining/growing pages, and more
 - **GSC index audit** — inspects sitemap/Search Analytics URLs across every connected Search Console property, groups indexing problems and keeps history
 - **ASO research** — keyword popularity/difficulty/opportunity scoring via a local RespectASO instance, with a reusable cross-project keyword cache
@@ -170,39 +172,24 @@ OpenFindability exposes an MCP server so Claude Code can query your analytics li
 
 ### Setup (once)
 
-Install tsx globally:
+Run `pnpm install` once in OpenFindability, then configure the **portable Node launcher** in your MCP client. This launcher selects the OpenFindability working directory and TypeScript config, including when called from a different repository.
 
-```bash
-npm install -g tsx
-```
-
-Add to `~/.claude/settings.json`:
+Windows example (`~/.claude/settings.json`):
 
 ```json
 {
   "mcpServers": {
     "openfindability": {
-      "command": "tsx",
-      "args": ["/absolute/path/to/OpenFindability/mcp/server.ts"]
+      "command": "node",
+      "args": ["C:\\path\\to\\OpenFindability\\scripts\\mcp-launch.mjs"]
     }
   }
 }
 ```
 
-On Windows use the full path to `tsx.cmd`:
+macOS/Linux: `"command": "node"` and `"args": ["/path/to/OpenFindability/scripts/mcp-launch.mjs"]`.
 
-```json
-{
-  "mcpServers": {
-    "openfindability": {
-      "command": "C:\\Users\\<user>\\AppData\\Roaming\\npm\\tsx.cmd",
-      "args": ["C:\\path\\to\\OpenFindability\\mcp\\server.ts"]
-    }
-  }
-}
-```
-
-Restart Claude Code. The server starts automatically — no process to keep running.
+Restart the MCP client. This is a **local stdio** integration, not an always-on ChatGPT Mobile connection.
 
 ### Available tools
 
@@ -210,6 +197,7 @@ Restart Claude Code. The server starts automatically — no process to keep runn
 |------|-------------|
 | `list_projects` | List configured projects and their slugs |
 | `get_project_summary` | Live GSC + Umami + opportunities in one call |
+| `get_growth_snapshot` | **Cached, read-only** multi-provider KPI snapshot: SEO, web, revenue, subscriptions, Android/iOS, data freshness |
 | `get_gsc_stats` | Live GSC data: clicks, impressions, top queries, top pages |
 | `get_umami_stats` | Live Umami visitors and pageviews for a date |
 | `get_page_keywords` | All GSC queries ranking for a specific page URL |
@@ -242,6 +230,9 @@ See [`docs/guide/release-workflow.md`](docs/guide/release-workflow.md) for setup
 
 ```bash
 pnpm run doctor           # check connector config, flag stale syncs
+pnpm run growth:summary -- --slug <project-slug>          # offline multi-provider KPI snapshot
+pnpm run db:backup        # create + integrity-check a WAL-safe SQLite backup (ignored by git)
+pnpm run test:gsc         # daily GSC history/pagination regression tests
 pnpm seed:demo            # seed demo data
 pnpm dev                  # start the dashboard
 pnpm run sync             # sync gsc/umami/play_console/revenuecat/admob/adsense for every project
@@ -260,6 +251,10 @@ pnpm run release:status -- --slug <project-slug>    # live Google Play tracks
 pnpm run release:android -- --slug <project-slug> [--track internal] [--apply]  # build + publish (preflight by default)
 pnpm run research:aso -- --slug <project-slug>
 pnpm run report -- <slug> <gsc|aso|asc|monetization|all>
+pnpm run sync:ga4          # Google Analytics 4 (configured projects only)
+pnpm run sheet:export -- --days 90                   # dry-run ChatGPT Sheet projection
+pnpm run sheet:export -- --days 90 --apply           # update private Sheet (requires GOOGLE_SHEET_ID)
+pnpm run test:integrations                            # GA4/Sheets offline tests
 pnpm run db:studio        # open Drizzle Studio (local GUI SQL browser)
 pnpm run db:generate      # regenerate migrations after editing lib/db/schema.ts
 pnpm typecheck
@@ -270,16 +265,37 @@ pnpm build
 
 v0.1 uses manual sync only.
 
-- GSC imports the last 30 days by default (Search Console data has ~2 day delay), plus device/country/searchAppearance breakdowns and sitemap status.
+- GSC imports finalized daily totals and **date-qualified page/query rows** (last ~30 days by default, up to D-2), plus device/country/searchAppearance breakdowns and sitemaps. Detail is fetched in 7-day windows, paginated up to the Search Analytics row cap; large windows are retried by day. Query data is always potentially incomplete (Google returns top rows only).
 - Umami, AdMob, AdSense and RevenueCat import yesterday's data (with a configurable backfill window for AdMob/AdSense).
 - ASO stays opt-in (`pnpm run sync:aso`) — rate-limited and cached upstream, so it never runs as part of the default `pnpm run sync`.
 - Every import keeps `rawJson`. Connector runs are logged to `connectorRuns`.
 - Re-running a sync the same day replaces that day's row per project/source instead of duplicating it — different days accumulate, so history is preserved.
-- Page-level GSC data is stored separately from query-level data.
+- Page-level GSC data is stored separately from query-level data. Legacy rows from the previous implementation encoded a whole 30-day range as one date: they remain in SQLite but are **excluded** from daily charts, SEO scoring and reports unless overwritten by a new actual-daily sync. Run `pnpm run db:backup` before the first new sync. The GSC report and project page rank data from the latest 28 days and weight CTR/position correctly.
 
 ## Storage
 
-All data lives in `data/openfindability.db`, a local SQLite database accessed through Drizzle ORM (`lib/db/schema.ts`). No server process, no extra infra — still a single local file, just relational and queryable (`pnpm run db:studio`) instead of a hand-rolled JSON blob.
+All data lives in `data/openfindability.db`, a local SQLite database accessed through Drizzle ORM (`lib/db/schema.ts`). No server process, no extra infra — still a single local file, just relational and queryable (`pnpm run db:studio`) instead of a hand-rolled JSON blob. `pnpm run db:backup` makes a **consistent** SQLite snapshot using the online backup API (including WAL state) under ignored `data/backups/`. This is manual, not off-site backup or a cloud-sync solution.
+
+## Security and public repository checklist
+
+OpenFindability is public, but tokens, store credentials, customer reports and SQLite data must remain **private**. Scan tracked files and past history locally (no GitHub Actions required):
+
+```bash
+pnpm run audit:secrets
+pnpm run audit:secrets:history
+# independent scanner, if installed:
+gitleaks git --redact --log-opts="--all"
+```
+
+A clean signature scan is not proof that history is secret-free. Rotate any leaked credential immediately. See [SECURITY.md](SECURITY.md).
+
+For read-only version/rollout checks on an app without deploying it:
+
+```bash
+pnpm run store:status -- --slug <project-slug>
+```
+
+`discover:apps` is dry-run by default; review cross-store app matches and rerun with `--apply` to save safe matches. Fuzzy matches are only suggestions.
 
 ## Private files
 

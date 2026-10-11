@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 import { google } from "googleapis";
 import { createId } from "@/lib/id";
+import { parseCsv, parseNonnegativeInteger } from "@/lib/csv";
 import type { PlayInstallStat, Project, SyncResult } from "@/lib/types";
 
 // Install/uninstall counts are NOT available via any Android Publisher / Play Developer
@@ -26,14 +27,6 @@ function decodeCsv(buffer: Buffer): string {
     return buffer.toString("utf16le", 2);
   }
   return buffer.toString("utf8").replace(/^﻿/, "");
-}
-
-function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
-  if (lines.length === 0) return { headers: [], rows: [] };
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
-  const rows = lines.slice(1).map((line) => line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, "")));
-  return { headers, rows };
 }
 
 function monthKeys(startDate: string, endDate: string): string[] {
@@ -109,19 +102,20 @@ export async function syncPlayInstallStatsProject(
     const installsIdx = headers.indexOf("Daily Device Installs");
     const uninstallsIdx = headers.indexOf("Daily Device Uninstalls");
     const activeIdx = headers.indexOf("Active Device Installs");
-    if (dateIdx === -1) continue;
+    if (dateIdx === -1) throw new Error(`Missing Date header in Play export: ${object}`);
 
     for (const cells of rows) {
       const date = cells[dateIdx];
-      if (!date || date < startDate || date > endDate) continue;
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`Invalid Play export date in ${object}: ${date}`);
+      if (date < startDate || date > endDate) continue;
       const raw: Record<string, string> = {};
       headers.forEach((header, idx) => {
         raw[header] = cells[idx];
       });
       byDate.set(date, {
-        installs: installsIdx >= 0 ? Number(cells[installsIdx]) || 0 : undefined,
-        uninstalls: uninstallsIdx >= 0 ? Number(cells[uninstallsIdx]) || 0 : undefined,
-        activeDeviceInstalls: activeIdx >= 0 ? Number(cells[activeIdx]) || 0 : undefined,
+        installs: installsIdx >= 0 ? parseNonnegativeInteger(cells[installsIdx]) : undefined,
+        uninstalls: uninstallsIdx >= 0 ? parseNonnegativeInteger(cells[uninstallsIdx]) : undefined,
+        activeDeviceInstalls: activeIdx >= 0 ? parseNonnegativeInteger(cells[activeIdx]) : undefined,
         raw,
       });
     }
@@ -144,7 +138,7 @@ export async function syncPlayInstallStatsProject(
     result: {
       source: "play_stats",
       projectId: project.id,
-      status: "success",
+      status: stats.length > 0 ? "success" : "no_data",
       message: stats.length > 0
         ? `Imported Play install/uninstall stats for ${stats.length} day(s) between ${startDate} and ${endDate}.`
         : `No Play statistics CSV found in gs://${bucket}/stats/installs/ for ${packageName} between ${startDate} and ${endDate}.`,

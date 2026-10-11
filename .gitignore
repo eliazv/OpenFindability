@@ -17,3 +17,26 @@ private-notes/
 /project/
 secrets/
 sensibili/
+
+data/backups/
+
+# Public repository: never commit local customer reports or provider credentials.
+project-reports/
+*.p8
+*.pem
+*.p12
+*.pfx
+*.key
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
+*oauth*token*.json
+*credentials*.json
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm

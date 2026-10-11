@@ -107,6 +107,43 @@ export async function syncPlayConsoleProject(
   };
 }
 
+export type PlayTrackReleaseStatus = {
+  name?: string;
+  status?: string;
+  versionCodes: string[];
+  rolloutFraction?: number;
+  releaseNotes: Array<{ language?: string; text?: string }>;
+};
+
+export type PlayTrackStatus = {
+  track: string;
+  releases: PlayTrackReleaseStatus[];
+};
+
+/** Read existing Google Play track releases without committing an edit. */
+export async function listPlayTrackStatus(packageName: string): Promise<PlayTrackStatus[]> {
+  const auth = await getAndroidAuth();
+  if (!auth) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE is not configured.");
+  const publisher = google.androidpublisher({ version: "v3", auth });
+  const edit = await publisher.edits.insert({ packageName, requestBody: {} });
+  const editId = edit.data.id;
+  if (!editId) throw new Error("Play Console: failed to open a read-only edit session.");
+  const response = await publisher.edits.tracks.list({ packageName, editId });
+  return (response.data.tracks ?? []).map((row) => ({
+    track: row.track ?? "unknown",
+    releases: (row.releases ?? []).map((release) => ({
+      name: release.name ?? undefined,
+      status: release.status ?? undefined,
+      versionCodes: (release.versionCodes ?? []).map(String),
+      rolloutFraction: release.userFraction ?? undefined,
+      releaseNotes: (release.releaseNotes ?? []).map((note) => ({
+        language: note.language ?? undefined,
+        text: note.text ?? undefined,
+      })),
+    })),
+  }));
+}
+
 export type PlayStoreListing = {
   language: string;
   title?: string;

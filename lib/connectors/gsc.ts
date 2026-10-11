@@ -20,7 +20,7 @@ type GscRow = {
   position?: number;
 };
 
-export async function syncGscProject(project: Project, startDate: string, endDate: string): Promise<{
+export async function syncGscProject(project: Project, startDate: string, endDate: string, options: { details?: boolean } = {}): Promise<{
   result: SyncResult;
   snapshots: MetricSnapshot[];
   queries: SearchQueryMetric[];
@@ -40,21 +40,43 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   const searchconsole = google.searchconsole({ version: "v1", auth });
   const createdAt = new Date().toISOString();
 
-  const [dateRows, queryRows, pageRows, deviceRows, countryRows, appearanceRows, sitemapEntries] = await Promise.all([
+  // A "query + page" row over a 30-day window is NOT a daily observation. Fetch
+  // date-qualified rows in bounded windows so page/query history has a real day.
+  // Small windows also avoid starving low-traffic days behind GSC's top-row cap.
+  const [dateRows, queryDetails, pageDetails, deviceRows, countryRows, appearanceRows, sitemapEntries] = await Promise.all([
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["date"]),
-    querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["query", "page"]),
-    querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["page"]),
+    options.details === false ? Promise.resolve({ rows: [], capped: false }) : queryDailyDetails(searchconsole, project.gscProperty, startDate, endDate, ["query", "page"]),
+    options.details === false ? Promise.resolve({ rows: [], capped: false }) : queryDailyDetails(searchconsole, project.gscProperty, startDate, endDate, ["page"]),
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["device"]),
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["country"]),
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["searchAppearance"]),
     listSitemaps(searchconsole, project.gscProperty),
   ]);
+  const queryRows = queryDetails.rows;
+  const pageRows = pageDetails.rows;
+
+  // Reject malformed API rows before writing any of the batch to SQLite.
+  for (const row of dateRows) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.keys?.[0] ?? "")) {
+      throw new Error("GSC returned a daily total without a valid date key.");
+    }
+  }
+  for (const row of queryRows) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.keys?.[0] ?? "") || !row.keys?.[1] || !row.keys?.[2]) {
+      throw new Error("GSC returned a query/page row with missing daily dimensions.");
+    }
+  }
+  for (const row of pageRows) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.keys?.[0] ?? "") || !row.keys?.[1]) {
+      throw new Error("GSC returned a page row with missing daily dimensions.");
+    }
+  }
 
   const snapshots = dateRows.map((row) => ({
     id: createId("metric"),
     projectId: project.id,
     source: "gsc" as const,
-    date: row.keys?.[0] ?? endDate,
+    date: row.keys![0],
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
     ctr: row.ctr ?? 0,
@@ -66,26 +88,26 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   const queries = queryRows.map((row) => ({
     id: createId("query"),
     projectId: project.id,
-    date: endDate,
-    query: row.keys?.[0] ?? "",
-    page: row.keys?.[1],
+    date: row.keys![0],
+    query: row.keys![1],
+    page: row.keys![2],
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
     ctr: row.ctr ?? 0,
     avgPosition: row.position ?? 0,
-    rawJson: row,
+    rawJson: dailyDetailPayload(row, project.gscProperty!, createdAt, queryDetails.capped),
   }));
 
   const pages = pageRows.map((row) => ({
     id: createId("page"),
     projectId: project.id,
-    date: endDate,
-    page: row.keys?.[0] ?? "",
+    date: row.keys![0],
+    page: row.keys![1],
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
     ctr: row.ctr ?? 0,
     avgPosition: row.position ?? 0,
-    rawJson: row,
+    rawJson: dailyDetailPayload(row, project.gscProperty!, createdAt, pageDetails.capped),
   }));
 
   const breakdowns = [
@@ -113,7 +135,7 @@ export async function syncGscProject(project: Project, startDate: string, endDat
       source: "gsc",
       projectId: project.id,
       status: "success",
-      message: `Imported GSC data from ${startDate} to ${endDate}.`,
+      message: `Imported daily GSC data from ${startDate} to ${endDate}.${queryDetails.capped || pageDetails.capped ? " Detail reached Google's row cap for at least one day; saved rows are top results only." : ""}`,
       inserted: {
         snapshots: snapshots.length,
         queries: queries.length,
@@ -209,6 +231,75 @@ async function getGoogleAuth() {
   });
 }
 
+const GSC_ROW_LIMIT = 25_000;
+const GSC_MAX_ROWS = 50_000;
+const DETAIL_WINDOW_DAYS = 7;
+
+type GscDetailResponse = { rows: GscRow[]; capped: boolean };
+
+function dailyDetailPayload(row: GscRow, property: string, fetchedAt: string, capped: boolean) {
+  return {
+    ...row,
+    _openfindability: {
+      version: 2,
+      grain: "day" as const,
+      property,
+      fetchedAt,
+      // Google does not expose all anonymized query data even with pagination.
+      coverage: "top_rows_only" as const,
+      hitRowCap: capped,
+    },
+  };
+}
+
+// Date arithmetic must be in UTC: local DST changes cannot skip/duplicate a day.
+function gscDateWindows(startDate: string, endDate: string, daysPerWindow = DETAIL_WINDOW_DAYS) {
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endDate}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
+    throw new Error(`Invalid GSC date range: ${startDate}..${endDate}`);
+  }
+  const result: Array<{ start: string; end: string }> = [];
+  const dayMs = 86_400_000;
+  for (let time = start; time <= end; time += daysPerWindow * dayMs) {
+    result.push({
+      start: new Date(time).toISOString().slice(0, 10),
+      end: new Date(Math.min(end, time + (daysPerWindow - 1) * dayMs)).toISOString().slice(0, 10),
+    });
+  }
+  return result;
+}
+
+/**
+ * Page/query history is collected by actual calendar day rather than assigning
+ * a multi-day aggregate to endDate. If a seven-day window hits the export cap,
+ * retry each day separately to give every day a chance to be represented.
+ */
+export async function queryDailyDetails(
+  searchconsole: ReturnType<typeof google.searchconsole>,
+  siteUrl: string,
+  startDate: string,
+  endDate: string,
+  dimensions: string[],
+): Promise<GscDetailResponse> {
+  const rows: GscRow[] = [];
+  let capped = false;
+  for (const window of gscDateWindows(startDate, endDate)) {
+    const batch = await pagedSearchAnalytics(searchconsole, siteUrl, window.start, window.end, ["date", ...dimensions]);
+    if (batch.capped && window.start !== window.end) {
+      for (const single of gscDateWindows(window.start, window.end, 1)) {
+        const day = await pagedSearchAnalytics(searchconsole, siteUrl, single.start, single.end, ["date", ...dimensions]);
+        rows.push(...day.rows);
+        capped ||= day.capped;
+      }
+    } else {
+      rows.push(...batch.rows);
+      capped ||= batch.capped;
+    }
+  }
+  return { rows, capped };
+}
+
 async function querySearchAnalytics(
   searchconsole: ReturnType<typeof google.searchconsole>,
   siteUrl: string,
@@ -216,18 +307,38 @@ async function querySearchAnalytics(
   endDate: string,
   dimensions: string[],
 ): Promise<GscRow[]> {
-  const response = await searchconsole.searchanalytics.query({
-    siteUrl,
-    requestBody: {
-      startDate,
-      endDate,
-      dimensions,
-      rowLimit: 25000,
-      startRow: 0,
-    },
-  });
+  return (await pagedSearchAnalytics(searchconsole, siteUrl, startDate, endDate, dimensions)).rows;
+}
 
-  return (response.data.rows ?? []) as GscRow[];
+export async function pagedSearchAnalytics(
+  searchconsole: ReturnType<typeof google.searchconsole>,
+  siteUrl: string,
+  startDate: string,
+  endDate: string,
+  dimensions: string[],
+): Promise<GscDetailResponse> {
+  const rows: GscRow[] = [];
+  const hasPage = dimensions.includes("page");
+  for (let startRow = 0; startRow < GSC_MAX_ROWS; startRow += GSC_ROW_LIMIT) {
+    const response = await searchconsole.searchanalytics.query({
+      siteUrl,
+      requestBody: {
+        startDate,
+        endDate,
+        dimensions,
+        type: "web",
+        dataState: "final",
+        // Search appearance may require Google to choose a compatible grouping.
+        aggregationType: hasPage ? "byPage" : dimensions.includes("searchAppearance") ? "auto" : "byProperty",
+        rowLimit: GSC_ROW_LIMIT,
+        startRow,
+      },
+    });
+    const page = (response.data.rows ?? []) as GscRow[];
+    rows.push(...page);
+    if (page.length < GSC_ROW_LIMIT) return { rows, capped: false };
+  }
+  return { rows, capped: true };
 }
 
 function skipped(projectId: string, message: string) {

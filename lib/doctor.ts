@@ -1,6 +1,7 @@
 import { access } from "node:fs/promises";
 import { getDataFilePath, readData } from "@/lib/store";
 import type { AppData } from "@/lib/types";
+import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
 
 const STALE_AFTER_DAYS = 3;
 
@@ -25,6 +26,12 @@ export async function getDoctorReport() {
       status: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_FILE),
       required: false,
       detail: "GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE",
+    },
+    {
+      name: "GA4 projects",
+      status: data.projects.some((project) => Boolean(project.ga4PropertyId)),
+      required: false,
+      detail: `${data.projects.filter((project) => project.ga4PropertyId).length} GA4 properties configured (service account needs Analytics Viewer role)`,
     },
     {
       name: "Umami credentials",
@@ -106,6 +113,12 @@ export async function getDoctorReport() {
       detail: describeFreshness(data, STALE_AFTER_DAYS),
     },
     {
+      name: "Incomplete or failed latest syncs",
+      status: getLatestSyncProblems(data).length === 0,
+      required: false,
+      detail: getLatestSyncProblems(data).join("; ") || "no recent partial, no-data or failed runs",
+    },
+    {
       name: "ASO projects",
       status: data.projects.some((p) => Boolean(p.asoKeywords?.length)),
       required: false,
@@ -136,8 +149,9 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
   const stale: { slug: string; source: string; ageDays: number | null }[] = [];
 
   for (const project of data.projects) {
-    const sources: ("gsc" | "umami" | "revenuecat" | "admob" | "adsense" | "play_vitals" | "play_stats" | "asc_analytics")[] = [];
+    const sources: ("gsc" | "ga4" | "umami" | "revenuecat" | "admob" | "adsense" | "play_vitals" | "play_stats" | "asc_analytics")[] = [];
     if (project.gscProperty) sources.push("gsc");
+    if (project.ga4PropertyId) sources.push("ga4");
     if (project.umamiWebsiteId) sources.push("umami");
     if (project.revenueCatProjectId) sources.push("revenuecat");
     if (project.admobAppId || project.admobAppIdIos) sources.push("admob");
@@ -156,13 +170,31 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
       }
 
       const ageDays = (Date.now() - new Date(lastRun.finishedAt).getTime()) / 86_400_000;
-      if (ageDays > staleAfterDays) {
+      if (ageDays > Math.max(staleAfterDays, CONNECTOR_CATALOG[source].staleAfterDays)) {
         stale.push({ slug: project.slug, source, ageDays });
       }
     }
   }
 
   return stale;
+}
+
+function getLatestSyncProblems(data: AppData): string[] {
+  const last = new Map<string, (typeof data.connectorRuns)[number]>();
+  for (const run of data.connectorRuns) {
+    if (!run.projectId) continue;
+    const key = `${run.projectId}:${run.source}`;
+    const previous = last.get(key);
+    if (!previous || (run.finishedAt ?? run.startedAt) > (previous.finishedAt ?? previous.startedAt)) {
+      last.set(key, run);
+    }
+  }
+  return [...last.values()]
+    .filter((run) => ["partial", "no_data", "failed"].includes(run.status))
+    .map((run) => {
+      const project = data.projects.find((item) => item.id === run.projectId);
+      return `${project?.slug ?? run.projectId}/${run.source}: ${run.status} at ${run.finishedAt ?? run.startedAt}`;
+    });
 }
 
 function describeFreshness(data: AppData, staleAfterDays: number): string {

@@ -17,7 +17,7 @@ They are ignored by `.gitignore`.
 
 `private-notes/` is treated as a private scratch folder. Do not put public project documentation there.
 
-`project-reports/` stores per-project inspection reports and may contain private metrics. It is ignored by git.
+`project-reports/` stores per-project inspection reports and may contain private metrics. It is now explicitly ignored by git, alongside `project/`, `secrets/` and `data/`.
 
 Public documentation belongs in:
 
@@ -84,9 +84,15 @@ If an API key has been shared in a chat, issue, screenshot or commit, rotate it 
 Runtime data is stored locally in:
 
 ```txt
-data/openfindability.json
+data/openfindability.db
 ```
 
 This file is ignored because it can contain private project names, metrics and imported API payloads.
 
-Only `data/.gitkeep` is tracked.
+The runtime SQLite file, WAL/SHM files and backups under `data/backups/` are ignored. Only `data/.gitkeep` is tracked.
+
+## Audit before publishing
+
+Run `pnpm run audit:secrets` for current tracked files and `pnpm run audit:secrets:history` for historical Git blobs (never prints secret values). For an independent scan, use Gitleaks locally: `gitleaks git --redact --log-opts="--all"`.
+
+Review [SECURITY.md](../../SECURITY.md). Even if a credential was removed from the current tree, a previously published key **must be rotated**; history rewrite alone is not remediation.
