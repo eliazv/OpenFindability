@@ -4,43 +4,42 @@ OpenFindability espone un MCP server che Claude Code può usare come tool nativo
 
 ## Setup (una volta sola)
 
-### 1. Installa tsx globalmente
+### 1. Installa le dipendenze di OpenFindability
 
 ```bash
-npm install -g tsx
+cd /path/to/OpenFindability
+pnpm install
 ```
 
-### 2. Registra il server in `~/.claude/settings.json`
+### 2. Configura il launcher MCP (senza tsx globale)
+
+Windows, `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "openfindability": {
-      "command": "C:\\Users\\<tuo-utente>\\AppData\\Roaming\\npm\\tsx.cmd",
-      "args": [
-        "C:\\path\\to\\OpenFindability\\mcp\\server.ts"
-      ]
+      "command": "node",
+      "args": ["C:\\path\\to\\OpenFindability\\scripts\\mcp-launch.mjs"]
     }
   }
 }
 ```
 
-Adatta i path al tuo sistema. Su Mac/Linux:
+macOS/Linux:
 
 ```json
 {
   "mcpServers": {
     "openfindability": {
-      "command": "tsx",
-      "args": ["/path/to/OpenFindability/mcp/server.ts"]
+      "command": "node",
+      "args": ["/path/to/OpenFindability/scripts/mcp-launch.mjs"]
     }
   }
 }
 ```
 
-### 3. Riavvia Claude Code
-
-Il server viene spawato automaticamente all'avvio. Nessun processo da tenere in piedi.
+Il launcher usa il `tsx` installato nel repository, imposta la working directory e il `TSX_TSCONFIG_PATH` in modo da risolvere correttamente gli import `@/lib/...` anche se il client è avviato da un altro progetto. Riavvia il client MCP dopo la modifica.
 
 ---
 
@@ -71,7 +70,7 @@ Il server viene spawato automaticamente all'avvio. Nessun processo da tenere in 
 | `get_page_keywords` | Tutte le query GSC che rankano per una specifica URL |
 | `compare_periods` | Delta tra periodo corrente e precedente (click, impression, CTR, posizione) |
 
-### Opportunity (dal JSON locale)
+### Opportunity (dal database SQLite locale)
 
 | Tool | Note |
 |------|------|
@@ -81,7 +80,7 @@ Il server viene spawato automaticamente all'avvio. Nessun processo da tenere in 
 
 | Tool | Note |
 |------|------|
-| `create_project` | Aggiunge progetto al JSON store |
+| `create_project` | Aggiunge progetto al database SQLite |
 | `update_project` | Modifica campi (es. aggiungi GSC property o Umami ID) |
 | `delete_project` | Rimuove progetto e tutti i suoi dati. Richiede `confirm: true`. |
 
@@ -133,14 +132,14 @@ cd /path/to/OpenFindability
 pnpm sync
 ```
 
-Tutti gli altri tool sono sempre fresh — nessun sync necessario.
+I tool live interrogano i provider; i tool SQLite riflettono l’ultimo salvataggio locale — nessun sync necessario.
 
 ---
 
 ## Troubleshooting
 
 **Il server non parte**
-- Verifica che `tsx` sia nel PATH: `where tsx` (Windows) / `which tsx` (Mac/Linux)
+- Verifica di aver eseguito `pnpm install` in OpenFindability: il launcher risolve `tsx/cli` dai `node_modules` locali
 - Verifica i path in `~/.claude/settings.json`
 
 **"Project not found"**
