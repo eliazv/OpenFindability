@@ -1,14 +1,14 @@
 import Link from "next/link";
 
 import {
-  buildOpportunities,
   getAdmobRevenueTrend,
   getLatestGscIndexInspections,
   getRevenueCatMrrTrend,
   summarizeMonetization,
   summarizeProject,
 } from "@/lib/insights";
-import { readData, writeData } from "@/lib/store";
+import { readData } from "@/lib/store";
+import { SyncButton } from "@/components/sync-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,10 +27,6 @@ const severityVariant = {
 
 export default async function HomePage() {
   const data = await readData();
-  if (data.opportunities.length === 0 && (data.searchQueries.length > 0 || data.pageMetrics.length > 0)) {
-    data.opportunities = buildOpportunities(data);
-    await writeData(data);
-  }
 
   const totals = data.projects.reduce(
     (acc, project) => {
@@ -78,9 +74,7 @@ export default async function HomePage() {
           <Button variant="outline" asChild>
             <a href="/api/doctor">Doctor</a>
           </Button>
-          <Button asChild>
-            <a href="/api/sync">Sync manuale</a>
-          </Button>
+          <SyncButton />
         </div>
       </header>
 
