@@ -12,6 +12,7 @@ import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { buildOpportunities } from "@/lib/insights";
+import { aggregateDailyQueryRows, aggregateDailyPageRows } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
 import type { AppData, Project, ProjectType } from "@/lib/types";
 
@@ -115,8 +116,9 @@ server.tool(
       return { content: [{ type: "text", text: `Project "${slug}" has no GSC property configured.` }] };
     }
 
-    const endDate = yesterday();
-    const startDate = daysAgo(days);
+    // GSC finalized data is generally delayed: use the last 30 completed days ending D-2.
+    const endDate = daysAgo(2);
+    const startDate = daysAgo(days + 1);
 
     const { result, snapshots, queries, pages } = await syncGscProject(project, startDate, endDate);
 
@@ -127,10 +129,9 @@ server.tool(
     const totalClicks = snapshots.reduce((s, r) => s + (r.clicks ?? 0), 0);
     const totalImpressions = snapshots.reduce((s, r) => s + (r.impressions ?? 0), 0);
     const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
-    const avgPosition =
-      snapshots.length > 0
-        ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0), 0) / snapshots.length
-        : 0;
+    const avgPosition = totalImpressions > 0
+      ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0) * (r.impressions ?? 0), 0) / totalImpressions
+      : 0;
 
     const output = {
       project: project.name,
@@ -142,10 +143,10 @@ server.tool(
         avgPosition: parseFloat(avgPosition.toFixed(1)),
       },
       topQueries: stripRaw(
-        [...queries].sort((a, b) => b.clicks - a.clicks).slice(0, limit),
+        aggregateDailyQueryRows(queries).sort((a, b) => b.clicks - a.clicks).slice(0, limit),
       ),
       topPages: stripRaw(
-        [...pages].sort((a, b) => b.clicks - a.clicks).slice(0, limit),
+        aggregateDailyPageRows(pages).sort((a, b) => b.clicks - a.clicks).slice(0, limit),
       ),
       dailySnapshots: stripRaw(
         [...snapshots].sort((a, b) => a.date.localeCompare(b.date)),
@@ -466,8 +467,9 @@ server.tool(
       return { content: [{ type: "text", text: `Project "${slug}" not found. Use list_projects to see options.` }] };
     }
 
-    const endDate = yesterday();
-    const startDate = daysAgo(days);
+    // GSC finalized data is generally delayed: use the last 30 completed days ending D-2.
+    const endDate = daysAgo(2);
+    const startDate = daysAgo(days + 1);
     const summary: Record<string, unknown> = { project: project.name, slug: project.slug, url: project.websiteUrl };
 
     if (project.gscProperty) {
@@ -476,8 +478,8 @@ server.tool(
         const totalClicks = snapshots.reduce((s, r) => s + (r.clicks ?? 0), 0);
         const totalImpressions = snapshots.reduce((s, r) => s + (r.impressions ?? 0), 0);
         const avgCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
-        const avgPosition = snapshots.length > 0
-          ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0), 0) / snapshots.length
+        const avgPosition = totalImpressions > 0
+          ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0) * (r.impressions ?? 0), 0) / totalImpressions
           : 0;
 
         summary.gsc = {
@@ -486,8 +488,8 @@ server.tool(
           totalImpressions,
           avgCtrPercent: parseFloat((avgCtr * 100).toFixed(2)),
           avgPosition: parseFloat(avgPosition.toFixed(1)),
-          topQueries: stripRaw([...queries].sort((a, b) => b.clicks - a.clicks).slice(0, 10)),
-          topPages: stripRaw([...pages].sort((a, b) => b.clicks - a.clicks).slice(0, 10)),
+          topQueries: stripRaw(aggregateDailyQueryRows(queries).sort((a, b) => b.clicks - a.clicks).slice(0, 10)),
+          topPages: stripRaw(aggregateDailyPageRows(pages).sort((a, b) => b.clicks - a.clicks).slice(0, 10)),
         };
       } else {
         summary.gsc = { error: result.message };
@@ -560,15 +562,16 @@ server.tool(
       return { content: [{ type: "text", text: `Project "${slug}" has no GSC property configured.` }] };
     }
 
-    const endDate = yesterday();
-    const startDate = daysAgo(days);
+    // GSC finalized data is generally delayed: use the last 30 completed days ending D-2.
+    const endDate = daysAgo(2);
+    const startDate = daysAgo(days + 1);
     const { result, queries } = await syncGscProject(project, startDate, endDate);
 
     if (result.status !== "success") {
       return { content: [{ type: "text", text: `GSC failed: ${result.message}` }] };
     }
 
-    const filtered = queries
+    const filtered = aggregateDailyQueryRows(queries)
       .filter((q) => q.page && q.page.includes(pageUrl) && q.impressions >= minImpressions)
       .sort((a, b) => b.impressions - a.impressions);
 
@@ -603,22 +606,22 @@ server.tool(
       return { content: [{ type: "text", text: `Project "${slug}" has no GSC property configured.` }] };
     }
 
-    const currentEnd = yesterday();
-    const currentStart = daysAgo(days);
-    const previousEnd = daysAgo(days + 1);
+    const currentEnd = daysAgo(2);
+    const currentStart = daysAgo(days + 1);
+    const previousEnd = daysAgo(days + 2);
     const previousStart = daysAgo(days * 2 + 1);
 
     const [current, previous] = await Promise.all([
-      syncGscProject(project, currentStart, currentEnd),
-      syncGscProject(project, previousStart, previousEnd),
+      syncGscProject(project, currentStart, currentEnd, { details: false }),
+      syncGscProject(project, previousStart, previousEnd, { details: false }),
     ]);
 
     function periodMetrics(snapshots: typeof current.snapshots) {
       const clicks = snapshots.reduce((s, r) => s + (r.clicks ?? 0), 0);
       const impressions = snapshots.reduce((s, r) => s + (r.impressions ?? 0), 0);
       const avgCtr = impressions > 0 ? clicks / impressions : 0;
-      const avgPosition = snapshots.length > 0
-        ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0), 0) / snapshots.length
+      const avgPosition = impressions > 0
+        ? snapshots.reduce((s, r) => s + (r.avgPosition ?? 0) * (r.impressions ?? 0), 0) / impressions
         : 0;
       return { clicks, impressions, avgCtrPercent: parseFloat((avgCtr * 100).toFixed(2)), avgPosition: parseFloat(avgPosition.toFixed(1)) };
     }
