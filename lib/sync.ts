@@ -251,7 +251,18 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
     }
   }
 
-  data.opportunities = buildOpportunities(data);
+  // Recomputing opportunities must not erase a user's ignored/done decisions.
+  // Match on a stable semantic identity rather than the generated random ID.
+  const prior = new Map(data.opportunities.map((item) => [
+    `${item.projectId}\u0000${item.type}\u0000${item.title}`,
+    item,
+  ] as const));
+  data.opportunities = buildOpportunities(data).map((item) => {
+    const previous = prior.get(`${item.projectId}\u0000${item.type}\u0000${item.title}`);
+    return previous
+      ? { ...item, id: previous.id, status: previous.status, detectedAt: previous.detectedAt }
+      : item;
+  });
   await writeData(data);
   return results;
 }
