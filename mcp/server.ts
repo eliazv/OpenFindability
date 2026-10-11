@@ -350,7 +350,7 @@ server.tool(
 
 server.tool(
   "delete_project",
-  "Permanently remove a project and ALL its stored data (snapshots, queries, pages, opportunities) from the local JSON store. Irreversible — no backup. Requires confirm: true. Returns a count of deleted records per type.",
+  "Permanently remove a project and its linked SQLite records (all connector tables). Destructive: take a local backup first. Requires confirm: true. Returns a record count summary.",
   {
     slug: z.string().describe("Project slug to delete"),
     confirm: z.boolean().describe("Must be true to confirm deletion"),
@@ -375,12 +375,30 @@ server.tool(
       reviews: data.appReviews.filter((x) => x.projectId === id).length,
     };
 
+    // Remove ALL project-scoped tables, not just the original six.
+    // Deleting only the project row would leave orphaned analytics and store
+    // records (and foreign key constraints can then reject the transaction).
+    const ownedExperimentIds = new Set(data.ascExperiments.filter((x) => x.projectId === id).map((x) => x.id));
     data.projects = data.projects.filter((p) => p.id !== id);
     data.metricSnapshots = data.metricSnapshots.filter((x) => x.projectId !== id);
     data.searchQueries = data.searchQueries.filter((x) => x.projectId !== id);
     data.pageMetrics = data.pageMetrics.filter((x) => x.projectId !== id);
     data.opportunities = data.opportunities.filter((x) => x.projectId !== id);
     data.appReviews = data.appReviews.filter((x) => x.projectId !== id);
+    data.connectorRuns = data.connectorRuns.filter((x) => x.projectId !== id);
+    data.appKeywords = data.appKeywords.filter((x) => x.projectId !== id);
+    data.asoKeywordSnapshots = data.asoKeywordSnapshots.filter((x) => x.projectId !== id);
+    data.asoAppRankSnapshots = data.asoAppRankSnapshots.filter((x) => x.projectId !== id);
+    data.gscDimensionBreakdowns = data.gscDimensionBreakdowns.filter((x) => x.projectId !== id);
+    data.gscSitemaps = data.gscSitemaps.filter((x) => x.projectId !== id);
+    data.gscIndexInspections = data.gscIndexInspections.filter((x) => x.projectId !== id);
+    data.admobMediationMetrics = data.admobMediationMetrics.filter((x) => x.projectId !== id);
+    data.ascMetadataSnapshots = data.ascMetadataSnapshots.filter((x) => x.projectId !== id);
+    data.ascExperimentTreatments = data.ascExperimentTreatments.filter((x) => !ownedExperimentIds.has(x.experimentId));
+    data.ascExperiments = data.ascExperiments.filter((x) => x.projectId !== id);
+    data.playVitalsMetrics = data.playVitalsMetrics.filter((x) => x.projectId !== id);
+    data.playInstallStats = data.playInstallStats.filter((x) => x.projectId !== id);
+    data.ascAnalyticsMetrics = data.ascAnalyticsMetrics.filter((x) => x.projectId !== id);
 
     await writeStoredData(data);
 
