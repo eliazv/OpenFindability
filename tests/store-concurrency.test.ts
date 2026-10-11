@@ -55,3 +55,36 @@ test("untracked data objects may not trigger an unsafe full-store rewrite", () =
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("GSC row-level delta replaces refreshed rows but preserves unrelated history", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "openfindability-delta-"));
+  const connection = createDb(path.join(dir, "openfindability.db"), path.join(process.cwd(), "drizzle"));
+  try {
+    const base = readDataWith(connection);
+    base.projects.push({ id: "p", slug: "website", name: "Website", type: "web",
+      createdAt: "2026-10-01", updatedAt: "2026-10-01" });
+    base.searchQueries = [
+      { id: "old-day", projectId: "p", date: "2026-10-08", query: "old", page: "/old", clicks: 2, impressions: 100, ctr: 0.02, avgPosition: 8 },
+      { id: "replace-me", projectId: "p", date: "2026-10-09", query: "changed", page: "/a", clicks: 1, impressions: 20, ctr: 0.05, avgPosition: 3 },
+    ];
+    writeDataWith(connection, base);
+    const refreshed = readDataWith(connection);
+    refreshed.searchQueries = [
+      refreshed.searchQueries.find((r) => r.id === "old-day")!,
+      { id: "new-row", projectId: "p", date: "2026-10-09", query: "changed", page: "/a",
+        clicks: 8, impressions: 100, ctr: 0.08, avgPosition: 2 },
+    ];
+    writeDataWith(connection, refreshed);
+    const stored = readDataWith(connection);
+    assert.deepEqual(stored.searchQueries.map((r) => r.id).sort(), ["new-row", "old-day"]);
+    assert.equal(stored.searchQueries.find((r) => r.id === "new-row")!.clicks, 8);
+    assert.equal(stored.searchQueries.find((r) => r.id === "old-day")!.clicks, 2);
+    // Editing a previously existing row with the same ID uses UPDATE, not DELETE table.
+    stored.searchQueries[0].clicks = 15;
+    writeDataWith(connection, stored);
+    assert.equal(readDataWith(connection).searchQueries.find((r) => r.id === stored.searchQueries[0].id)!.clicks, 15);
+  } finally {
+    getSqliteHandle(connection).close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
