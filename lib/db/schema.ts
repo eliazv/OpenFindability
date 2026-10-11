@@ -218,6 +218,7 @@ export const opportunities = sqliteTable(
     type: text("type", {
       enum: [
         "low_ctr_query",
+        "low_ctr_page",
         "striking_distance_query",
         "declining_page",
         "growing_page",
