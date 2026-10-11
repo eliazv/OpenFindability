@@ -236,13 +236,15 @@ export function buildGscReportMarkdown(
   const topPages = options.topPages ?? 20;
   const topQueries = options.topQueries ?? 30;
 
-  const queries = dailyGscQueries(data.searchQueries.filter((row) => row.projectId === project.id));
-  const pages = dailyGscPages(data.pageMetrics.filter((row) => row.projectId === project.id));
-  const snapshots = data.metricSnapshots.filter((row) => row.projectId === project.id && row.source === "gsc");
-
-  const dates = [...new Set([...queries, ...pages].map((row) => row.date))].sort();
-  const rangeStart = dates[0] ?? "n/a";
-  const rangeEnd = dates[dates.length - 1] ?? "n/a";
+  const allSnapshots = data.metricSnapshots.filter((row) => row.projectId === project.id && row.source === "gsc");
+  const rangeEnd = allSnapshots.reduce((max, row) => row.date > max ? row.date : max, "");
+  const firstDay = rangeEnd ? new Date(`${rangeEnd}T00:00:00Z`) : undefined;
+  firstDay?.setUTCDate(firstDay.getUTCDate() - 27);
+  const rangeStart = firstDay?.toISOString().slice(0, 10) ?? "";
+  const inPeriod = (date: string) => Boolean(rangeStart && date >= rangeStart && date <= rangeEnd);
+  const queries = dailyGscQueries(data.searchQueries.filter((row) => row.projectId === project.id && inPeriod(row.date)));
+  const pages = dailyGscPages(data.pageMetrics.filter((row) => row.projectId === project.id && inPeriod(row.date)));
+  const snapshots = allSnapshots.filter((row) => inPeriod(row.date));
 
   const totals = snapshots.reduce(
     (acc, row) => ({
@@ -293,10 +295,10 @@ export function buildGscReportMarkdown(
   lines.push(`Google Search Console: ${project.gscProperty ?? "(not configured)"}`);
   lines.push("```");
   lines.push("");
-  lines.push("Period covered by current data:");
+  lines.push("Report window (up to 28 finalized GSC days; missing days are not treated as zero):");
   lines.push("");
   lines.push("```txt");
-  lines.push(`${rangeStart} -> ${rangeEnd}`);
+  lines.push(`${rangeStart || "n/a"} -> ${rangeEnd || "n/a"}`);
   lines.push("```");
   lines.push("");
   lines.push("## GSC summary");
@@ -307,6 +309,8 @@ export function buildGscReportMarkdown(
   lines.push(`CTR:           ${formatPercent(ctr)}`);
   lines.push(`Avg position:  ${avgPosition.toFixed(1)}`);
   lines.push("```");
+  lines.push("");
+  lines.push("Note: page/query details contain Google\u0027s top rows only; legacy multi-day rows are kept in SQLite but excluded.");
   lines.push("");
   lines.push(`## Top pages by impressions (top ${pageRows.length})`);
   lines.push("");
