@@ -117,16 +117,30 @@ export function buildOpportunities(data: AppData): Opportunity[] {
   return [...byProject.values()].flat().sort((a, b) => b.score - a.score);
 }
 
+function lastAvailableDays<T extends { date: string }>(rows: T[], days = 28): T[] {
+  if (rows.length === 0) return [];
+  const end = rows.reduce((latest, row) => row.date > latest ? row.date : latest, "");
+  const start = new Date(`${end}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - days + 1);
+  const cutoff = start.toISOString().slice(0, 10);
+  return rows.filter((row) => row.date >= cutoff && row.date <= end).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function summarizeProject(data: AppData, projectId: string) {
   const snapshots = data.metricSnapshots.filter((metric) => metric.projectId === projectId);
-  const gsc = snapshots.filter((metric) => metric.source === "gsc");
-  const umami = snapshots.filter((metric) => metric.source === "umami");
-  const admob = getAdmobRevenueRows(data, projectId);
+  // Each source reports its latest 28 available calendar days, never its
+  // entire lifetime. Expose the endpoint so stale data is not disguised.
+  const gsc = lastAvailableDays(snapshots.filter((metric) => metric.source === "gsc"));
+  const umami = lastAvailableDays(snapshots.filter((metric) => metric.source === "umami"));
+  const admob = lastAvailableDays(getAdmobRevenueRows(data, projectId));
   const revenuecat = snapshots.filter((metric) => metric.source === "revenuecat");
   const latestRevenueCat = latestByDate(revenuecat);
-  const opportunities = data.opportunities.filter((opportunity) => opportunity.projectId === projectId);
+  const opportunities = data.opportunities.filter((opportunity) => opportunity.projectId === projectId && opportunity.status === "open");
 
   return {
+    gscLatestDate: gsc.at(-1)?.date,
+    umamiLatestDate: umami.at(-1)?.date,
+    admobLatestDate: admob.at(-1)?.date,
     clicks: sum(gsc, "clicks"),
     impressions: sum(gsc, "impressions"),
     visitors: sum(umami, "visitors"),
