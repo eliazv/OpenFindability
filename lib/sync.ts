@@ -137,7 +137,7 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
 
     if (!source || source === "umami") {
       try {
-        const synced = await syncUmamiProject(project, daysAgo(1));
+        const synced = await syncUmamiProject(project, daysAgo(backfillDays), daysAgo(1));
         data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
         results.push(synced.result);
         data.connectorRuns.push(toRun("umami", project.id, startedAt, synced.result));

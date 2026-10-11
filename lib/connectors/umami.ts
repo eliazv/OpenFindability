@@ -1,14 +1,34 @@
 import { createId } from "@/lib/id";
 import type { MetricSnapshot, Project, SyncResult } from "@/lib/types";
 
+// Umami Cloud / v2 wrap each metric as { value, prev }; self-hosted v3 returns plain numbers.
+type UmamiMetric = number | { value?: number };
 type UmamiStatsResponse = {
-  pageviews?: { value?: number };
-  visitors?: { value?: number };
-  visits?: { value?: number };
-  views?: { value?: number };
+  pageviews?: UmamiMetric;
+  visitors?: UmamiMetric;
+  visits?: UmamiMetric;
+  views?: UmamiMetric;
 };
 
-export async function syncUmamiProject(project: Project, date: string): Promise<{
+export function readUmamiMetric(metric: UmamiMetric | undefined): number | undefined {
+  if (typeof metric === "number") return metric;
+  return typeof metric?.value === "number" ? metric.value : undefined;
+}
+
+function enumerateDates(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDate}T00:00:00.000Z`);
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+// One stats call per day: Umami only returns unique visitors for the window it is asked about,
+// so daily visitors cannot be derived from a single range request.
+export async function syncUmamiProject(project: Project, startDate: string, endDate: string = startDate): Promise<{
   result: SyncResult;
   snapshots: MetricSnapshot[];
 }> {
@@ -23,49 +43,48 @@ export async function syncUmamiProject(project: Project, date: string): Promise<
     return skipped(project.id, "UMAMI_API_KEY is not configured.");
   }
 
-  const startAt = new Date(`${date}T00:00:00.000Z`).getTime();
-  const endAt = new Date(`${date}T23:59:59.999Z`).getTime();
-  const url = buildUmamiUrl(baseUrl, `/websites/${project.umamiWebsiteId}/stats`);
-  url.searchParams.set("startAt", String(startAt));
-  url.searchParams.set("endAt", String(endAt));
-
   const isCloud = new URL(baseUrl).hostname.endsWith("umami.is");
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      ...(isCloud ? { "x-umami-api-key": apiKey } : { Authorization: `Bearer ${apiKey}` }),
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Umami request failed for ${project.name}: ${response.status} ${await response.text()}`);
-  }
-
-  const payload = (await response.json()) as UmamiStatsResponse;
-  const visitors = payload.visitors?.value ?? payload.visits?.value ?? 0;
-  const pageviews = payload.pageviews?.value ?? payload.views?.value ?? 0;
   const createdAt = new Date().toISOString();
+  const snapshots: MetricSnapshot[] = [];
+
+  for (const date of enumerateDates(startDate, endDate)) {
+    const url = buildUmamiUrl(baseUrl, `/websites/${project.umamiWebsiteId}/stats`);
+    url.searchParams.set("startAt", String(new Date(`${date}T00:00:00.000Z`).getTime()));
+    url.searchParams.set("endAt", String(new Date(`${date}T23:59:59.999Z`).getTime()));
+
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        ...(isCloud ? { "x-umami-api-key": apiKey } : { Authorization: `Bearer ${apiKey}` }),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Umami request failed for ${project.name}: ${response.status} ${await response.text()}`);
+    }
+
+    const payload = (await response.json()) as UmamiStatsResponse;
+    snapshots.push({
+      id: createId("metric"),
+      projectId: project.id,
+      source: "umami",
+      date,
+      visitors: readUmamiMetric(payload.visitors) ?? readUmamiMetric(payload.visits) ?? 0,
+      pageviews: readUmamiMetric(payload.pageviews) ?? readUmamiMetric(payload.views) ?? 0,
+      rawJson: payload,
+      createdAt,
+    });
+  }
 
   return {
     result: {
       source: "umami",
       projectId: project.id,
       status: "success",
-      message: `Imported Umami stats for ${date}.`,
-      inserted: { snapshots: 1, queries: 0, pages: 0 },
+      message: `Imported Umami stats for ${snapshots.length} day(s) between ${startDate} and ${endDate}.`,
+      inserted: { snapshots: snapshots.length, queries: 0, pages: 0 },
     },
-    snapshots: [
-      {
-        id: createId("metric"),
-        projectId: project.id,
-        source: "umami",
-        date,
-        visitors,
-        pageviews,
-        rawJson: payload,
-        createdAt,
-      },
-    ],
+    snapshots,
   };
 }
 

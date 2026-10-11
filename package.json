@@ -38,7 +38,7 @@
     "store:status": "tsx scripts/store-status.ts",
     "growth:summary": "tsx scripts/growth-summary.ts",
     "sheet:export": "tsx scripts/export-chatgpt-sheet.ts",
-    "test:integrations": "tsx --test tests/ga4.test.ts tests/sheets-export.test.ts",
+    "test:integrations": "tsx --test tests/ga4.test.ts tests/sheets-export.test.ts tests/umami.test.ts",
     "mcp:start": "node scripts/mcp-launch.mjs",
     "audit:secrets": "node scripts/audit-public-repo.mjs",
     "audit:secrets:history": "node scripts/audit-public-repo.mjs --history",
