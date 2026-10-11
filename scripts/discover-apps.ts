@@ -33,12 +33,17 @@ async function main() {
     console.warn(`Skipping App Store Connect discovery: ${error instanceof Error ? error.message : error}`);
   }
 
+  // Apps that exist on the store accounts but should never become projects (abandoned
+  // experiments, test listings): Play package names and App Store ids, comma-separated.
+  const ignored = new Set((process.env.DISCOVER_IGNORE_APPS ?? "").split(",").map((value) => value.trim()).filter(Boolean));
+
   const data = await readData();
   const newProjectSlugs: string[] = [];
   let created = 0;
   let linked = 0;
 
   for (const app of playApps) {
+    if (ignored.has(app.packageName)) continue;
     if (data.projects.some((p) => p.playConsolePackageName === app.packageName)) continue;
 
     const name = app.name ?? app.packageName;
@@ -78,6 +83,7 @@ async function main() {
 
   for (const app of ascApps) {
     const appId = Number(app.id);
+    if (ignored.has(String(app.id))) continue;
     if (data.projects.some((p) => p.appStoreTrackId === appId)) continue;
 
     const nameGuess = app.name ?? app.bundleId ?? String(app.id);
