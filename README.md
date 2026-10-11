@@ -9,6 +9,8 @@ No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app b
 ## What it does
 
 - **Local dashboard** — sidebar with every project, a homepage overview and a per-project page (SEO, analytics, Play Store reviews, ASO keywords, ad/subscription revenue, opportunities, sync log)
+- **Google Analytics 4** — separate GA4 Data API daily active users, sessions, page views and key events, never conflated with Umami or GSC — see [`docs/guide/ga4-setup.md`](docs/guide/ga4-setup.md)
+- **Google Sheets + ChatGPT Mobile bridge** — daily GSC collector through bound Apps Script and dry-run-first export of non-GSC KPI snapshots; see [`docs/guide/google-sheets-live-setup.md`](docs/guide/google-sheets-live-setup.md)
 - **SEO opportunities** — automated detection of low-CTR queries, striking-distance keywords, cannibalization, declining/growing pages, and more
 - **GSC index audit** — inspects sitemap/Search Analytics URLs across every connected Search Console property, groups indexing problems and keeps history
 - **ASO research** — keyword popularity/difficulty/opportunity scoring via a local RespectASO instance, with a reusable cross-project keyword cache
@@ -232,6 +234,10 @@ pnpm run aso:push-copy -- --slug <project-slug> --locale it [...] [--apply]  # w
 pnpm run asc:experiments -- --slug <project-slug>  # sync/create Product Page Optimization tests
 pnpm run research:aso -- --slug <project-slug>
 pnpm run report -- <slug> <gsc|aso|asc|monetization|all>
+pnpm run sync:ga4          # Google Analytics 4 (configured projects only)
+pnpm run sheet:export -- --days 90                   # dry-run ChatGPT Sheet projection
+pnpm run sheet:export -- --days 90 --apply           # update private Sheet (requires GOOGLE_SHEET_ID)
+pnpm run test:integrations                            # GA4/Sheets offline tests
 pnpm run db:studio        # open Drizzle Studio (local GUI SQL browser)
 pnpm run db:generate      # regenerate migrations after editing lib/db/schema.ts
 pnpm typecheck
