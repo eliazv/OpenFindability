@@ -195,9 +195,12 @@ export function readDataWith(database: AppDb): AppData {
 
 export function writeDataWith(database: AppDb, data: AppData): void {
   const expectedRevision = snapshotRevisions.get(data);
+  if (expectedRevision === undefined) {
+    throw new Error("Untracked AppData cannot overwrite SQLite. Read a fresh snapshot first or use updateData for an explicit replacement.");
+  }
   const revision = database.transaction((tx) => {
     const actualRevision = storeRevision(database);
-    if (expectedRevision !== undefined && expectedRevision !== actualRevision) {
+    if (expectedRevision !== actualRevision) {
       throw new StaleStoreSnapshotError(expectedRevision, actualRevision);
     }
     tx.delete(searchQueriesTable).run();
