@@ -13,6 +13,7 @@ type Args = {
   category?: string;
   url?: string;
   gsc?: string;
+  ga4?: string;
   umami?: string;
   playConsole?: string;
   appStoreTrackId?: string;
@@ -43,6 +44,7 @@ function parseArgs(argv: string[]): Args {
       case "category": args.category = value; break;
       case "url": args.url = value; break;
       case "gsc": args.gsc = value; break;
+      case "ga4": args.ga4 = value; break;
       case "umami": args.umami = value; break;
       case "play-console": args.playConsole = value; break;
       case "app-store-track-id": args.appStoreTrackId = value; break;
@@ -91,6 +93,7 @@ async function main() {
     category: args.category,
     websiteUrl: args.url,
     gscProperty: args.gsc,
+    ga4PropertyId: args.ga4,
     umamiWebsiteId: args.umami,
     playConsolePackageName: args.playConsole,
     appStoreTrackId: args.appStoreTrackId ? Number(args.appStoreTrackId) : undefined,
@@ -125,6 +128,7 @@ async function main() {
 
   if (
     !project.gscProperty &&
+    !project.ga4PropertyId &&
     !project.umamiWebsiteId &&
     !project.playConsolePackageName &&
     !project.asoKeywords?.length &&
