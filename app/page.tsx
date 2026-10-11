@@ -87,13 +87,13 @@ export default async function HomePage() {
         </Card>
         <Card>
           <CardContent className="grid gap-1.5">
-            <span className="text-sm text-muted-foreground">Click GSC</span>
+            <span className="text-sm text-muted-foreground">Click GSC · ultimi 28 gg disponibili</span>
             <strong className="text-3xl font-extrabold">{totals.clicks.toLocaleString("it-IT")}</strong>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="grid gap-1.5">
-            <span className="text-sm text-muted-foreground">Visitatori Umami</span>
+            <span className="text-sm text-muted-foreground">Visitatori Umami · ultimi 28 gg disponibili</span>
             <strong className="text-3xl font-extrabold">{totals.visitors.toLocaleString("it-IT")}</strong>
           </CardContent>
         </Card>
