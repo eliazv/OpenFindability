@@ -218,7 +218,7 @@ function writeGscRowDelta(
   const columns = name === "search_queries"
     ? ["project_id", "date", "query", "page", "clicks", "impressions", "ctr", "avg_position", "raw_json"]
     : ["project_id", "date", "page", "clicks", "impressions", "ctr", "avg_position", "raw_json"];
-  const encode = (row: GscDetail): unknown[] => name === "search_queries"
+  const encode = (row: GscDetail): Array<string | number | null> => name === "search_queries"
     ? [
         row.projectId, row.date, (row as SearchQueryMetric).query, (row as SearchQueryMetric).page ?? null,
         row.clicks, row.impressions, row.ctr, row.avgPosition,
