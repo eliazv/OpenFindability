@@ -22,7 +22,10 @@ export function normalizeGa4Days(
     const date = row.dimensionValues?.[0]?.value ?? "";
     if (!/^\d{8}$/.test(date)) throw new Error("GA4 returned an invalid YYYYMMDD date.");
     const dateKey = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
-    if (Number.isNaN(Date.parse(dateKey + "T00:00:00Z"))) throw new Error("GA4 returned an invalid date.");
+    const validDate = new Date(dateKey + "T00:00:00Z");
+    if (Number.isNaN(validDate.getTime()) || validDate.toISOString().slice(0, 10) !== dateKey) {
+      throw new Error("GA4 returned an invalid date.");
+    }
     const parseMetric = (index: number): number => {
       const raw = row.metricValues?.[index]?.value;
       if (raw === undefined || raw.trim() === "") throw new Error(`GA4 returned a missing metric at ${dateKey}.`);
