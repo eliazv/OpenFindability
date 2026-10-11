@@ -194,6 +194,7 @@ Restart the MCP client. This is a **local stdio** integration, not an always-on 
 |------|-------------|
 | `list_projects` | List configured projects and their slugs |
 | `get_project_summary` | Live GSC + Umami + opportunities in one call |
+| `get_growth_snapshot` | **Cached, read-only** multi-provider KPI snapshot: SEO, web, revenue, subscriptions, Android/iOS, data freshness |
 | `get_gsc_stats` | Live GSC data: clicks, impressions, top queries, top pages |
 | `get_umami_stats` | Live Umami visitors and pageviews for a date |
 | `get_page_keywords` | All GSC queries ranking for a specific page URL |
@@ -212,6 +213,7 @@ See [`docs/guide/mcp-server.md`](docs/guide/mcp-server.md) for full setup and us
 
 ```bash
 pnpm run doctor           # check connector config, flag stale syncs
+pnpm run growth:summary -- --slug <project-slug>          # offline multi-provider KPI snapshot
 pnpm run db:backup        # create + integrity-check a WAL-safe SQLite backup (ignored by git)
 pnpm run test:gsc         # daily GSC history/pagination regression tests
 pnpm seed:demo            # seed demo data
