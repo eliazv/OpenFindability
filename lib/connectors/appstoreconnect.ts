@@ -107,6 +107,26 @@ export async function listAscApps(): Promise<AscApp[]> {
   }));
 }
 
+export type AscVersionStatus = {
+  id: string;
+  versionString?: string;
+  state?: string;
+  platform?: string;
+  createdDate?: string;
+};
+
+/** Read-only App Store version/review state; not an upload or submission. */
+export async function listAppStoreVersionStatus(appId: string): Promise<AscVersionStatus[]> {
+  const versions = await ascFetchAllPages(`/apps/${appId}/appStoreVersions?limit=200`);
+  return versions.map((version) => ({
+    id: version.id,
+    versionString: version.attributes?.versionString as string | undefined,
+    state: (version.attributes?.appVersionState ?? version.attributes?.appStoreState) as string | undefined,
+    platform: version.attributes?.platform as string | undefined,
+    createdDate: version.attributes?.createdDate as string | undefined,
+  }));
+}
+
 export type AscAppInfoLocalization = {
   id: string;
   locale: string;
