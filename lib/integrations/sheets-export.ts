@@ -13,6 +13,13 @@ export const OF_SHEET_HEADERS = {
   OF_GscDaily: ["project_id", "slug", "date", "clicks", "impressions", "ctr", "avg_position"],
   OF_GscQueries: ["project_id", "slug", "query", "page", "clicks", "impressions", "ctr", "avg_position", "window_days", "window_end"],
   OF_GscPages: ["project_id", "slug", "page", "clicks", "impressions", "ctr", "avg_position", "window_days", "window_end"],
+  OF_GscBreakdowns: ["project_id", "slug", "dimension", "key", "clicks", "impressions", "ctr", "avg_position", "range_start", "range_end"],
+  OF_GscSitemaps: ["project_id", "slug", "path", "type", "last_submitted", "is_pending", "warnings", "errors"],
+  OF_GscIndexSummary: ["site_url", "slug", "issue_code", "severity", "urls", "latest_inspection"],
+  OF_GscIndexIssues: ["site_url", "slug", "url", "issue_code", "severity", "coverage_state", "last_crawl", "inspection_date"],
+  OF_AdmobBreakdown: ["project_id", "slug", "date", "ad_source", "format", "ad_requests", "matched_requests", "match_rate", "impressions", "clicks", "estimated_earnings", "observed_ecpm", "currency"],
+  OF_AsoKeywords: ["project_id", "slug", "date", "keyword", "country", "popularity", "difficulty", "opportunity", "app_rank", "classification"],
+  OF_StoreCopy: ["project_id", "slug", "locale", "name", "subtitle", "keywords", "promotional_text", "version_state", "pulled_at"],
   OF_SyncStatus: ["project_id", "slug", "source", "status", "finished_at", "latest_data_date"],
 } as const;
 
@@ -21,8 +28,19 @@ const GSC_TOP_QUERIES_PER_PROJECT = 500;
 const GSC_TOP_PAGES_PER_PROJECT = 200;
 // Tabs ranked "best first" within each project: column index of the ranking value.
 const RANKED_TABS: Partial<Record<keyof typeof OF_SHEET_HEADERS, number>> = {
-  OF_Opportunities: 4, OF_GscQueries: 5, OF_GscPages: 4,
+  OF_Opportunities: 4, OF_GscQueries: 5, OF_GscPages: 4, OF_AsoKeywords: 7,
 };
+
+// Keeps only the rows sharing the newest version within each group.
+function latestPerGroup<T>(rows: T[], groupOf: (row: T) => string, versionOf: (row: T) => string): T[] {
+  const newest = new Map<string, string>();
+  for (const row of rows) {
+    const group = groupOf(row);
+    const version = versionOf(row);
+    if (!newest.has(group) || version > newest.get(group)!) newest.set(group, version);
+  }
+  return rows.filter((row) => newest.get(groupOf(row)) === versionOf(row));
+}
 
 type Tab = keyof typeof OF_SHEET_HEADERS;
 type Cell = string | number | boolean | null;
@@ -58,7 +76,9 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
   const slug = (id: string) => byId.get(id)?.slug ?? "(deleted)";
   const out: ExportProjection = {
     OF_Projects: [], OF_DailyMetrics: [], OF_Revenue: [], OF_AppMetrics: [], OF_Opportunities: [],
-    OF_GscDaily: [], OF_GscQueries: [], OF_GscPages: [], OF_SyncStatus: [],
+    OF_GscDaily: [], OF_GscQueries: [], OF_GscPages: [], OF_GscBreakdowns: [], OF_GscSitemaps: [],
+    OF_GscIndexSummary: [], OF_GscIndexIssues: [], OF_AdmobBreakdown: [], OF_AsoKeywords: [],
+    OF_StoreCopy: [], OF_SyncStatus: [],
   };
 
   for (const p of data.projects) {
@@ -151,6 +171,63 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
   }
   for (const p of topPerProject(gsc.pages, GSC_TOP_PAGES_PER_PROJECT)) {
     out.OF_GscPages.push([p.projectId, slug(p.projectId), p.page, p.clicks, p.impressions, p.ctr, p.avgPosition, GSC_WINDOW_DAYS, p.date]);
+  }
+
+  // Device/country/search-appearance splits are stored per synced range, not per day:
+  // only the newest range of each project is exported.
+  for (const b of latestPerGroup(data.gscDimensionBreakdowns, (row) => row.projectId, (row) => row.rangeEnd + row.rangeStart)) {
+    if (!byId.has(b.projectId)) continue;
+    out.OF_GscBreakdowns.push([b.projectId, slug(b.projectId), b.dimension, b.key, b.clicks, b.impressions, b.ctr, b.avgPosition, b.rangeStart, b.rangeEnd]);
+  }
+  for (const s of data.gscSitemaps) {
+    if (!byId.has(s.projectId)) continue;
+    out.OF_GscSitemaps.push([s.projectId, slug(s.projectId), s.path, s.type ?? "", s.lastSubmitted ?? "", s.isPending, s.warnings, s.errors]);
+  }
+
+  // Index audit: latest inspection per URL. Properties not mapped to a project have no
+  // projectId, so these tabs are keyed by site_url. Indexed URLs only count in the summary.
+  const inspections = latestPerGroup(data.gscIndexInspections, (row) => row.siteUrl + " " + row.url, (row) => row.inspectedAt);
+  const indexSummary = new Map<string, { siteUrl: string; slug: string; code: string; severity: string; urls: number; latest: string }>();
+  for (const i of inspections) {
+    const siteSlug = i.projectId && byId.has(i.projectId) ? slug(i.projectId) : "";
+    const key = i.siteUrl + " " + i.issueCode;
+    const entry = indexSummary.get(key) ?? { siteUrl: i.siteUrl, slug: siteSlug, code: i.issueCode, severity: i.severity, urls: 0, latest: "" };
+    entry.urls += 1;
+    if (i.inspectionDate > entry.latest) entry.latest = i.inspectionDate;
+    indexSummary.set(key, entry);
+    if (i.issueCode !== "indexed") {
+      out.OF_GscIndexIssues.push([i.siteUrl, siteSlug, i.url, i.issueCode, i.severity, i.coverageState ?? "", i.lastCrawlTime ?? "", i.inspectionDate]);
+    }
+  }
+  for (const e of indexSummary.values()) out.OF_GscIndexSummary.push([e.siteUrl, e.slug, e.code, e.severity, e.urls, e.latest]);
+
+  // Per ad network and format. These rows add up to the AdMob estimated_revenue in
+  // OF_Revenue for the same day: they are its breakdown, not extra revenue.
+  for (const m of data.admobMediationMetrics) {
+    if (!byId.has(m.projectId) || !dateWithin(m.date, days, today)) continue;
+    out.OF_AdmobBreakdown.push([
+      m.projectId, slug(m.projectId), m.date, m.adSourceName, m.format ?? "",
+      m.adRequests ?? null, m.matchedRequests ?? null, m.matchRate ?? null, m.impressions ?? null,
+      m.clicks ?? null, m.estimatedEarnings ?? null, m.observedEcpm ?? null, m.currency ?? "",
+    ]);
+  }
+
+  // appKeywords is append-only: export the newest research date of each project.
+  for (const k of latestPerGroup(data.appKeywords, (row) => row.projectId, (row) => row.date)) {
+    if (!byId.has(k.projectId)) continue;
+    out.OF_AsoKeywords.push([
+      k.projectId, slug(k.projectId), k.date, k.keyword, k.country, k.popularityScore,
+      k.difficultyScore, k.opportunityScore, k.appRank ?? null, k.classification ?? "",
+    ]);
+  }
+
+  // Newest App Store text per locale. Descriptions are left out: long, and not a ranking field.
+  for (const c of latestPerGroup(data.ascMetadataSnapshots, (row) => row.projectId + " " + row.locale, (row) => row.createdAt)) {
+    if (!byId.has(c.projectId)) continue;
+    out.OF_StoreCopy.push([
+      c.projectId, slug(c.projectId), c.locale, c.name ?? "", c.subtitle ?? "", c.keywords ?? "",
+      c.promotionalText ?? "", c.versionState ?? "", c.createdAt,
+    ]);
   }
 
   const latestRuns = new Map<string, (typeof data.connectorRuns)[number]>();

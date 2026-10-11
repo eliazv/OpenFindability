@@ -23,7 +23,17 @@ test("private Sheet export excludes raw data, avoids duplicate AdMob totals and 
       { id: "o3", projectId: "gone", type: "low_ctr_page", title: "Orphan", description: "d", severity: "low", score: 99, status: "open", detectedAt: "2026-10-10" },
     ],
     appReviews: [], appKeywords: [], asoKeywordSnapshots: [], asoAppRankSnapshots: [],
-    gscDimensionBreakdowns: [], gscSitemaps: [], gscIndexInspections: [], admobMediationMetrics: [],
+    gscDimensionBreakdowns: [
+      { id: "b1", projectId: "p", rangeStart: "2026-08-01", rangeEnd: "2026-08-30", dimension: "device", key: "MOBILE", clicks: 1, impressions: 9, ctr: 0.1, avgPosition: 3, createdAt: "2026-09-01" },
+      { id: "b2", projectId: "p", rangeStart: "2026-09-10", rangeEnd: "2026-10-09", dimension: "device", key: "MOBILE", clicks: 5, impressions: 50, ctr: 0.1, avgPosition: 4, createdAt: "2026-10-11" },
+    ],
+    gscSitemaps: [],
+    gscIndexInspections: [
+      { id: "i1", siteUrl: "sc-domain:x", url: "https://x/a", inspectionDate: "2026-09-01", inspectedAt: "2026-09-01T10:00:00Z", discoveredFrom: [], issueCode: "not_found", severity: "high" },
+      { id: "i2", siteUrl: "sc-domain:x", url: "https://x/a", inspectionDate: "2026-10-01", inspectedAt: "2026-10-01T10:00:00Z", discoveredFrom: [], issueCode: "indexed", severity: "none" },
+      { id: "i3", siteUrl: "sc-domain:x", url: "https://x/b", inspectionDate: "2026-10-01", inspectedAt: "2026-10-01T10:00:00Z", discoveredFrom: [], issueCode: "crawled_not_indexed", severity: "medium" },
+    ],
+    admobMediationMetrics: [],
     ascMetadataSnapshots: [], ascExperiments: [], ascExperimentTreatments: [], playVitalsMetrics: [],
     playInstallStats: [], ascAnalyticsMetrics: [],
   };
@@ -34,6 +44,10 @@ test("private Sheet export excludes raw data, avoids duplicate AdMob totals and 
   assert.equal(JSON.stringify(projection).includes("customer_private"), false);
   assert.equal(JSON.stringify(projection).includes("secret"), false);
   assert.equal(projection.OF_Projects.length, 1);
+  // Only the newest breakdown range, and only the latest inspection of each URL.
+  assert.deepEqual(projection.OF_GscBreakdowns.map((row) => row[9]), ["2026-10-09"]);
+  assert.deepEqual(projection.OF_GscIndexIssues.map((row) => [row[2], row[3]]), [["https://x/b", "crawled_not_indexed"]]);
+  assert.deepEqual(projection.OF_GscIndexSummary.map((row) => [row[2], row[4]]), [["crawled_not_indexed", 1], ["indexed", 1]]);
   assert.deepEqual(projection.OF_GscDaily, [["p", "game", "2026-10-09", 500, 0, null, null]]);
   // Daily rows are merged with an impression-weighted position; legacy range aggregates are excluded.
   assert.deepEqual(projection.OF_GscQueries.map((row) => row.slice(2, 8)), [["kw", "https://x/a", 4, 40, 0.1, 7]]);
