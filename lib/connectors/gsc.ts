@@ -20,7 +20,7 @@ type GscRow = {
   position?: number;
 };
 
-export async function syncGscProject(project: Project, startDate: string, endDate: string): Promise<{
+export async function syncGscProject(project: Project, startDate: string, endDate: string, options: { details?: boolean } = {}): Promise<{
   result: SyncResult;
   snapshots: MetricSnapshot[];
   queries: SearchQueryMetric[];
@@ -45,8 +45,8 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   // Small windows also avoid starving low-traffic days behind GSC's top-row cap.
   const [dateRows, queryDetails, pageDetails, deviceRows, countryRows, appearanceRows, sitemapEntries] = await Promise.all([
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["date"]),
-    queryDailyDetails(searchconsole, project.gscProperty, startDate, endDate, ["query", "page"]),
-    queryDailyDetails(searchconsole, project.gscProperty, startDate, endDate, ["page"]),
+    options.details === false ? Promise.resolve({ rows: [], capped: false }) : queryDailyDetails(searchconsole, project.gscProperty, startDate, endDate, ["query", "page"]),
+    options.details === false ? Promise.resolve({ rows: [], capped: false }) : queryDailyDetails(searchconsole, project.gscProperty, startDate, endDate, ["page"]),
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["device"]),
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["country"]),
     querySearchAnalytics(searchconsole, project.gscProperty, startDate, endDate, ["searchAppearance"]),
@@ -55,11 +55,28 @@ export async function syncGscProject(project: Project, startDate: string, endDat
   const queryRows = queryDetails.rows;
   const pageRows = pageDetails.rows;
 
+  // Reject malformed API rows before writing any of the batch to SQLite.
+  for (const row of dateRows) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.keys?.[0] ?? "")) {
+      throw new Error("GSC returned a daily total without a valid date key.");
+    }
+  }
+  for (const row of queryRows) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.keys?.[0] ?? "") || !row.keys?.[1] || !row.keys?.[2]) {
+      throw new Error("GSC returned a query/page row with missing daily dimensions.");
+    }
+  }
+  for (const row of pageRows) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.keys?.[0] ?? "") || !row.keys?.[1]) {
+      throw new Error("GSC returned a page row with missing daily dimensions.");
+    }
+  }
+
   const snapshots = dateRows.map((row) => ({
     id: createId("metric"),
     projectId: project.id,
     source: "gsc" as const,
-    date: row.keys?.[0] ?? endDate,
+    date: row.keys![0],
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
     ctr: row.ctr ?? 0,
@@ -72,8 +89,8 @@ export async function syncGscProject(project: Project, startDate: string, endDat
     id: createId("query"),
     projectId: project.id,
     date: row.keys?.[0] ?? endDate,
-    query: row.keys?.[1] ?? "",
-    page: row.keys?.[2],
+    query: row.keys![1],
+    page: row.keys![2],
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
     ctr: row.ctr ?? 0,
@@ -85,7 +102,7 @@ export async function syncGscProject(project: Project, startDate: string, endDat
     id: createId("page"),
     projectId: project.id,
     date: row.keys?.[0] ?? endDate,
-    page: row.keys?.[1] ?? "",
+    page: row.keys![1],
     clicks: row.clicks ?? 0,
     impressions: row.impressions ?? 0,
     ctr: row.ctr ?? 0,
