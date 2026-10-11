@@ -5,7 +5,7 @@ Stato: **codice pronto nel repo, autorizzazioni Google e trigger da attivare sul
 ## Architettura senza confondere proprietari dei dati
 
 - **Apps Script → GSC:** indipendente dal PC, usa l'account Google che apre il foglio; scrive solo `Properties`, `Daily`, `TopPages`, `TopQueries`, `SEO_Overview` e `SyncLog`.
-- **OpenFindability locale → lo stesso foglio:** dopo un sync locale esporta i KPI non-GSC sulle schede `OF_Projects`, `OF_DailyMetrics`, `OF_Revenue`, `OF_AppMetrics`, `OF_SyncStatus`. Il job è manuale e aggiorna gli ultimi 90 giorni; a PC spento quei dati restano disponibili ma non si aggiornano.
+- **OpenFindability locale → lo stesso foglio:** dopo un sync locale esporta i KPI non-GSC sulle schede `OF_Projects`, `OF_DailyMetrics`, `OF_Revenue`, `OF_AppMetrics`, `OF_Opportunities` (opportunità SEO già calcolate, ordinate per punteggio), `OF_SyncStatus`. Il job è manuale e aggiorna gli ultimi 90 giorni; a PC spento quei dati restano disponibili ma non si aggiornano.
 - **ChatGPT Mobile → Google Drive/Sheets:** può leggere il foglio privato collegato. Non può accedere alla SQLite locale, né pubblicare versioni sugli store attraverso il foglio.
 - **Non usare due writer sulle stesse schede.** Mai inserire i dati GSC dello script dentro `OF_DailyMetrics` o viceversa.
 
@@ -35,7 +35,7 @@ Aggiungi al `.env` **solo**:
 GOOGLE_SHEET_ID=<ID_DEL_FOGLIO_PRIVATO>
 ```
 
-Condividi il foglio con l'email del **service account** OpenFindability (solo questo documento; ruolo **Editor**). Usa l'account JSON già in `secrets/google/`. Il connettore Node usa Sheets API con scope `spreadsheets`, non richiede di inserire nuovi token nello script.
+Abilita **Google Sheets API** nel progetto Google Cloud del service account (una tantum), poi condividi il foglio con l'email del **service account** OpenFindability (solo questo documento; ruolo **Editor**). Usa l'account JSON già in `secrets/google/`. Il connettore Node usa Sheets API con scope `spreadsheets`, non richiede di inserire nuovi token nello script.
 
 ```bash
 pnpm run db:backup

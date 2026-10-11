@@ -8,12 +8,32 @@ export const OF_SHEET_HEADERS = {
   OF_DailyMetrics: ["project_id", "slug", "source", "date", "visitors", "sessions", "pageviews", "key_events", "clicks", "impressions", "revenue", "currency", "grain"],
   OF_Revenue: ["project_id", "slug", "source", "date", "metric", "value", "currency", "grain"],
   OF_AppMetrics: ["project_id", "slug", "platform", "date", "metric", "value", "grain"],
+  OF_Opportunities: ["project_id", "slug", "type", "severity", "score", "status", "title", "description", "query", "page", "clicks", "impressions", "ctr", "avg_position", "detected_at"],
   OF_SyncStatus: ["project_id", "slug", "source", "status", "finished_at", "latest_data_date"],
 } as const;
 
 type Tab = keyof typeof OF_SHEET_HEADERS;
 type Cell = string | number | boolean | null;
 export type ExportProjection = Record<Tab, Cell[][]>;
+
+type OpportunityEvidence = { query?: unknown; page?: unknown; clicks?: unknown; impressions?: unknown; ctr?: unknown; avgPosition?: unknown };
+
+// Opportunities keep the whole source row in rawJson; only these whitelisted
+// evidence fields reach the Sheet. Cannibalization carries one row per competing URL.
+function opportunityEvidence(rawJson: unknown): Cell[] {
+  const raw = (rawJson ?? {}) as OpportunityEvidence & { pages?: OpportunityEvidence[] };
+  const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+  const str = (value: unknown) => (typeof value === "string" ? value : "");
+  if (Array.isArray(raw.pages)) {
+    const clicks = raw.pages.reduce((sum, p) => sum + (num(p.clicks) ?? 0), 0);
+    const impressions = raw.pages.reduce((sum, p) => sum + (num(p.impressions) ?? 0), 0);
+    return [
+      str(raw.query), raw.pages.map((p) => str(p.page)).filter(Boolean).join(" | "),
+      clicks, impressions, impressions > 0 ? clicks / impressions : null, null,
+    ];
+  }
+  return [str(raw.query), str(raw.page), num(raw.clicks), num(raw.impressions), num(raw.ctr), num(raw.avgPosition)];
+}
 
 function dateWithin(date: string, days: number, today: Date): boolean {
   const cutoff = new Date(today);
@@ -25,7 +45,7 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
   const byId = new Map(data.projects.map((p) => [p.id, p]));
   const slug = (id: string) => byId.get(id)?.slug ?? "(deleted)";
   const out: ExportProjection = {
-    OF_Projects: [], OF_DailyMetrics: [], OF_Revenue: [], OF_AppMetrics: [], OF_SyncStatus: [],
+    OF_Projects: [], OF_DailyMetrics: [], OF_Revenue: [], OF_AppMetrics: [], OF_Opportunities: [], OF_SyncStatus: [],
   };
 
   for (const p of data.projects) {
@@ -89,6 +109,15 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
     if (r.anrRate !== undefined) out.OF_AppMetrics.push([r.projectId, slug(r.projectId), "android", r.date, "anr_rate", r.anrRate, "daily"]);
   }
 
+  // Not date-windowed: an opportunity stays relevant until it is ignored or done.
+  for (const o of data.opportunities) {
+    if (!byId.has(o.projectId)) continue;
+    out.OF_Opportunities.push([
+      o.projectId, slug(o.projectId), o.type, o.severity, o.score, o.status,
+      o.title, o.description, ...opportunityEvidence(o.rawJson), o.detectedAt,
+    ]);
+  }
+
   const latestRuns = new Map<string, (typeof data.connectorRuns)[number]>();
   for (const r of data.connectorRuns) {
     if (!r.projectId || !byId.has(r.projectId)) continue;
@@ -114,6 +143,8 @@ export function buildSheetProjection(data: AppData, today = new Date(), days = 9
   }
   for (const tab of Object.keys(out) as Tab[]) {
     out[tab].sort((a, b) => a.map(String).join("|").localeCompare(b.map(String).join("|")));
+    // Highest score first within each project, so the top of the tab is what to work on.
+    if (tab === "OF_Opportunities") out[tab].sort((a, b) => String(a[1]).localeCompare(String(b[1])) || Number(b[4]) - Number(a[4]));
     if (out[tab].length > 20000) throw new Error(`Sheet export for ${tab} exceeds safety limit (20k rows).`);
   }
   return out;
