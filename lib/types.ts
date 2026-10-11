@@ -1,5 +1,6 @@
 export type SourceType =
   | "gsc"
+  | "ga4"
   | "umami"
   | "play_console"
   | "aso"
@@ -20,6 +21,7 @@ export type Project = {
   category?: string;
   websiteUrl?: string;
   gscProperty?: string;
+  ga4PropertyId?: string;
   umamiWebsiteId?: string;
   playConsolePackageName?: string;
   appStoreTrackId?: number;
