@@ -241,6 +241,8 @@ export async function syncAscAnalyticsProject(
 
     if (sessionsReport) {
       await attachSessionsRetention(sessionsReport.id, startDate, endDate, byDate);
+    } else {
+      analyticsNote = "retention report not yet available";
     }
   } catch (error) {
     analyticsNote = `retention unavailable (${error instanceof Error ? error.message : String(error)})`;
@@ -271,11 +273,17 @@ export async function syncAscAnalyticsProject(
     analyticsNote ?? "retention via Analytics Reports",
   ];
 
+  const hasError = Boolean(salesReportError || (analyticsNote && analyticsNote.startsWith("retention unavailable")));
+  const missingConfiguredData = Boolean(vendorNumber && !salesReportsAvailable) || Boolean(analyticsNote);
+  const status = metrics.length === 0
+    ? (hasError ? "failed" : "no_data")
+    : missingConfiguredData ? "partial" : "success";
+
   return {
     result: {
       source: "asc_analytics",
       projectId: project.id,
-      status: "success",
+      status,
       message: `Imported App Store Connect analytics for ${metrics.length} day(s) between ${startDate} and ${endDate} (${parts.join("; ")}).`,
       inserted: { snapshots: metrics.length, queries: 0, pages: 0 },
     },
