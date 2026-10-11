@@ -26,6 +26,7 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
   const snapshots = data.metricSnapshots.filter((row) => row.projectId === projectId);
   const search = recent(snapshots.filter((row) => row.source === "gsc"), days);
   const web = recent(snapshots.filter((row) => row.source === "umami"), days);
+  const ga4 = recent(snapshots.filter((row) => row.source === "ga4"), days);
   const ad = recent(getAdmobRevenueRows(data, projectId), days);
   const playInstalls = recent(data.playInstallStats.filter((row) => row.projectId === projectId), days);
   const ios = recent(data.ascAnalyticsMetrics.filter((row) => row.projectId === projectId), days);
@@ -64,6 +65,15 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
     web: {
       latestDataDate: web.latestDataDate, observedDays: web.observedDays,
       visitors: total(web.rows, "visitors"), pageviews: total(web.rows, "pageviews"),
+    },
+    ga4: {
+      latestDataDate: ga4.latestDataDate, observedDays: ga4.observedDays,
+      activeUsers: total(ga4.rows, "visitors"), pageviews: total(ga4.rows, "pageviews"),
+      sessions: ga4.rows.reduce<number | null>((sum, row) => {
+        const v = (row.rawJson as { sessions?: number } | undefined)?.sessions;
+        return typeof v === "number" ? (sum ?? 0) + v : sum;
+      }, null),
+      note: "GA4 active users is not equivalent to Umami visitors. Do not add the two sources.",
     },
     advertising: {
       latestDataDate: ad.latestDataDate, observedDays: ad.observedDays,
