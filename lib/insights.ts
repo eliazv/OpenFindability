@@ -132,6 +132,7 @@ export function summarizeProject(data: AppData, projectId: string) {
   // entire lifetime. Expose the endpoint so stale data is not disguised.
   const gsc = lastAvailableDays(snapshots.filter((metric) => metric.source === "gsc"));
   const umami = lastAvailableDays(snapshots.filter((metric) => metric.source === "umami"));
+  const ga4 = lastAvailableDays(snapshots.filter((metric) => metric.source === "ga4"));
   const admob = lastAvailableDays(getAdmobRevenueRows(data, projectId));
   const revenuecat = snapshots.filter((metric) => metric.source === "revenuecat");
   const latestRevenueCat = latestByDate(revenuecat);
@@ -140,6 +141,9 @@ export function summarizeProject(data: AppData, projectId: string) {
   return {
     gscLatestDate: gsc.at(-1)?.date,
     umamiLatestDate: umami.at(-1)?.date,
+    ga4LatestDate: ga4.at(-1)?.date,
+    ga4DailyActiveUsersSum: sum(ga4, "visitors"),
+    ga4Pageviews: sum(ga4, "pageviews"),
     admobLatestDate: admob.at(-1)?.date,
     clicks: sum(gsc, "clicks"),
     impressions: sum(gsc, "impressions"),
