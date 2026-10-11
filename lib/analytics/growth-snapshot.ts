@@ -37,7 +37,8 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
   const avgPosition = impressions && impressions > 0
     ? searches.reduce((sum, row) => sum + (row.avgPosition ?? 0) * (row.impressions ?? 0), 0) / impressions
     : null;
-  const adCurrencies = [...new Set(ad.rows.map((row) => row.currency).filter(Boolean))];
+  const adCurrencies = [...new Set(ad.rows.map((row) => row.currency ?? "unknown"))];
+  const canSumAdRevenue = adCurrencies.length === 1 && adCurrencies[0] !== "unknown";
   const lastRunBySource = new Map<string, (typeof data.connectorRuns)[number]>();
   for (const run of data.connectorRuns.filter((row) => row.projectId === projectId)) {
     const previous = lastRunBySource.get(run.source);
@@ -66,9 +67,9 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
     },
     advertising: {
       latestDataDate: ad.latestDataDate, observedDays: ad.observedDays,
-      estimatedRevenue: adCurrencies.length <= 1 ? total(ad.rows, "revenue") : null,
-      currency: adCurrencies.length === 1 ? adCurrencies[0] : null,
-      warning: adCurrencies.length > 1 ? "Multiple currencies: do not sum without FX conversion" : undefined,
+      estimatedRevenue: canSumAdRevenue ? total(ad.rows, "revenue") : null,
+      currency: canSumAdRevenue ? adCurrencies[0] : null,
+      warning: adCurrencies.length > 1 ? "Multiple currencies: do not sum without FX conversion" : adCurrencies.includes("unknown") ? "Currency unavailable: revenue cannot be safely summed" : undefined,
     },
     subscriptions: subscription ? {
       asOf: subscription.date, mrr: subscription.mrr ?? null,
