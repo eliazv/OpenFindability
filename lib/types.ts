@@ -321,6 +321,7 @@ export type OpportunityType =
   | "low_ctr_query"
   | "striking_distance_query"
   | "declining_page"
+  | "low_ctr_page"
   | "growing_page"
   | "analytics_spike"
   | "page_two_query"
