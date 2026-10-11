@@ -65,6 +65,7 @@ Il launcher usa il `tsx` installato nel repository, imposta la working directory
 | Tool | Cosa ritorna |
 |------|-------------|
 | `get_project_summary` | Overview completo: GSC + Umami + opportunity in una call. Punto di partenza ideale. |
+| `get_growth_snapshot` | **Solo SQLite locale**: numeri GSC, Umami, AdMob, RevenueCat, Play/ASC, freshness e opportunità; non chiama API e non pubblica nulla. |
 | `get_gsc_stats` | Snapshot giornalieri, top query, top pagine per un range di date |
 | `get_umami_stats` | Visitatori e pageview Umami per una data specifica |
 | `get_page_keywords` | Tutte le query GSC che rankano per una specifica URL |
