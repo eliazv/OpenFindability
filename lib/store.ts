@@ -216,6 +216,14 @@ export function writeDataWith(database: AppDb, data: AppData): void {
       .filter(([name, rows]) => !baseline || baseline.get(name) !== JSON.stringify(rows))
       .map(([name]) => name));
     if (changed.size === 0) return actualRevision;
+    // Full-table replacement must preserve SQLite foreign keys. A project
+    // replacement can affect every child table; experiment treatments depend
+    // on experiments, so replace them together in child-before-parent order.
+    if (changed.has("projects")) {
+      for (const name of Object.keys(data)) changed.add(name);
+    } else if (changed.has("ascExperiments")) {
+      changed.add("ascExperimentTreatments");
+    }
 
     if (changed.has("searchQueries")) tx.delete(searchQueriesTable).run();
     if (changed.has("pageMetrics")) tx.delete(pageMetricsTable).run();
