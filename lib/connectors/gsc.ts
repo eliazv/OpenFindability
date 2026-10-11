@@ -328,7 +328,8 @@ export async function pagedSearchAnalytics(
         dimensions,
         type: "web",
         dataState: "final",
-        aggregationType: hasPage ? "byPage" : "byProperty",
+        // Search appearance may require Google to choose a compatible grouping.
+        aggregationType: hasPage ? "byPage" : dimensions.includes("searchAppearance") ? "auto" : "byProperty",
         rowLimit: GSC_ROW_LIMIT,
         startRow,
       },
