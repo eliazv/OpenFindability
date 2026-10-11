@@ -51,6 +51,13 @@ const INSERT_CHUNK_SIZE = 50;
 
 // Revision is attached to the exact snapshot returned by readData().
 const snapshotRevisions = new WeakMap<AppData, number>();
+// Stable serialized baselines let the legacy store skip untouched tables
+// instead of deleting/reinserting every table on every sync or metadata edit.
+const snapshotTableDigests = new WeakMap<AppData, Map<string, string>>();
+
+function tableDigests(data: AppData): Map<string, string> {
+  return new Map(Object.entries(data).map(([name, rows]) => [name, JSON.stringify(rows)]));
+}
 
 export class StaleStoreSnapshotError extends Error {
   constructor(expected: number, actual: number) {
@@ -189,6 +196,7 @@ export function readDataWith(database: AppDb): AppData {
     ascAnalyticsMetrics,
   };
   snapshotRevisions.set(snapshot, revision);
+  snapshotTableDigests.set(snapshot, tableDigests(snapshot));
   return snapshot;
   })();
 }
@@ -203,89 +211,95 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     if (expectedRevision !== actualRevision) {
       throw new StaleStoreSnapshotError(expectedRevision, actualRevision);
     }
-    tx.delete(searchQueriesTable).run();
-    tx.delete(pageMetricsTable).run();
-    tx.delete(opportunitiesTable).run();
-    tx.delete(connectorRunsTable).run();
-    tx.delete(appReviewsTable).run();
-    tx.delete(appKeywordsTable).run();
-    tx.delete(asoAppRankSnapshotsTable).run();
-    tx.delete(gscDimensionBreakdownsTable).run();
-    tx.delete(gscSitemapsTable).run();
-    tx.delete(gscIndexInspectionsTable).run();
-    tx.delete(admobMediationMetricsTable).run();
-    tx.delete(ascMetadataSnapshotsTable).run();
-    tx.delete(ascExperimentTreatmentsTable).run();
-    tx.delete(ascExperimentsTable).run();
-    tx.delete(playVitalsMetricsTable).run();
-    tx.delete(playInstallStatsTable).run();
-    tx.delete(ascAnalyticsMetricsTable).run();
-    tx.delete(metricSnapshotsTable).run();
-    tx.delete(projectsTable).run();
-    tx.delete(asoKeywordSnapshotsTable).run();
+    const baseline = snapshotTableDigests.get(data);
+    const changed = new Set(Object.entries(data)
+      .filter(([name, rows]) => !baseline || baseline.get(name) !== JSON.stringify(rows))
+      .map(([name]) => name));
+    if (changed.size === 0) return actualRevision;
 
-    for (const batch of chunk(data.projects, INSERT_CHUNK_SIZE)) {
+    if (changed.has("searchQueries")) tx.delete(searchQueriesTable).run();
+    if (changed.has("pageMetrics")) tx.delete(pageMetricsTable).run();
+    if (changed.has("opportunities")) tx.delete(opportunitiesTable).run();
+    if (changed.has("connectorRuns")) tx.delete(connectorRunsTable).run();
+    if (changed.has("appReviews")) tx.delete(appReviewsTable).run();
+    if (changed.has("appKeywords")) tx.delete(appKeywordsTable).run();
+    if (changed.has("asoAppRankSnapshots")) tx.delete(asoAppRankSnapshotsTable).run();
+    if (changed.has("gscDimensionBreakdowns")) tx.delete(gscDimensionBreakdownsTable).run();
+    if (changed.has("gscSitemaps")) tx.delete(gscSitemapsTable).run();
+    if (changed.has("gscIndexInspections")) tx.delete(gscIndexInspectionsTable).run();
+    if (changed.has("admobMediationMetrics")) tx.delete(admobMediationMetricsTable).run();
+    if (changed.has("ascMetadataSnapshots")) tx.delete(ascMetadataSnapshotsTable).run();
+    if (changed.has("ascExperimentTreatments")) tx.delete(ascExperimentTreatmentsTable).run();
+    if (changed.has("ascExperiments")) tx.delete(ascExperimentsTable).run();
+    if (changed.has("playVitalsMetrics")) tx.delete(playVitalsMetricsTable).run();
+    if (changed.has("playInstallStats")) tx.delete(playInstallStatsTable).run();
+    if (changed.has("ascAnalyticsMetrics")) tx.delete(ascAnalyticsMetricsTable).run();
+    if (changed.has("metricSnapshots")) tx.delete(metricSnapshotsTable).run();
+    if (changed.has("projects")) tx.delete(projectsTable).run();
+    if (changed.has("asoKeywordSnapshots")) tx.delete(asoKeywordSnapshotsTable).run();
+
+    if (changed.has("projects")) for (const batch of chunk(data.projects, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(projectsTable).values(batch).run();
     }
-    for (const batch of chunk(data.metricSnapshots, INSERT_CHUNK_SIZE)) {
+    if (changed.has("metricSnapshots")) for (const batch of chunk(data.metricSnapshots, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(metricSnapshotsTable).values(batch).run();
     }
-    for (const batch of chunk(data.searchQueries, INSERT_CHUNK_SIZE)) {
+    if (changed.has("searchQueries")) for (const batch of chunk(data.searchQueries, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(searchQueriesTable).values(batch).run();
     }
-    for (const batch of chunk(data.pageMetrics, INSERT_CHUNK_SIZE)) {
+    if (changed.has("pageMetrics")) for (const batch of chunk(data.pageMetrics, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(pageMetricsTable).values(batch).run();
     }
-    for (const batch of chunk(data.opportunities, INSERT_CHUNK_SIZE)) {
+    if (changed.has("opportunities")) for (const batch of chunk(data.opportunities, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(opportunitiesTable).values(batch).run();
     }
-    for (const batch of chunk(data.connectorRuns, INSERT_CHUNK_SIZE)) {
+    if (changed.has("connectorRuns")) for (const batch of chunk(data.connectorRuns, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(connectorRunsTable).values(batch).run();
     }
-    for (const batch of chunk(data.appReviews, INSERT_CHUNK_SIZE)) {
+    if (changed.has("appReviews")) for (const batch of chunk(data.appReviews, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) {
         tx.insert(appReviewsTable)
           .values(batch.map(({ text, ...rest }) => ({ ...rest, reviewText: text })))
           .run();
       }
     }
-    for (const batch of chunk(data.appKeywords, INSERT_CHUNK_SIZE)) {
+    if (changed.has("appKeywords")) for (const batch of chunk(data.appKeywords, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(appKeywordsTable).values(batch).run();
     }
-    for (const batch of chunk(data.asoKeywordSnapshots, INSERT_CHUNK_SIZE)) {
+    if (changed.has("asoKeywordSnapshots")) for (const batch of chunk(data.asoKeywordSnapshots, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(asoKeywordSnapshotsTable).values(batch).run();
     }
-    for (const batch of chunk(data.asoAppRankSnapshots, INSERT_CHUNK_SIZE)) {
+    if (changed.has("asoAppRankSnapshots")) for (const batch of chunk(data.asoAppRankSnapshots, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(asoAppRankSnapshotsTable).values(batch).run();
     }
-    for (const batch of chunk(data.gscDimensionBreakdowns, INSERT_CHUNK_SIZE)) {
+    if (changed.has("gscDimensionBreakdowns")) for (const batch of chunk(data.gscDimensionBreakdowns, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(gscDimensionBreakdownsTable).values(batch).run();
     }
-    for (const batch of chunk(data.gscSitemaps, INSERT_CHUNK_SIZE)) {
+    if (changed.has("gscSitemaps")) for (const batch of chunk(data.gscSitemaps, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(gscSitemapsTable).values(batch).run();
     }
-    for (const batch of chunk(data.gscIndexInspections, INSERT_CHUNK_SIZE)) {
+    if (changed.has("gscIndexInspections")) for (const batch of chunk(data.gscIndexInspections, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(gscIndexInspectionsTable).values(batch).run();
     }
-    for (const batch of chunk(data.admobMediationMetrics, INSERT_CHUNK_SIZE)) {
+    if (changed.has("admobMediationMetrics")) for (const batch of chunk(data.admobMediationMetrics, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(admobMediationMetricsTable).values(batch).run();
     }
-    for (const batch of chunk(data.ascMetadataSnapshots, INSERT_CHUNK_SIZE)) {
+    if (changed.has("ascMetadataSnapshots")) for (const batch of chunk(data.ascMetadataSnapshots, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(ascMetadataSnapshotsTable).values(batch).run();
     }
-    for (const batch of chunk(data.ascExperiments, INSERT_CHUNK_SIZE)) {
+    if (changed.has("ascExperiments")) for (const batch of chunk(data.ascExperiments, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(ascExperimentsTable).values(batch).run();
     }
-    for (const batch of chunk(data.ascExperimentTreatments, INSERT_CHUNK_SIZE)) {
+    if (changed.has("ascExperimentTreatments")) for (const batch of chunk(data.ascExperimentTreatments, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(ascExperimentTreatmentsTable).values(batch).run();
     }
-    for (const batch of chunk(data.playVitalsMetrics, INSERT_CHUNK_SIZE)) {
+    if (changed.has("playVitalsMetrics")) for (const batch of chunk(data.playVitalsMetrics, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(playVitalsMetricsTable).values(batch).run();
     }
-    for (const batch of chunk(data.playInstallStats, INSERT_CHUNK_SIZE)) {
+    if (changed.has("playInstallStats")) for (const batch of chunk(data.playInstallStats, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(playInstallStatsTable).values(batch).run();
     }
-    for (const batch of chunk(data.ascAnalyticsMetrics, INSERT_CHUNK_SIZE)) {
+    if (changed.has("ascAnalyticsMetrics")) for (const batch of chunk(data.ascAnalyticsMetrics, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(ascAnalyticsMetricsTable).values(batch).run();
     }
     getSqliteHandle(database)
@@ -294,6 +308,7 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     return actualRevision + 1;
   });
   snapshotRevisions.set(data, revision);
+  snapshotTableDigests.set(data, tableDigests(data));
 }
 
 export async function readData(): Promise<AppData> {
@@ -309,7 +324,10 @@ export async function updateData(mutator: (data: AppData) => AppData | void): Pr
   for (let attempt = 0; attempt < 3; attempt++) {
     const data = await readData();
     const next = mutator(data) ?? data;
-    if (next !== data) snapshotRevisions.set(next, snapshotRevisions.get(data)!);
+    if (next !== data) {
+      snapshotRevisions.set(next, snapshotRevisions.get(data)!);
+      snapshotTableDigests.set(next, snapshotTableDigests.get(data)!);
+    }
     try {
       await writeData(next);
       return next;
