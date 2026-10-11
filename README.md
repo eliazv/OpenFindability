@@ -227,6 +227,8 @@ See [`docs/guide/mcp-server.md`](docs/guide/mcp-server.md) for full setup and us
 
 ```bash
 pnpm run doctor           # check connector config, flag stale syncs
+pnpm run db:backup        # create + integrity-check a WAL-safe SQLite backup (ignored by git)
+pnpm run test:gsc         # daily GSC history/pagination regression tests
 pnpm seed:demo            # seed demo data
 pnpm dev                  # start the dashboard
 pnpm run sync             # sync gsc/umami/play_console/revenuecat/admob/adsense for every project
@@ -253,16 +255,16 @@ pnpm build
 
 v0.1 uses manual sync only.
 
-- GSC imports the last 30 days by default (Search Console data has ~2 day delay), plus device/country/searchAppearance breakdowns and sitemap status.
+- GSC imports finalized daily totals and **date-qualified page/query rows** (last ~30 days by default, up to D-2), plus device/country/searchAppearance breakdowns and sitemaps. Detail is fetched in 7-day windows, paginated up to the Search Analytics row cap; large windows are retried by day. Query data is always potentially incomplete (Google returns top rows only).
 - Umami, AdMob, AdSense and RevenueCat import yesterday's data (with a configurable backfill window for AdMob/AdSense).
 - ASO stays opt-in (`pnpm run sync:aso`) — rate-limited and cached upstream, so it never runs as part of the default `pnpm run sync`.
 - Every import keeps `rawJson`. Connector runs are logged to `connectorRuns`.
 - Re-running a sync the same day replaces that day's row per project/source instead of duplicating it — different days accumulate, so history is preserved.
-- Page-level GSC data is stored separately from query-level data.
+- Page-level GSC data is stored separately from query-level data. Legacy rows from the previous implementation encoded a whole 30-day range as one date: they remain in SQLite but are **excluded** from daily charts, SEO scoring and reports unless overwritten by a new actual-daily sync. Run `pnpm run db:backup` before the first new sync. The GSC report and project page rank data from the latest 28 days and weight CTR/position correctly.
 
 ## Storage
 
-All data lives in `data/openfindability.db`, a local SQLite database accessed through Drizzle ORM (`lib/db/schema.ts`). No server process, no extra infra — still a single local file, just relational and queryable (`pnpm run db:studio`) instead of a hand-rolled JSON blob.
+All data lives in `data/openfindability.db`, a local SQLite database accessed through Drizzle ORM (`lib/db/schema.ts`). No server process, no extra infra — still a single local file, just relational and queryable (`pnpm run db:studio`) instead of a hand-rolled JSON blob. `pnpm run db:backup` makes a **consistent** SQLite snapshot using the online backup API (including WAL state) under ignored `data/backups/`. This is manual, not off-site backup or a cloud-sync solution.
 
 ## Private files
 
