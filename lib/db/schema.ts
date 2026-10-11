@@ -8,6 +8,7 @@ export const projects = sqliteTable("projects", {
   category: text("category"),
   websiteUrl: text("website_url"),
   gscProperty: text("gsc_property"),
+  ga4PropertyId: text("ga4_property_id"),
   umamiWebsiteId: text("umami_website_id"),
   playConsolePackageName: text("play_console_package_name"),
   appStoreTrackId: integer("app_store_track_id"),
@@ -33,6 +34,7 @@ export const metricSnapshots = sqliteTable(
     source: text("source", {
       enum: [
         "gsc",
+        "ga4",
         "umami",
         "play_console",
         "aso",
