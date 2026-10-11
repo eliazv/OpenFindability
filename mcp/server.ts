@@ -280,12 +280,13 @@ server.tool(
     type: z.enum(["web", "app", "web_app"]).default("web").describe("Project type"),
     websiteUrl: z.string().optional().describe("Website URL, e.g. https://example.com"),
     gscProperty: z.string().optional().describe("GSC property URL (e.g. sc-domain:example.com or https://example.com/)"),
+    ga4PropertyId: z.string().optional().describe("Numeric GA4 property id"),
     umamiWebsiteId: z.string().optional().describe("Umami website UUID"),
     playConsolePackageName: z.string().optional().describe("Android package name, e.g. com.example.app"),
     category: z.string().optional().describe("Optional category label"),
     notes: z.string().optional().describe("Optional notes"),
   },
-  async ({ name, slug, type, websiteUrl, gscProperty, umamiWebsiteId, playConsolePackageName, category, notes }) => {
+  async ({ name, slug, type, websiteUrl, gscProperty, ga4PropertyId, umamiWebsiteId, playConsolePackageName, category, notes }) => {
     const data = await readStoredData();
 
     if (data.projects.some((p) => p.slug === slug)) {
@@ -300,6 +301,7 @@ server.tool(
       type: type as ProjectType,
       websiteUrl,
       gscProperty,
+      ga4PropertyId,
       umamiWebsiteId,
       playConsolePackageName,
       category,
@@ -334,6 +336,7 @@ server.tool(
     type: z.enum(["web", "app", "web_app"]).optional(),
     websiteUrl: z.string().optional(),
     gscProperty: z.string().optional().describe("Set to empty string to remove"),
+    ga4PropertyId: z.string().optional().describe("Numeric GA4 property id; empty to remove"),
     umamiWebsiteId: z.string().optional().describe("Set to empty string to remove"),
     playConsolePackageName: z.string().optional().describe("Android package name. Set to empty string to remove."),
     category: z.string().optional(),
@@ -353,6 +356,7 @@ server.tool(
       ...(fields.type !== undefined && { type: fields.type as ProjectType }),
       ...(fields.websiteUrl !== undefined && { websiteUrl: fields.websiteUrl || undefined }),
       ...(fields.gscProperty !== undefined && { gscProperty: fields.gscProperty || undefined }),
+      ...(fields.ga4PropertyId !== undefined && { ga4PropertyId: fields.ga4PropertyId || undefined }),
       ...(fields.umamiWebsiteId !== undefined && { umamiWebsiteId: fields.umamiWebsiteId || undefined }),
       ...(fields.playConsolePackageName !== undefined && { playConsolePackageName: fields.playConsolePackageName || undefined }),
       ...(fields.category !== undefined && { category: fields.category || undefined }),
