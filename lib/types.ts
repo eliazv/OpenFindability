@@ -31,6 +31,7 @@ export type Project = {
   admobAppId?: string;
   admobAppIdIos?: string;
   adsenseSiteDomain?: string;
+  flutterProjectPath?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -347,6 +348,7 @@ export type ConnectorSource =
   | "asc_metadata"
   | "asc_experiments"
   | "app_discovery"
+  | "play_release"
   | "all";
 
 export type ConnectorRun = {

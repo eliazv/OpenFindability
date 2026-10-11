@@ -36,6 +36,8 @@
     "asc:experiments": "tsx scripts/asc-experiments.ts",
     "play:pull-copy": "tsx scripts/play-push-copy.ts pull",
     "play:push-copy": "tsx scripts/play-push-copy.ts push",
+    "release:android": "tsx scripts/release.ts android",
+    "release:status": "tsx scripts/release.ts status",
     "gsc:sites": "tsx scripts/gsc-sites.ts",
     "audit:index": "tsx scripts/gsc-index-audit.ts",
     "project:add": "tsx scripts/add-project.ts",

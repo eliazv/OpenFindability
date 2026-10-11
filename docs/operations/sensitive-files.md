@@ -48,6 +48,24 @@ Do not commit the JSON file.
 
 The old `SEARCH_CONSOLE_API_KEY` value is not used by this project. The connector uses `GOOGLE_SERVICE_ACCOUNT_FILE` or `GOOGLE_SERVICE_ACCOUNT_JSON`.
 
+## Android signing keys
+
+The release pipeline (`docs/guide/release-workflow.md`) can sign with a keystore kept here instead
+of inside each app's repository:
+
+```txt
+secrets/android/<project-slug>/key.properties
+secrets/android/<project-slug>/upload-keystore.jks
+```
+
+`secrets/` is ignored by git, so these files exist only on this machine. Keep a backup of every
+keystore and its passwords somewhere else (a password manager works): an upload key that is lost
+can only be replaced by asking Google Play support to reset it, which takes days.
+
+During a build the keystore path and passwords are handed to Gradle as JVM options, so they are
+visible to other processes of the same user while the build runs. Do not run releases on a shared
+machine.
+
 ## Umami
 
 Configure Umami in `.env`:

@@ -205,7 +205,9 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
 
     if (!source || source === "play_vitals") {
       try {
-        const synced = await syncPlayVitalsProject(project, daysAgo(backfillDays), daysAgo(1));
+        // Play Developer Reporting API vitals data lags ~5 days behind real-time
+        // (observed: "end_date should be at most the current freshness" errors with daysAgo(1)/(2)).
+        const synced = await syncPlayVitalsProject(project, daysAgo(backfillDays), daysAgo(5));
         data.playVitalsMetrics = upsertPlayVitalsMetrics(data.playVitalsMetrics, synced.metrics);
         results.push(synced.result);
         data.connectorRuns.push(toRun("play_vitals", project.id, startedAt, synced.result));

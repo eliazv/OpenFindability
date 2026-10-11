@@ -141,8 +141,8 @@ function enumerateDates(startDate: string, endDate: string): string[] {
 
 // Resolves to null when Apple has no report for that day (404/410 -- normal for days before
 // the account existed or today's not-yet-processed day), or a map of Apple Identifier -> units
-// summed across every non-in-app-purchase row (product type codes starting with "IA" are IAP,
-// not app installs/redownloads).
+// summed across first-time-download rows only (product types 1/1F/1T/F1; updates, redownloads
+// and IAP are excluded).
 function fetchSalesReportForDate(vendorNumber: string, date: string): Promise<Map<string, number> | null> {
   const cacheKey = `${vendorNumber}::${date}`;
   const cached = salesReportCache.get(cacheKey);
@@ -180,7 +180,10 @@ function fetchSalesReportForDate(vendorNumber: string, date: string): Promise<Ma
     for (const line of lines.slice(1)) {
       const cells = line.split("\t");
       const productType = productTypeIdx >= 0 ? cells[productTypeIdx] : "";
-      if (productType?.toUpperCase().startsWith("IA")) continue; // in-app purchase, not an install
+      // Only first-time downloads count (Apple's "App Units"): 1/1F/1T/F1 = iPhone/universal/iPad app.
+      // Excludes updates (7/7F/7T), redownloads (3/3F/3T) and in-app purchases (IA*), which are also
+      // rows in the SUMMARY report and previously inflated the totals.
+      if (productTypeIdx >= 0 && !FIRST_DOWNLOAD_TYPES.has((productType ?? "").toUpperCase())) continue;
       const appleId = cells[appleIdIdx];
       if (!appleId) continue;
       const units = Number(cells[unitsIdx]) || 0;
@@ -192,6 +195,8 @@ function fetchSalesReportForDate(vendorNumber: string, date: string): Promise<Ma
   salesReportCache.set(cacheKey, promise);
   return promise;
 }
+
+const FIRST_DOWNLOAD_TYPES = new Set(["1", "1F", "1T", "F1"]);
 
 export async function syncAscAnalyticsProject(
   project: Project,

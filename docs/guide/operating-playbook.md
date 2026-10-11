@@ -59,6 +59,13 @@ listing for app X"), written from a full session doing exactly that.
      a perfectly reasonable localized title can 409 with `DIFFERENT_ACCOUNT` because someone else
      already registered that exact string. Have a fallback variant ready.
 
+6. **Shipping a new Android build** is a separate step from listing copy and has its own command:
+   `npx tsx scripts/release.ts android --path <flutter project dir> --track internal` (preflight),
+   then the same with `--apply`. Unlike listing writes, a bundle upload needs the *release*
+   permission on the service account in Play Console — being able to read reviews or edit the
+   listing does not imply it. A release to `internal` reaches testers in minutes; `production`
+   goes through Google's review first. Full details in `release-workflow.md`.
+
 ## Editing an existing project
 
 `pnpm run project:update -- --slug <slug> [--field value ...]` (added 2026-08-13). Same flags as

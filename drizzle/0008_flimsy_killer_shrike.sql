@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `flutter_project_path` text;

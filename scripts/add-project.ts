@@ -24,6 +24,7 @@ type Args = {
   admobAppId?: string;
   admobAppIdIos?: string;
   adsenseSiteDomain?: string;
+  flutterPath?: string;
   notes?: string;
 };
 
@@ -55,6 +56,7 @@ function parseArgs(argv: string[]): Args {
       case "admob-app-id": args.admobAppId = value; break;
       case "admob-app-id-ios": args.admobAppIdIos = value; break;
       case "adsense-domain": args.adsenseSiteDomain = value; break;
+      case "flutter-path": args.flutterPath = value; break;
       case "notes": args.notes = value; break;
       default:
         throw new Error(`Unknown argument --${key}`);
@@ -73,7 +75,7 @@ async function main() {
         "[--umami <websiteId>] [--play-console com.example.app] [--app-store-track-id 123] " +
         "[--respect-aso-app-id 3] [--aso-keywords \"one,two\"] [--aso-countries it,us] " +
         "[--revenuecat-project-id proj_xxx] [--admob-app-id ca-app-pub-xxx~yyy] " +
-        "[--admob-app-id-ios ca-app-pub-xxx~zzz] [--adsense-domain example.com] [--notes \"...\"]",
+        "[--admob-app-id-ios ca-app-pub-xxx~zzz] [--adsense-domain example.com] [--flutter-path C:/path/to/flutter/app] [--notes \"...\"]",
     );
   }
 
@@ -104,6 +106,7 @@ async function main() {
     admobAppId: args.admobAppId,
     admobAppIdIos: args.admobAppIdIos,
     adsenseSiteDomain: args.adsenseSiteDomain,
+    flutterProjectPath: args.flutterPath,
     notes: args.notes,
     createdAt: now,
     updatedAt: now,

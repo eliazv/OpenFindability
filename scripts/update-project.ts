@@ -18,6 +18,7 @@ type Args = {
   admobAppId?: string;
   admobAppIdIos?: string;
   adsenseSiteDomain?: string;
+  flutterPath?: string;
   notes?: string;
 };
 
@@ -46,6 +47,7 @@ function parseArgs(argv: string[]): Args {
       case "admob-app-id": args.admobAppId = value; break;
       case "admob-app-id-ios": args.admobAppIdIos = value; break;
       case "adsense-domain": args.adsenseSiteDomain = value; break;
+      case "flutter-path": args.flutterPath = value; break;
       case "notes": args.notes = value; break;
       default:
         throw new Error(`Unknown argument --${key}`);
@@ -73,7 +75,7 @@ async function main() {
         "[--aso-keywords \"one,two\"] [--aso-countries it,us] [--revenuecat-project-id proj_xxx] " +
         "[--revenuecat-api-key sk_xxx] " +
         "[--admob-app-id ca-app-pub-xxx~yyy] [--admob-app-id-ios ca-app-pub-xxx~zzz] " +
-        "[--adsense-domain example.com] [--notes \"...\"]\n\n" +
+        "[--adsense-domain example.com] [--flutter-path C:/path/to/flutter/app] [--notes \"...\"]\n\n" +
         "Only fields you pass are changed — everything else on the existing project is left untouched.",
     );
   }
@@ -96,6 +98,7 @@ async function main() {
   if (args.admobAppId !== undefined) updates.admobAppId = args.admobAppId;
   if (args.admobAppIdIos !== undefined) updates.admobAppIdIos = args.admobAppIdIos;
   if (args.adsenseSiteDomain !== undefined) updates.adsenseSiteDomain = args.adsenseSiteDomain;
+  if (args.flutterPath !== undefined) updates.flutterProjectPath = args.flutterPath;
   if (args.notes !== undefined) updates.notes = args.notes;
 
   if (Object.keys(updates).length === 0) {

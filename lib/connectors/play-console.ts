@@ -1,3 +1,4 @@
+import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { google } from "googleapis";
 import { createId } from "@/lib/id";
@@ -170,6 +171,99 @@ export async function updatePlayStoreListing(
   });
 
   await publisher.edits.commit({ packageName, editId });
+}
+
+export type PlayTrackRelease = {
+  name?: string;
+  status?: string;
+  versionCodes: number[];
+  userFraction?: number;
+};
+
+export type PlayTrack = {
+  track: string;
+  releases: PlayTrackRelease[];
+};
+
+export type PlayReleaseStatus = "completed" | "draft" | "inProgress" | "halted";
+
+export type PlayBundleRelease = {
+  track: string;
+  status: PlayReleaseStatus;
+  userFraction?: number;
+  releaseName?: string;
+  releaseNotes?: { language: string; text: string }[];
+};
+
+export async function getPlayTracks(packageName: string): Promise<PlayTrack[]> {
+  const auth = await getAndroidAuth();
+  if (!auth) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE is not configured.");
+  const publisher = google.androidpublisher({ version: "v3", auth });
+
+  const edit = await publisher.edits.insert({ packageName, requestBody: {} });
+  const editId = edit.data.id;
+  if (!editId) throw new Error("Play Console: failed to open an edit session.");
+
+  // Read-only edit, left uncommitted like getPlayStoreListing.
+  const res = await publisher.edits.tracks.list({ packageName, editId });
+  return (res.data.tracks ?? []).map((track) => ({
+    track: track.track ?? "",
+    releases: (track.releases ?? []).map((release) => ({
+      name: release.name ?? undefined,
+      status: release.status ?? undefined,
+      versionCodes: (release.versionCodes ?? []).map(Number),
+      userFraction: release.userFraction ?? undefined,
+    })),
+  }));
+}
+
+export async function uploadPlayBundle(
+  packageName: string,
+  aabPath: string,
+  release: PlayBundleRelease,
+): Promise<{ versionCode: number; rawJson: unknown }> {
+  const auth = await getAndroidAuth();
+  if (!auth) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE is not configured.");
+  const publisher = google.androidpublisher({ version: "v3", auth });
+
+  const edit = await publisher.edits.insert({ packageName, requestBody: {} });
+  const editId = edit.data.id;
+  if (!editId) throw new Error("Play Console: failed to open an edit session.");
+
+  const upload = await publisher.edits.bundles.upload(
+    {
+      packageName,
+      editId,
+      media: { mimeType: "application/octet-stream", body: createReadStream(aabPath) },
+    },
+    // Bundles are tens of MB; the default request timeout is too short on a slow uplink.
+    { timeout: 15 * 60 * 1000 },
+  );
+  const versionCode = upload.data.versionCode;
+  if (!versionCode) throw new Error("Play Console: bundle upload returned no versionCode.");
+
+  const track = await publisher.edits.tracks.update({
+    packageName,
+    editId,
+    track: release.track,
+    requestBody: {
+      track: release.track,
+      releases: [
+        {
+          name: release.releaseName,
+          versionCodes: [String(versionCode)],
+          status: release.status,
+          userFraction: release.userFraction,
+          releaseNotes: release.releaseNotes,
+        },
+      ],
+    },
+  });
+
+  // Nothing is live until this commit — a failure above leaves only an abandoned edit.
+  const commit = await publisher.edits.commit({ packageName, editId });
+
+  return { versionCode, rawJson: { bundle: upload.data, track: track.data, commit: commit.data } };
 }
 
 async function getAndroidAuth() {

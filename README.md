@@ -15,6 +15,7 @@ No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app b
 - **App Store Connect** — read/write live App Store product text (name, subtitle, keywords, description, promotional text) with a full pull/push history, plus Product Page Optimization (icon/screenshot/app preview A/B test) management — see [`docs/guide/appstoreconnect-workflow.md`](docs/guide/appstoreconnect-workflow.md)
 - **App & site monetization** — RevenueCat (MRR, subscribers, trials), AdMob (in-app ad revenue, impressions, clicks, per-ad-network mediation breakdown, Android + iOS summed per app) and AdSense (site display-ad revenue)
 - **Play Console listing writes** — pull/push live Play Store title/short/full description (dry-run by default, `--apply` to publish)
+- **Android releases** — build a Flutter app and publish its bundle to a Google Play track (internal/alpha/beta/production) from one place, reusing the same service account; preflight-only by default, `--apply` to publish, signature verified before upload
 - **Account-wide app growth stats** — `discover:apps` auto-lists every app visible to your Play Console/App Store Connect credentials and creates matching projects; syncs install/uninstall stats, crash/ANR rate (Play vitals) and App Store downloads/retention (ASC Analytics)
 - **MCP server** — call live GSC/Umami data and manage projects from any Claude Code session as native tools
 - **SQLite storage** — `data/openfindability.db` via Drizzle ORM, a single local file with full history (no server, no manual setup)
@@ -223,6 +224,20 @@ Live tools (`get_gsc_stats`, `get_umami_stats`, `get_project_summary`, `get_page
 
 See [`docs/guide/mcp-server.md`](docs/guide/mcp-server.md) for full setup and usage.
 
+## Releasing Android apps
+
+Build a Flutter app and publish its App Bundle to Google Play without Fastlane or per-project store credentials. Run from this repository and point at the app with `--path`:
+
+```bash
+npx tsx scripts/release.ts status  --path <flutter project dir>                            # live tracks
+npx tsx scripts/release.ts android --path <flutter project dir> --track internal           # preflight only
+npx tsx scripts/release.ts android --path <flutter project dir> --track internal --apply   # build + upload
+```
+
+The app is matched to a project by its Gradle `applicationId`. The preflight checks the package, the signing setup and that the version code is higher than anything already on Play; `--build` also builds and verifies the bundle signature; only `--apply` uploads. Signing uses `secrets/android/<slug>/key.properties` when present, otherwise the Flutter project's own Gradle config. Android only.
+
+See [`docs/guide/release-workflow.md`](docs/guide/release-workflow.md) for setup, options, signing and troubleshooting — it also has a section written for an AI agent asked to publish from the app's own repository.
+
 ## Useful commands
 
 ```bash
@@ -241,6 +256,8 @@ pnpm run asc:apps         # list App Store Connect apps visible to the key
 pnpm run aso:pull-copy -- --slug <project-slug>                  # read live App Store text
 pnpm run aso:push-copy -- --slug <project-slug> --locale it [...] [--apply]  # write it (dry-run by default)
 pnpm run asc:experiments -- --slug <project-slug>  # sync/create Product Page Optimization tests
+pnpm run release:status -- --slug <project-slug>    # live Google Play tracks
+pnpm run release:android -- --slug <project-slug> [--track internal] [--apply]  # build + publish (preflight by default)
 pnpm run research:aso -- --slug <project-slug>
 pnpm run report -- <slug> <gsc|aso|asc|monetization|all>
 pnpm run db:studio        # open Drizzle Studio (local GUI SQL browser)
