@@ -3,6 +3,7 @@ import { buildOpportunities } from "@/lib/insights";
 import { isDailyGscDetail } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
 import { syncGscProject } from "@/lib/connectors/gsc";
+import { syncGa4Project } from "@/lib/connectors/ga4";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { syncAsoProject } from "@/lib/connectors/aso";
@@ -118,6 +119,19 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
         const result = failed("gsc", project.id, error);
         results.push(result);
         data.connectorRuns.push(toRun("gsc", project.id, startedAt, result));
+      }
+    }
+
+    if (!source || source === "ga4") {
+      try {
+        const synced = await syncGa4Project(project, daysAgo(backfillDays), daysAgo(2));
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
+        results.push(synced.result);
+        data.connectorRuns.push(toRun("ga4", project.id, startedAt, synced.result));
+      } catch (error) {
+        const result = failed("ga4", project.id, error);
+        results.push(result);
+        data.connectorRuns.push(toRun("ga4", project.id, startedAt, result));
       }
     }
 
