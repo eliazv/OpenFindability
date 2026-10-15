@@ -11,6 +11,8 @@ function git(args, encoding = "utf8") {
 const badPaths = [
   /(^|\/)\.env(?:\..+)?$/i,
   /(^|\/)(secrets|sensibili|private-notes|project-reports|project)\/.+/i,
+  /(^|\/)(data|exports|backups|tmp)\/.+/i,
+  /\.(csv|tsv|xls|xlsx|ods|parquet|arrow|feather|duckdb|ndjson|jsonl)$/i,
   /\.(p8|p12|pfx|pem|key|keystore|jks)$/i,
   /(^|\/)(google-services\.json|GoogleService-Info\.plist)$/i,
   /\.(db|sqlite|sqlite3)(?:-(?:wal|shm))?$/i,
@@ -23,8 +25,13 @@ const badValues = [
   /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
   /\bxox[baprs]-[A-Za-z0-9-]{20,}\b/,
   /\bsk_(?:live|test)_[A-Za-z0-9]{20,}\b/,
+  /\bsk_[A-Za-z0-9_-]{25,}\b/, // RevenueCat and other provider keys
+  /\bsb_secret_[A-Za-z0-9_-]{20,}\b/,
+  /\b1\/\/[A-Za-z0-9_-]{25,}\b/, // OAuth refresh token form
+  /\beyJ[A-Za-z0-9_-]{40,}\.[A-Za-z0-9_-]{20,}/, // JWT-like bearer token
   /\bsk-(?:proj-)?[A-Za-z0-9_-]{35,}\b/,
   /"private_key"\s*:\s*"-----BEGIN/,
+  /\b(?:api_key|client_secret|refresh_token|access_token|service_role_key|password)\s*[:=]\s*["'`][^"'`\r\n]{18,}["'`]/i,
 ];
 const seen = new Set();
 const issues = [];
@@ -32,7 +39,7 @@ function audit(path, bytes, location) {
   const key = location + ":" + path;
   if (seen.has(key)) return;
   seen.add(key);
-  if (path !== ".env.example" && badPaths.some((rule) => rule.test(path))) {
+  if (path !== ".env.example" && path !== "data/.gitkeep" && badPaths.some((rule) => rule.test(path))) {
     issues.push({ path, location, category: "tracked private filename" });
   }
   if (bytes.length > 8_000_000) {
