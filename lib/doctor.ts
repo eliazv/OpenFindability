@@ -164,6 +164,7 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
     if (project.clarityTokenEnv) sources.push("clarity");
     if (project.gscProperty) sources.push("gsc");
     if (project.ga4PropertyId) sources.push("ga4");
+    if (project.ga4PropertyId && project.websiteUrl) sources.push("ga4_landing");
     if (project.umamiWebsiteId) sources.push("umami");
     if (project.revenueCatProjectId) sources.push("revenuecat");
     if (project.admobAppId || project.admobAppIdIos) sources.push("admob");
@@ -200,6 +201,9 @@ export function getLatestSyncProblems(data: Pick<AppData, "projects" | "connecto
     // Historical failures stay in the audit log, but disconnected sources must
     // not remain current operational warnings after tracking is disabled.
     const configured: Partial<Record<typeof run.source, boolean>> = {
+      ga4_landing: Boolean(project.ga4PropertyId && project.websiteUrl),
+      pagespeed: Boolean(project.websiteUrl && (project.gscProperty || project.ga4PropertyId || project.umamiWebsiteId)),
+      crux: Boolean(process.env.CRUX_API_KEY && project.websiteUrl && (project.gscProperty || project.ga4PropertyId || project.umamiWebsiteId)),
       gsc: Boolean(project.gscProperty), gsc_index: Boolean(project.gscProperty),
       ga4: Boolean(project.ga4PropertyId), umami: Boolean(project.umamiWebsiteId),
       bing_webmaster: Boolean(project.bingSiteUrl), cloudflare_ai: Boolean(project.cloudflareZoneId), clarity: Boolean(project.clarityTokenEnv),

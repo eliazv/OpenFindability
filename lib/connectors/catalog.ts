@@ -15,6 +15,9 @@ export type ConnectorDescriptor = {
 };
 
 export const CONNECTOR_CATALOG = {
+  ga4_landing: { label: "GA4 landing conversions", category: "web_analytics", grain: "daily", typicalLagDays: 2, staleAfterDays: 4, syncSafety: "read_only", docs: "docs/guide/conversions-performance-interventions.md" },
+  pagespeed: { label: "PageSpeed Lighthouse", category: "seo", grain: "mixed", typicalLagDays: 0, staleAfterDays: 30, syncSafety: "read_only", docs: "docs/guide/conversions-performance-interventions.md" },
+  crux: { label: "CrUX field experience", category: "seo", grain: "rolling_snapshot", typicalLagDays: 2, staleAfterDays: 30, syncSafety: "read_only", docs: "docs/guide/conversions-performance-interventions.md" },
   bing_webmaster: {
     label: "Bing Webmaster", category: "seo", grain: "mixed", typicalLagDays: 3,
     staleAfterDays: 7, syncSafety: "read_only", docs: "docs/guide/seo-geo-warehouse.md",

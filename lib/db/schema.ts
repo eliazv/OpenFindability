@@ -39,6 +39,7 @@ export const metricSnapshots = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     source: text("source", {
       enum: [
+        "ga4_landing", "pagespeed", "crux",
         "bing_webmaster", "cloudflare_ai", "clarity",
         "gsc",
         "ga4",
@@ -256,6 +257,7 @@ export const connectorRuns = sqliteTable(
     id: text("id").primaryKey(),
     source: text("source", {
       enum: [
+        "ga4_landing", "pagespeed", "crux",
         "bing_webmaster", "cloudflare_ai", "clarity", "motherduck",
         "gsc",
         "gsc_index",
@@ -524,7 +526,63 @@ export const seoGeoObservations = sqliteTable("seo_geo_observations", {
   index("seo_geo_project_source_window").on(table.projectId, table.source, table.windowEnd),
 ]);
 
+export const ga4LandingMetrics = sqliteTable("ga4_landing_metrics", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  hostname: text("hostname").notNull(),
+  landingPage: text("landing_page").notNull(),
+  channel: text("channel").notNull(),
+  sourceMedium: text("source_medium").notNull(),
+  device: text("device").notNull(),
+  sessions: integer("sessions").notNull(),
+  engagedSessions: integer("engaged_sessions").notNull(),
+  keyEvents: real("key_events").notNull(),
+  sessionKeyEventRate: real("session_key_event_rate").notNull(),
+  timeZone: text("time_zone"),
+  quality: text("quality").notNull(),
+  rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+  fetchedAt: text("fetched_at").notNull(),
+}, t => [uniqueIndex("ga4_landing_identity").on(t.projectId,t.date,t.hostname,t.landingPage,t.channel,t.sourceMedium,t.device)]);
+
+export const webPerformanceMetrics = sqliteTable("web_performance_metrics", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  source: text("source", { enum: ["pagespeed", "crux"] }).notNull(),
+  url: text("url").notNull(),
+  scope: text("scope", { enum: ["url", "origin"] }).notNull(),
+  device: text("device", { enum: ["mobile", "desktop"] }).notNull(),
+  date: text("date").notNull(),
+  status: text("status", { enum: ["available", "no_data"] }).notNull(),
+  periodStart: text("period_start"),
+  periodEnd: text("period_end"),
+  lcpMs: real("lcp_ms"),
+  inpMs: real("inp_ms"),
+  cls: real("cls"),
+  fcpMs: real("fcp_ms"),
+  tbtMs: real("tbt_ms"),
+  performanceScore: real("performance_score"),
+  finalUrl: text("final_url"),
+  version: text("version"),
+  rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+  fetchedAt: text("fetched_at").notNull(),
+}, t => [uniqueIndex("web_performance_identity").on(t.projectId,t.source,t.url,t.scope,t.device,t.date)]);
+
+export const projectInterventions = sqliteTable("project_interventions", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  title: text("title").notNull(),
+  kind: text("kind").notNull(),
+  targetUrl: text("target_url"),
+  reference: text("reference"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, t => [index("interventions_project_date").on(t.projectId,t.date)]);
+
 export const schema = {
+  ga4LandingMetrics, webPerformanceMetrics, projectInterventions,
   seoGeoObservations,
   projects,
   metricSnapshots,

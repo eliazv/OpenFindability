@@ -4,6 +4,7 @@ import type { SourceType } from "@/lib/types";
 
 export const runtime = "nodejs";
 const allowedSources: SourceType[] = [
+  "ga4_landing",
   "bing_webmaster", "cloudflare_ai", "clarity",
   "gsc", "ga4", "umami", "play_console", "aso", "revenuecat",
   "admob", "adsense", "play_vitals", "play_stats", "asc_analytics",

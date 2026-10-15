@@ -4,6 +4,7 @@ import { isDailyGscDetail } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncGa4Project } from "@/lib/connectors/ga4";
+import { syncGa4LandingProject } from "@/lib/connectors/ga4-landing";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncBingProject } from "@/lib/connectors/bing";
 import { syncCloudflareProject } from "@/lib/connectors/cloudflare-ai";
@@ -103,6 +104,18 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
   const startedAt = nowIso();
 
   for (const project of data.projects) {
+    if (!source || source === "ga4_landing") {
+      try {
+        const start=daysAgo(backfillDays), end=daysAgo(2);
+        const synced=await syncGa4LandingProject(project,start,end);
+        if (synced.replace) data.ga4LandingMetrics = [...(data.ga4LandingMetrics??[]).filter(r=>r.projectId!==project.id || r.date<start || r.date>end),...synced.rows];
+        results.push(synced.result);
+        data.connectorRuns.push(toRun("ga4_landing",project.id,nowIso(),synced.result));
+      } catch(error) {
+        const result=failed("ga4_landing",project.id,error); results.push(result);
+        data.connectorRuns.push(toRun("ga4_landing",project.id,nowIso(),result));
+      }
+    }
     for (const provider of ["bing_webmaster", "cloudflare_ai", "clarity"] as const) {
       if (source && source !== provider) continue;
       try {

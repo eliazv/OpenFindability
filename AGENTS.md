@@ -42,6 +42,11 @@ pnpm run doctor                     # credentials, data freshness, failed syncs
 # Sync (default 30-day window; `npx tsx scripts/sync.ts <source> <days>` for more)
 pnpm run sync                       # every source except ASO
 pnpm run sync:gsc | sync:ga4 | sync:umami | sync:play-console
+pnpm run sync:ga4-landing           # daily web landing/channel conversions
+pnpm run audit:performance          # bounded CrUX/PageSpeed preview; --apply to fetch
+pnpm run intervention               # list; add --apply saves, report compares before/after
+pnpm run report:growth-evidence     # --slug required
+pnpm run test:growth-evidence
 pnpm run sync:revenuecat | sync:admob | sync:adsense
 pnpm run sync:play-vitals | sync:play-stats | sync:asc-analytics
 pnpm run sync:aso                   # opt-in, needs local RespectASO

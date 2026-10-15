@@ -9,15 +9,17 @@ import { createSemanticViews, publishSourceConfiguration, publishWarehouseCommen
 // Explicit table/column allowlist: projects contain API keys, paths and private notes.
 export const WAREHOUSE_TABLES = [
   "projects", "metric_snapshots", "search_queries", "page_metrics", "opportunities", "connector_runs",
+  "ga4_landing_metrics", "web_performance_metrics", "project_interventions",
   "gsc_dimension_breakdowns", "gsc_sitemaps", "gsc_index_inspections", "admob_mediation_metrics",
   "play_vitals_metrics", "play_install_stats", "asc_analytics_metrics", "app_keywords", "aso_keyword_snapshots", "aso_app_rank_snapshots", "seo_geo_observations",
 ] as const;
 const PROJECT_COLUMNS = new Set(["id", "name", "slug", "type", "category", "website_url", "gsc_property", "ga4_property_id", "umami_website_id", "play_console_package_name", "app_store_track_id", "bing_site_url", "created_at", "updated_at"]);
 const RUN_COLUMNS = new Set(["id", "source", "project_id", "status", "started_at", "finished_at"]);
+const INTERVENTION_COLUMNS = new Set(["id","project_id","date","title","kind","target_url","created_at","updated_at"]);
 const q = (s: string) => `"${s.replaceAll('"', '""')}"`;
 
 export function warehouseColumns(table: string, columns: { name: string; type: string }[]) {
-  return columns.filter(c => c.name !== "raw_json" && (table !== "projects" || PROJECT_COLUMNS.has(c.name)) && (table !== "connector_runs" || RUN_COLUMNS.has(c.name)));
+  return columns.filter(c => c.name !== "raw_json" && (table !== "projects" || PROJECT_COLUMNS.has(c.name)) && (table !== "connector_runs" || RUN_COLUMNS.has(c.name)) && (table !== "project_interventions" || INTERVENTION_COLUMNS.has(c.name)));
 }
 export function warehousePredicate(table: string) {
   return table === "search_queries" || table === "page_metrics"
@@ -103,19 +105,25 @@ export async function replicateWarehouse(connection: DuckDBConnection, sqlite: D
     await connection.run("BEGIN TRANSACTION");
     try {
       for (const key of changed) {
-        await connection.run(`DELETE FROM ${target} WHERE _partition_key = $1`, [key]);
-        await connection.run(`DELETE FROM ${catalog}.main.warehouse_sync_state WHERE table_name = $1 AND partition_key = $2`, [table, key]);
+        // Keep stable IDs in place: DuckDB's indexed delete+reinsert can conflict
+        // across vector chunks (>2048 rows) inside the same transaction.
+        await connection.run(`DELETE FROM ${target} AS dest WHERE _partition_key = $1 AND NOT EXISTS (SELECT 1 FROM of_stage src WHERE src.id=dest.id)`, [key]);
+        if (!local.has(key)) await connection.run(`DELETE FROM ${catalog}.main.warehouse_sync_state WHERE table_name = $1 AND partition_key = $2`, [table, key]);
       }
       if (changed.size) {
         const names = [...p.columns.map(col => q(col.name)), "_partition_key"].join(",");
-        await connection.run(`INSERT INTO ${target} (${names}) SELECT ${names} FROM of_stage`);
+        const columns=[...p.columns.map(col=>col.name),"_partition_key"];
+        await connection.run(`MERGE INTO ${target} AS dest USING of_stage AS src ON dest.id=src.id
+          WHEN MATCHED THEN UPDATE SET ${columns.filter(name=>name!=="id").map(name=>`${q(name)}=src.${q(name)}`).join(",")}
+          WHEN NOT MATCHED THEN INSERT (${names}) VALUES (${columns.map(name=>`src.${q(name)}`).join(",")})`);
       }
       for (const key of changed) {
         const partition = local.get(key);
         if (!partition) continue;
         const count = (await connection.runAndReadAll(`SELECT count(*) n FROM ${target} WHERE _partition_key = $1`, [key])).getRows()[0][0];
         if (Number(count) !== partition.count) throw new Error(`Warehouse row count mismatch: ${table}`);
-        await connection.run(`INSERT INTO ${catalog}.main.warehouse_sync_state VALUES ($1,$2,$3,$4,$5)`, [table, key, partition.hash, partition.count, new Date().toISOString()]);
+        await connection.run(`INSERT INTO ${catalog}.main.warehouse_sync_state VALUES ($1,$2,$3,$4,$5)
+          ON CONFLICT(table_name,partition_key) DO UPDATE SET content_hash=excluded.content_hash,row_count=excluded.row_count,snapshot_at=excluded.snapshot_at`, [table, key, partition.hash, partition.count, new Date().toISOString()]);
       }
       await connection.run("COMMIT");
     } catch (error) { await connection.run("ROLLBACK"); throw error; }
@@ -186,7 +194,8 @@ export async function migrateWarehouseSchema(c: DuckDBConnection, database: stri
       await c.run(`ALTER TABLE ${d}.metric_snapshots ADD COLUMN IF NOT EXISTS key_events BIGINT`);
     }
     await c.run(`INSERT OR IGNORE INTO ${d}.warehouse_schema_migrations VALUES (2,current_timestamp)`);
-    await c.run(`UPDATE ${d}.warehouse_metadata SET schema_version=2 WHERE owner='openfindability'`);
+    await c.run(`INSERT OR IGNORE INTO ${d}.warehouse_schema_migrations VALUES (3,current_timestamp)`);
+    await c.run(`UPDATE ${d}.warehouse_metadata SET schema_version=3 WHERE owner='openfindability'`);
     await c.run("COMMIT");
   } catch (error) { await c.run("ROLLBACK"); throw error; }
 }
@@ -222,7 +231,7 @@ export async function syncMotherDuck(options: { apply?: boolean; verifyLocal?: b
     if (existing.length && !existing.includes("warehouse_metadata")) throw new Error("Destination contains unmanaged tables. Choose a new MOTHERDUCK_DATABASE; no existing tables were changed.");
     await connection.run(`CREATE TABLE IF NOT EXISTS ${q(databaseName)}.main.warehouse_metadata (owner VARCHAR PRIMARY KEY, schema_version BIGINT)`);
     const owners = (await connection.runAndReadAll(`SELECT owner,schema_version FROM ${q(databaseName)}.main.warehouse_metadata`)).getRows();
-    if (owners.length && (owners.length !== 1 || owners[0][0] !== "openfindability" || ![1,2].includes(Number(owners[0][1])))) throw new Error("Incompatible MotherDuck warehouse ownership/schema version.");
+    if (owners.length && (owners.length !== 1 || owners[0][0] !== "openfindability" || ![1,2,3].includes(Number(owners[0][1])))) throw new Error("Incompatible MotherDuck warehouse ownership/schema version.");
     await connection.run(`INSERT OR IGNORE INTO ${q(databaseName)}.main.warehouse_metadata VALUES ('openfindability',1)`);
     await migrateWarehouseSchema(connection, databaseName);
     await connection.run(`CREATE TABLE IF NOT EXISTS ${q(databaseName)}.main.warehouse_runs (id VARCHAR PRIMARY KEY, started_at VARCHAR, finished_at VARCHAR, status VARCHAR)`);

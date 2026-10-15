@@ -59,6 +59,17 @@ export function normalizeGa4Days(
   });
 }
 
+export async function ga4AccessToken(): Promise<string | null> {
+  const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
+  const file = process.env.GOOGLE_SERVICE_ACCOUNT_FILE?.trim();
+  if (!json && !file) return null;
+  const credentials = JSON.parse(json || await readFile(file as string, "utf8"));
+  const auth = new google.auth.GoogleAuth({ credentials, scopes: ["https://www.googleapis.com/auth/analytics.readonly"] });
+  const token = await auth.getAccessToken();
+  if (!token) throw new Error("Cannot obtain GA4 Analytics read-only access token.");
+  return token;
+}
+
 export async function syncGa4Project(
   project: Project, startDate: string, endDate: string,
 ): Promise<{ result: SyncResult; snapshots: MetricSnapshot[] }> {
@@ -72,16 +83,8 @@ export async function syncGa4Project(
   const property = project.ga4PropertyId.replace(/^properties\//, "");
   if (!/^\d+$/.test(property)) throw new Error("GA4 property ID must be numeric.");
 
-  const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
-  const file = process.env.GOOGLE_SERVICE_ACCOUNT_FILE?.trim();
-  if (!json && !file) return skipped("Configure GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE.");
-  const credentials = JSON.parse(json || await readFile(file as string, "utf8"));
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ["https://www.googleapis.com/auth/analytics.readonly"],
-  });
-  const token = await auth.getAccessToken();
-  if (!token) throw new Error("Cannot obtain GA4 Analytics read-only access token.");
+  const token = await ga4AccessToken();
+  if (!token) return skipped("Configure GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE.");
 
   const response = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`, {
     method: "POST",

@@ -1,5 +1,8 @@
 import { db, getSqliteHandle, type AppDb } from "@/lib/db/client";
 import {
+  ga4LandingMetrics as ga4LandingMetricsTable,
+  webPerformanceMetrics as webPerformanceMetricsTable,
+  projectInterventions as projectInterventionsTable,
   admobMediationMetrics as admobMediationMetricsTable,
   appKeywords as appKeywordsTable,
   appReviews as appReviewsTable,
@@ -175,6 +178,9 @@ export function readDataWith(database: AppDb): AppData {
     .map(denull) as AscAnalyticsMetric[];
 
   const snapshot: AppData = {
+    ga4LandingMetrics: database.select().from(ga4LandingMetricsTable).all(),
+    webPerformanceMetrics: database.select().from(webPerformanceMetricsTable).all(),
+    projectInterventions: database.select().from(projectInterventionsTable).all(),
     seoGeoObservations: database.select().from(seoGeoObservationsTable).all() as NonNullable<AppData["seoGeoObservations"]>,
     projects,
     metricSnapshots,
@@ -284,6 +290,9 @@ export function writeDataWith(database: AppDb, data: AppData): void {
       }
     }
 
+    if (changed.has("ga4LandingMetrics")) tx.delete(ga4LandingMetricsTable).run();
+    if (changed.has("webPerformanceMetrics")) tx.delete(webPerformanceMetricsTable).run();
+    if (changed.has("projectInterventions")) tx.delete(projectInterventionsTable).run();
     if (changed.has("seoGeoObservations")) tx.delete(seoGeoObservationsTable).run();
     if (changed.has("searchQueries")) tx.delete(searchQueriesTable).run();
     if (changed.has("pageMetrics")) tx.delete(pageMetricsTable).run();
@@ -308,6 +317,15 @@ export function writeDataWith(database: AppDb, data: AppData): void {
 
     if (changed.has("projects")) for (const batch of chunk(data.projects, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(projectsTable).values(batch).run();
+    }
+    if (changed.has("ga4LandingMetrics")) for (const batch of chunk(data.ga4LandingMetrics ?? [], INSERT_CHUNK_SIZE)) {
+      if (batch.length) tx.insert(ga4LandingMetricsTable).values(batch).run();
+    }
+    if (changed.has("webPerformanceMetrics")) for (const batch of chunk(data.webPerformanceMetrics ?? [], INSERT_CHUNK_SIZE)) {
+      if (batch.length) tx.insert(webPerformanceMetricsTable).values(batch).run();
+    }
+    if (changed.has("projectInterventions")) for (const batch of chunk(data.projectInterventions ?? [], INSERT_CHUNK_SIZE)) {
+      if (batch.length) tx.insert(projectInterventionsTable).values(batch).run();
     }
     if (changed.has("metricSnapshots")) for (const batch of chunk(data.metricSnapshots, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(metricSnapshotsTable).values(batch).run();

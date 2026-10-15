@@ -5,6 +5,7 @@ import type { SourceType } from "@/lib/types";
 async function main() {
   const arg = process.argv[2];
   const validSources: SourceType[] = [
+    "ga4_landing",
     "bing_webmaster", "cloudflare_ai", "clarity",
     "gsc",
     "ga4",

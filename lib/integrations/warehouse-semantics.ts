@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
+import { createGrowthWarehouseViews } from "./growth-warehouse";
 
 const q = (s: string) => `"${s.replaceAll('"', '""')}"`;
 
@@ -8,11 +9,14 @@ export async function publishSourceConfiguration(c: DuckDBConnection, sqlite: Da
   const target = `${q(database)}.main.project_source_configuration`;
   await c.run(`CREATE TABLE IF NOT EXISTS ${target} (project_id VARCHAR, source VARCHAR, configured BOOLEAN, typical_lag_days INTEGER, stale_after_days INTEGER, PRIMARY KEY(project_id,source))`);
   const fields = {
+    ga4_landing: "ga4_property_id",
     gsc: "gsc_property", ga4: "ga4_property_id", umami: "umami_website_id", bing_webmaster: "bing_site_url", cloudflare_ai: "cloudflare_zone_id", clarity: "clarity_token_env",
     play_console: "play_console_package_name", play_vitals: "play_console_package_name", play_stats: "play_console_package_name", asc_analytics: "app_store_track_id", revenuecat: "revenue_cat_project_id", adsense: "adsense_site_domain", aso: "aso_keywords",
   } as const;
   // Export booleans only; token/key values and private project fields never leave SQLite.
-  const configured = sqlite.prepare(`SELECT id, ${Object.entries(fields).map(([source, field]) => `${source === "aso" ? "json_valid(aso_keywords) AND json_array_length(aso_keywords)>0" : `NULLIF(${q(field)},'') IS NOT NULL`} AS ${q(source)}`).join(",")},
+  const activeWeb="NULLIF(website_url,'') IS NOT NULL AND (NULLIF(gsc_property,'') IS NOT NULL OR NULLIF(ga4_property_id,'') IS NOT NULL OR NULLIF(umami_website_id,'') IS NOT NULL)";
+  const configured = sqlite.prepare(`SELECT id, (${activeWeb}) AS pagespeed, (${activeWeb} AND ${process.env.CRUX_API_KEY?1:0}) AS crux,
+    ${Object.entries(fields).map(([source, field]) => `${source === "aso" ? "json_valid(aso_keywords) AND json_array_length(aso_keywords)>0" : source === "ga4_landing" ? "NULLIF(ga4_property_id,'') IS NOT NULL AND NULLIF(website_url,'') IS NOT NULL" : `NULLIF(${q(field)},'') IS NOT NULL`} AS ${q(source)}`).join(",")},
     (NULLIF(admob_app_id,'') IS NOT NULL OR NULLIF(admob_app_id_ios,'') IS NOT NULL) AS admob FROM projects`).all() as Record<string, string | number>[];
   await c.run("BEGIN TRANSACTION");
   try {
@@ -60,6 +64,8 @@ export async function createSemanticViews(c: DuckDBConnection, database: string)
     UNION ALL SELECT project_id,'asc_analytics',min(date),max(date),count(DISTINCT date),count(*) FROM ${d}.asc_analytics_metrics GROUP BY project_id
     UNION ALL SELECT project_id,source,min(substr(window_start,1,10)),max(substr(window_end,1,10)),count(DISTINCT substr(window_start,1,10)),count(*) FROM ${d}.seo_geo_observations WHERE source IN ('clarity','cloudflare_ai') GROUP BY project_id,source
     UNION ALL SELECT project_id,'aso',min(date),max(date),count(DISTINCT date),count(*) FROM ${d}.app_keywords GROUP BY project_id
+    UNION ALL SELECT project_id,'ga4_landing',min(date),max(date),count(DISTINCT date),count(*) FROM ${d}.ga4_landing_metrics GROUP BY project_id
+    UNION ALL SELECT project_id,source,min(date),max(date),count(DISTINCT date),count(*) FROM ${d}.web_performance_metrics GROUP BY project_id,source
     ), totals AS (SELECT project_id,source,min(first_date) first_date,max(last_date) last_date,max(days_with_rows) days_with_rows,sum(stored_rows) stored_rows FROM observations GROUP BY project_id,source)
     SELECT cfg.*,p.slug,t.first_date,t.last_date,coalesce(t.days_with_rows,0) days_with_rows,coalesce(t.stored_rows,0) stored_rows,
       CASE WHEN cfg.source IN ('clarity','cloudflare_ai') THEN 'windowed; days are not proof of continuous coverage'
@@ -89,9 +95,17 @@ export async function createSemanticViews(c: DuckDBConnection, database: string)
     sum(requests) requests,count(DISTINCT window_start) observed_hours,max(fetched_at) fetched_at,
     'sampled proxy requests; observed hours are not proof of full-day coverage or citations' coverage_note
     FROM ${d}.ai_crawler_requests GROUP BY project_id,substr(window_start,1,10),crawler,host,http_status`);
+  await createGrowthWarehouseViews(c,d);
 }
 
 const COMMENTS: Record<string, string> = {
+  session_key_event_rate: "GA4 fraction (0..1) of sessions triggering any configured key event. NOT key_events/sessions. Weight by sessions only within compatible scopes; hostname cross-domain sessions can overlap.",
+  lcp_ms: "LCP in milliseconds. CrUX is rolling field p75; PageSpeed is one Lighthouse lab run. Never combine or sum these sources.",
+  inp_ms: "CrUX field INP p75 in milliseconds. NULL for Lighthouse lab runs: TBT is not INP.",
+  cls: "Unitless CLS: CrUX field p75 or Lighthouse lab measurement according to source. NULL is unavailable.",
+  performance_score: "Lighthouse performance score 0..1, lab only. Not a field Core Web Vitals verdict or SEO ranking score.",
+  quality: "GA4 reporting metadata flags: standard, thresholded, sampled, other_row. Standard does not guarantee exhaustive measurement.",
+  target_url: "Optional intervention URL. NULL scopes comparison to the project. Observation does not establish causal attribution.",
   project_id: "OpenFindability project ID. Join projects.id; NULL is allowed only for genuinely unmapped account/property-level observations.",
   date: "Provider reporting date, ISO YYYY-MM-DD. Missing rows are not measured zeros. Providers have different delays/timezones.",
   source: "Provider namespace. Google/Bing and GA4/Umami remain independent measurements.",

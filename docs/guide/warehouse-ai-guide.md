@@ -4,6 +4,12 @@ Database: `openfindability.main`. Leggere `metric_dictionary`, `warehouse_runs`,
 
 ## Scelta delle viste
 
+Per conversioni per pagina e canale usare `ga4_landing_daily` o `ga4_landing_monthly`, mantenendo hostname, dispositivo, fuso orario e qualità. `session_key_event_rate` è il tasso fornito da Google, pesato sulle sessioni in aggregazione: non è `key_events/sessions`. I dettagli non si aggiungono ai totali GA4; sessioni cross-domain possono comparire su più hostname.
+
+`web_performance_latest` separa CrUX (`field_p75_rolling`) da Lighthouse (`lighthouse_lab_snapshot`). Verificare ambito URL/origine, dispositivo, periodo e `age_days`. `no_data` e percentili mancanti restano sconosciuti; TBT non è INP. Non sommare percentili o punteggi.
+
+`intervention_summary` confronta finestre fisse di 28 giorni prima/dopo, escludendo il giorno della modifica. Usare `complete`, controllare gli altri interventi e la qualità. Nessuna variazione prova da sola causalità. Note e riferimenti privati sono esclusi dalla replica. Guida operativa: [conversioni, prestazioni e interventi](conversions-performance-interventions.md).
+
 Usare `project_daily_kpis` per periodi e `project_latest_kpis` per l'ultima misura. Il formato lungo conserva progetto, fonte, metrica, valore, unità, valuta e grana. Queste dimensioni non si possono eliminare quando si sommano importi o confrontano misure. La data dell'ultimo KPI può differire tra metriche e fonti.
 
 `project_source_configuration.configured` descrive cosa raccogliamo adesso. Lo storico resta dopo la disattivazione; una vecchia riga non prova che la fonte sia ancora attiva. La configurazione non è una prova di pubblicazione sugli store. Non inventare categorie o collegamenti sito/app.

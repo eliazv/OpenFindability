@@ -1,6 +1,6 @@
 # Prossime integrazioni consigliate
 
-Valutazione del 15 ottobre 2026. Questo documento propone lavoro futuro: non introduce nuovi collegamenti, costi o servizi. Le priorità sono una valutazione per OpenFindability, basata sul codice attuale e sulle fonti ufficiali riportate.
+Valutazione del 15 ottobre 2026. Le prime tre estensioni sono state implementate: conversioni GA4 per landing/canale, CrUX/PageSpeed e registro degli interventi. Configurazione e comandi sono nella [guida operativa](conversions-performance-interventions.md); l'attivazione delle API prestazioni dipende da chiavi e quote. Le sezioni seguenti conservano le motivazioni e indicano le ulteriori proposte, senza attivare nuovi servizi a pagamento.
 
 ## Scelta consigliata
 

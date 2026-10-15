@@ -1,4 +1,7 @@
 export type SourceType =
+  | "ga4_landing"
+  | "pagespeed"
+  | "crux"
   | "bing_webmaster"
   | "cloudflare_ai"
   | "clarity"
@@ -376,6 +379,9 @@ export type ConnectorRun = {
 };
 
 export type AppData = {
+  ga4LandingMetrics?: (typeof import("./db/schema").ga4LandingMetrics.$inferSelect)[];
+  webPerformanceMetrics?: (typeof import("./db/schema").webPerformanceMetrics.$inferSelect)[];
+  projectInterventions?: (typeof import("./db/schema").projectInterventions.$inferSelect)[];
   seoGeoObservations?: SeoGeoObservation[];
   projects: Project[];
   metricSnapshots: MetricSnapshot[];

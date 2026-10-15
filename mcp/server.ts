@@ -16,6 +16,8 @@ import { aggregateDailyQueryRows, aggregateDailyPageRows } from "@/lib/gsc-detai
 import { createId } from "@/lib/id";
 import { getGrowthSnapshot } from "@/lib/analytics/growth-snapshot";
 import { seoGeoSnapshot } from "@/lib/analytics/seo-geo";
+import { growthEvidenceSnapshot } from "@/lib/analytics/growth-evidence";
+import { readGrowthEvidenceWith } from "@/lib/analytics/growth-evidence-store";
 import type { AppData, Project, ProjectType } from "@/lib/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -700,6 +702,10 @@ server.tool(
     return { content: [{ type: "text", text: JSON.stringify(output, null, 2) }] };
   },
 );
+
+server.tool("get_growth_evidence", "Read cached GA4 landing/channel conversions, latest CrUX/Lighthouse measurements and intervention comparisons. No live API calls or writes. Missing data stays unknown; lab and field measurements remain separate.",
+  {slug:z.string(),start:z.string().describe("YYYY-MM-DD"),end:z.string().describe("YYYY-MM-DD"),limit:z.number().int().min(1).max(200).default(50)},
+  async ({slug,start,end,limit})=>({content:[{type:"text",text:JSON.stringify(growthEvidenceSnapshot(readGrowthEvidenceWith(mcpDb,slug,start,end),slug,start,end,limit),null,2)}]}));
 
 async function main() {
   const transport = new StdioServerTransport();
