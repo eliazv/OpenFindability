@@ -18,6 +18,7 @@ import { syncPlayInstallStatsProject } from "@/lib/connectors/play-gcs-stats";
 import { syncAscAnalyticsProject } from "@/lib/connectors/appstoreconnect-analytics";
 import { upsertAsoCacheRows } from "@/lib/aso-cache";
 import { readData, writeData } from "@/lib/store";
+import { reconcileGscProjectLinks } from "@/lib/gsc-project-links";
 import type {
   AdmobMediationMetric,
   AscAnalyticsMetric,
@@ -97,6 +98,7 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
   const source = options.source;
   const backfillDays = options.backfillDays ?? 30;
   const data = await readData();
+  reconcileGscProjectLinks(data);
   const results: SyncResult[] = [];
   const startedAt = nowIso();
 

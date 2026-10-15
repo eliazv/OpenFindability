@@ -57,6 +57,8 @@ export type MetricSnapshot = {
   avgPosition?: number;
   visitors?: number;
   pageviews?: number;
+  sessions?: number;
+  keyEvents?: number;
   avgRating?: number;
   totalReviews?: number;
   revenue?: number;

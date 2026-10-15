@@ -60,6 +60,8 @@ export const metricSnapshots = sqliteTable(
     avgPosition: real("avg_position"),
     visitors: integer("visitors"),
     pageviews: integer("pageviews"),
+    sessions: integer("sessions"),
+    keyEvents: integer("key_events"),
     avgRating: real("avg_rating"),
     totalReviews: integer("total_reviews"),
     revenue: real("revenue"),

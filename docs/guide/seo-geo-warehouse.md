@@ -77,6 +77,8 @@ Le quote e i costi dipendono dal piano MotherDuck. Consultare [prezzi correnti](
 
 Dopo il caricamento, usare il collegamento MotherDuck già configurato per interrogare `openfindability.main`. La variabile locale autentica lo script di esportazione: non configura né modifica automaticamente il collegamento ChatGPT.
 
+Se la sessione ChatGPT era già collegata durante il caricamento e non vede le nuove tabelle, eseguire `REFRESH DATABASES` prima delle query: aggiorna il catalogo della sessione dopo modifiche effettuate da un altro client.
+
 Viste:
 
 | Vista | Uso |
@@ -88,6 +90,35 @@ Viste:
 | `daily_ad_revenue` | Mediazione AdMob, fallback network solo nei giorni privi di mediazione, AdSense separato |
 | `revenuecat_latest` | Ultimo snapshot rolling/MRR per progetto |
 | `metric_dictionary` | Definizioni e vincoli per interpretare le metriche |
+| `project_daily_kpis` | KPI giornalieri in formato lungo, con sorgente/metrica/unità/valuta/grana |
+| `project_latest_kpis` | Ultimo valore per metrica, con snapshot RevenueCat esplicitamente distinti |
+| `data_freshness` | Configurazione attuale, ultimo esito sync, ultima data metrica e stato |
+| `source_coverage` | Date con righe e limiti di copertura, anche per fonti disattivate |
+| `app_store_daily_quality` | Download affidabili e disponibilità retention, mantenendo gli originali |
+| `gsc_page_monthly` / `gsc_query_monthly` | Aggregazioni per progetto/pagina/query/mese prima dei join |
+| `index_audit_latest` | Ultima ispezione per proprietà/URL ed età dell'audit |
+| `ai_crawler_daily` | Aggregato giornaliero per crawler/status con ore osservate |
+| `warehouse_integrity` | Controlli sui riferimenti e storico iOS non affidabile |
+
+`project_daily_kpis` usa righe `(project_id, source, date, metric, value, unit, currency, grain)`: non sommare metriche/unità/valute diverse. La retention mancante resta `NULL`; i download anteriori al 21 settembre 2025 restano nell'originale ma non entrano nei KPI affidabili. Le colonne GA4 `sessions` e `key_events` sono esplicite nella replica.
+
+Non fare un join fra le righe grezze query e pagine GSC: moltiplicherebbe le misure. Prima aggregare ciascuna fonte alle stesse chiavi e allo stesso periodo, oppure usare le viste mensili. Un mese parziale non va confrontato con uno intero. Anche i campi posizione e CTR richiedono aggregazioni pesate, non medie semplici.
+
+`project_source_configuration` replica solo booleani di configurazione, senza segreti. `configured=false` non significa che l'app non sia pubblicata: significa che OpenFindability non la sta raccogliendo su quella fonte. Le date storiche rimangono consultabili. Categorie mancanti e stato di pubblicazione non vengono inventati.
+
+Una guida privata MotherDuck nel topic `openfindability` documenta queste regole per gli agenti. La versione mantenibile è [warehouse-ai-guide.md](./warehouse-ai-guide.md); le colonne e le tabelle ricevono commenti SQL durante il sync.
+
+Lo schema cloud versione 2 aggiunge `sessions` e `key_events` con migrazione additiva tracciata in `warehouse_schema_migrations`. Le insert nominano le colonne, quindi non dipendono dall'ordine fisico dopo un ALTER. Indici unici su `id` prevengono duplicati; prima del trasferimento si controllano ID null/duplicati e riferimenti a progetti inesistenti. I riferimenti nullable degli audit realmente non associabili restano ammessi. Non si applicano FK cloud che impedirebbero il refresh indipendente delle partizioni: l'integrità relazionale viene verificata esplicitamente, mentre SQLite conserva le proprie FK.
+
+Per recuperare associazioni GSC e colonne GA4 dai payload già conservati:
+
+```powershell
+pnpm.cmd run repair:analytics
+pnpm.cmd run db:backup
+pnpm.cmd exec tsx scripts/repair-analytics-data.ts --apply
+```
+
+Il comando non fa richieste esterne. Ricollega solo audit senza progetto con abbinamento univoco, non sovrascrive valori GA4 già presenti e mantiene `rawJson`. Il normale sync e l'audit riconciliano anche le associazioni GSC pregresse.
 
 Esempi di richieste: «Leggi prima metric_dictionary e warehouse_runs, poi confronta le pagine GSC negli ultimi due periodi completi di 28 giorni»; «Per VitaRomagna trova URL visitate dai crawler AI con errori HTTP e confrontale con l'audit GSC».
 

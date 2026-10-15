@@ -191,10 +191,24 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
   return stale;
 }
 
-function getLatestSyncProblems(data: AppData): string[] {
+export function getLatestSyncProblems(data: Pick<AppData, "projects" | "connectorRuns">): string[] {
   const last = new Map<string, (typeof data.connectorRuns)[number]>();
   for (const run of data.connectorRuns) {
     if (!run.projectId) continue;
+    const project = data.projects.find(p => p.id === run.projectId);
+    if (!project) continue;
+    // Historical failures stay in the audit log, but disconnected sources must
+    // not remain current operational warnings after tracking is disabled.
+    const configured: Partial<Record<typeof run.source, boolean>> = {
+      gsc: Boolean(project.gscProperty), gsc_index: Boolean(project.gscProperty),
+      ga4: Boolean(project.ga4PropertyId), umami: Boolean(project.umamiWebsiteId),
+      bing_webmaster: Boolean(project.bingSiteUrl), cloudflare_ai: Boolean(project.cloudflareZoneId), clarity: Boolean(project.clarityTokenEnv),
+      play_console: Boolean(project.playConsolePackageName), play_vitals: Boolean(project.playConsolePackageName), play_stats: Boolean(project.playConsolePackageName),
+      asc_analytics: Boolean(project.appStoreTrackId), asc_metadata: Boolean(project.appStoreTrackId), asc_experiments: Boolean(project.appStoreTrackId),
+      admob: Boolean(project.admobAppId || project.admobAppIdIos), revenuecat: Boolean(project.revenueCatProjectId),
+      adsense: Boolean(project.adsenseSiteDomain), aso: Boolean(project.asoKeywords?.length),
+    };
+    if (configured[run.source] === false) continue;
     const key = `${run.projectId}:${run.source}`;
     const previous = last.get(key);
     if (!previous || (run.finishedAt ?? run.startedAt) > (previous.finishedAt ?? previous.startedAt)) {

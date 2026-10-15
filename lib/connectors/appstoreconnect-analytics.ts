@@ -65,6 +65,12 @@ export async function ensureOngoingAnalyticsRequest(appId: string): Promise<stri
 
 type AscAnalyticsReport = { id: string; name: string; category?: string };
 
+export function retentionImportStatus(reports: Pick<AscAnalyticsReport, "name">[]): string {
+  return reports.some(r => /retention/i.test(r.name))
+    ? "retention unavailable (report exists; validated cohort/unit parser not implemented)"
+    : "retention report not available; session counts are not retention";
+}
+
 async function listReportsForRequest(requestId: string): Promise<AscAnalyticsReport[]> {
   const reports = await ascAnalyticsFetchAllPages(`/analyticsReportRequests/${requestId}/reports?limit=50`);
   return reports.map((r) => ({
@@ -72,50 +78,6 @@ async function listReportsForRequest(requestId: string): Promise<AscAnalyticsRep
     name: (r.attributes?.name as string | undefined) ?? "",
     category: r.attributes?.category as string | undefined,
   }));
-}
-
-async function latestInstance(reportId: string): Promise<{ id: string; processingDate?: string } | null> {
-  // Apple rejects `sort` on this endpoint, so fetch everything available and pick the
-  // most recent processingDate client-side.
-  const instances = await ascAnalyticsFetchAllPages(`/analyticsReports/${reportId}/instances?limit=200`);
-  if (instances.length === 0) return null;
-  const withDates = instances
-    .map((i) => ({ id: i.id, processingDate: i.attributes?.processingDate as string | undefined }))
-    .sort((a, b) => (b.processingDate ?? "").localeCompare(a.processingDate ?? ""));
-  return withDates[0];
-}
-
-type AnalyticsSegmentRow = Record<string, string>;
-
-async function downloadSegments(instanceId: string): Promise<AnalyticsSegmentRow[]> {
-  const segments = await ascAnalyticsFetchAllPages(`/analyticsReportInstances/${instanceId}/segments?limit=50`);
-  const rows: AnalyticsSegmentRow[] = [];
-
-  for (const segment of segments) {
-    const url = segment.attributes?.url as string | undefined;
-    if (!url) continue;
-    const response = await fetch(url);
-    if (!response.ok) continue;
-    const compressed = Buffer.from(await response.arrayBuffer());
-    const text = gunzipSync(compressed).toString("utf8");
-    const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
-    if (lines.length === 0) continue;
-    const headers = lines[0].split("\t");
-    for (const line of lines.slice(1)) {
-      const cells = line.split("\t");
-      const row: AnalyticsSegmentRow = {};
-      headers.forEach((header, idx) => {
-        row[header] = cells[idx];
-      });
-      rows.push(row);
-    }
-  }
-
-  return rows;
-}
-
-function findColumn(headers: string[], ...needles: string[]): string | undefined {
-  return headers.find((h) => needles.some((needle) => h.toLowerCase().includes(needle.toLowerCase())));
 }
 
 // --- Sales Reports (downloads, historical) ---
@@ -235,21 +197,16 @@ export async function syncAscAnalyticsProject(
     }
   }
 
-  // Retention: Analytics Reports API (ONGOING request -> reports -> instances -> segments).
-  // Best-effort and independent of Sales Reports above -- a failure here (e.g. the first
-  // request needing an Admin-role key) must not wipe out downloads we already have.
+  // Retention availability is independent of Sales Reports. App Sessions is not
+  // a retention cohort; rates remain missing until a validated parser exists.
   let analyticsNote: string | undefined;
+  let analyticsFailed = false;
   try {
     const requestId = await ensureOngoingAnalyticsRequest(appId);
     const reports = await listReportsForRequest(requestId);
-    const sessionsReport = reports.find((r) => /session|retention|engagement/i.test(r.name));
-
-    if (sessionsReport) {
-      await attachSessionsRetention(sessionsReport.id, startDate, endDate, byDate);
-    } else {
-      analyticsNote = "retention report not yet available";
-    }
+    analyticsNote = retentionImportStatus(reports);
   } catch (error) {
+    analyticsFailed = true;
     analyticsNote = `retention unavailable (${error instanceof Error ? error.message : String(error)})`;
   }
 
@@ -278,7 +235,7 @@ export async function syncAscAnalyticsProject(
     analyticsNote ?? "retention via Analytics Reports",
   ];
 
-  const hasError = Boolean(salesReportError || (analyticsNote && analyticsNote.startsWith("retention unavailable")));
+  const hasError = Boolean(salesReportError || analyticsFailed);
   const missingConfiguredData = Boolean(vendorNumber && !salesReportsAvailable) || Boolean(analyticsNote);
   const status = metrics.length === 0
     ? (hasError ? "failed" : "no_data")
@@ -294,36 +251,6 @@ export async function syncAscAnalyticsProject(
     },
     metrics,
   };
-}
-
-async function attachSessionsRetention(
-  reportId: string,
-  startDate: string,
-  endDate: string,
-  byDate: Map<string, { downloads?: number; retentionDay1?: number; retentionDay7?: number; retentionDay28?: number; raw: Record<string, unknown> }>,
-): Promise<void> {
-  const instance = await latestInstance(reportId);
-  if (!instance) return;
-
-  const rows = await downloadSegments(instance.id);
-  if (rows.length === 0) return;
-
-  const headers = Object.keys(rows[0]);
-  const dateCol = findColumn(headers, "date");
-  const day1Col = findColumn(headers, "day 1", "day1");
-  const day7Col = findColumn(headers, "day 7", "day7");
-  const day28Col = findColumn(headers, "day 28", "day28");
-
-  for (const row of rows) {
-    const date = dateCol ? row[dateCol] : undefined;
-    if (!date || date < startDate || date > endDate) continue;
-    const entry = byDate.get(date) ?? { raw: {} };
-    if (day1Col) entry.retentionDay1 = Number(row[day1Col]);
-    if (day7Col) entry.retentionDay7 = Number(row[day7Col]);
-    if (day28Col) entry.retentionDay28 = Number(row[day28Col]);
-    entry.raw.sessionsRow = row;
-    byDate.set(date, entry);
-  }
 }
 
 function skipped(projectId: string, message: string) {

@@ -48,6 +48,7 @@ pnpm run sync:aso                   # opt-in, needs local RespectASO
 pnpm run sync:bing | sync:cloudflare-ai | sync:clarity
 pnpm run discover:seo-geo           # local mapping preview; --apply to save
 pnpm run sync:warehouse             # MotherDuck export preview; --apply to upload
+pnpm run repair:analytics           # preview GSC links + GA4 recovery; --apply after backup
 pnpm run report:seo-geo -- <slug>
 pnpm run test:seo-geo
 pnpm run sync:admob:backfill | sync:adsense:backfill | sync:play-stats:backfill | sync:asc-analytics:backfill

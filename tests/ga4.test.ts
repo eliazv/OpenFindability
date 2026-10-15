@@ -15,6 +15,8 @@ test("GA4 daily responses normalize known metrics and preserve provider grain", 
   assert.equal(result[0].date, "2026-10-09");
   assert.equal(result[0].visitors, 12);
   assert.equal(result[0].pageviews, 31);
+  assert.equal(result[0].sessions, 19);
+  assert.equal(result[0].keyEvents, 2);
   assert.deepEqual(result[0].rawJson, {
     activeUsers: 12, sessions: 19, screenPageViews: 31, keyEvents: 2, ga4TimeZone: "Europe/Rome", grain: "daily",
   });

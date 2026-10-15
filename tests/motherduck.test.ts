@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import Database from "better-sqlite3";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { replicateWarehouse, WAREHOUSE_TABLES, warehouseColumns } from "../lib/integrations/motherduck";
+import { replicateWarehouse, WAREHOUSE_TABLES, warehouseColumns, migrateWarehouseSchema } from "../lib/integrations/motherduck";
 import { createDb, getSqliteHandle } from "../lib/db/client";
 
 test("project credentials, notes, raw payloads and run errors never enter warehouse projection", () => {
@@ -26,6 +26,14 @@ test("warehouse partitions are idempotent, replace deleted rows, exclude legacy 
     assert.equal(first.find(t => t.table === "search_queries")?.rows, 1);
     assert.equal((await connection.runAndReadAll("SELECT revenue FROM daily_ad_revenue")).getRows()[0][0], 3);
     assert.equal((await connection.runAndReadAll("SELECT revenue FROM revenuecat_latest")).getRows()[0][0], 50);
+    assert.equal(Number((await connection.runAndReadAll("SELECT count(*) FROM project_daily_kpis WHERE source='revenuecat'")).getRows()[0][0]),0);
+    sqlite.prepare("INSERT INTO asc_analytics_metrics (id,project_id,date,downloads,created_at) VALUES ('old','p','2025-09-20',99,'2026-10-15'),('new','p','2026-10-14',2,'2026-10-15')").run();
+    sqlite.prepare("INSERT INTO metric_snapshots (id,project_id,source,date,sessions,key_events,created_at) VALUES ('ga','p','ga4','2026-10-14',12,0,'2026-10-15')").run();
+    await replicateWarehouse(connection,sqlite,"memory",()=>{});
+    assert.equal((await connection.runAndReadAll("SELECT trusted_downloads FROM app_store_daily_quality WHERE id='old'")).getRows()[0][0],null);
+    assert.equal(Number((await connection.runAndReadAll("SELECT value FROM project_daily_kpis WHERE metric='key_events'")).getRows()[0][0]),0);
+    assert.equal(Number((await connection.runAndReadAll("SELECT count(*) FROM project_daily_kpis WHERE date<'2025-09-21' AND source='asc_analytics'")).getRows()[0][0]),0);
+    assert.equal((await connection.runAndReadAll("SELECT freshness_status FROM data_freshness WHERE source='asc_analytics'")).getRows()[0][0],"not_configured");
     const columns = (await connection.runAndReadAll("DESCRIBE projects")).getRowObjects().map(r => r.column_name);
     assert.ok(!columns.includes("revenue_cat_api_key"));
     const unchanged = await replicateWarehouse(connection, sqlite, "memory", () => {});
@@ -38,4 +46,15 @@ test("warehouse partitions are idempotent, replace deleted rows, exclude legacy 
     const repaired = await replicateWarehouse(connection, sqlite, "memory", () => {});
     assert.equal(repaired.find(t => t.table === "projects")?.changedPartitions, 1);
   } finally { connection.closeSync(); instance.closeSync(); sqlite.close(); }
+});
+
+test("warehouse v2 migration is additive and repeatable on old tables", async () => {
+  const instance=await DuckDBInstance.create(); const c=await instance.connect();
+  try {
+    await c.run("CREATE TABLE warehouse_metadata(owner VARCHAR,schema_version INTEGER); INSERT INTO warehouse_metadata VALUES ('openfindability',1); CREATE TABLE metric_snapshots(id VARCHAR,revenue DOUBLE,_partition_key VARCHAR); INSERT INTO metric_snapshots VALUES ('old',3,'p'); CREATE VIEW old_report AS SELECT * FROM metric_snapshots");
+    await migrateWarehouseSchema(c,"memory"); await migrateWarehouseSchema(c,"memory");
+    const row=(await c.runAndReadAll("SELECT revenue,sessions,key_events FROM metric_snapshots WHERE id='old'")).getRows()[0];
+    assert.deepEqual(row,[3,null,null]);
+    assert.equal(Number((await c.runAndReadAll("SELECT schema_version FROM warehouse_metadata")).getRows()[0][0]),2);
+  } finally { c.closeSync(); instance.closeSync(); }
 });

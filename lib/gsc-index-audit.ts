@@ -4,6 +4,7 @@ import { createGscClient, listGscSites } from "@/lib/connectors/gsc";
 import { daysAgo, nowIso } from "@/lib/dates";
 import { createId } from "@/lib/id";
 import { readData, writeData } from "@/lib/store";
+import { reconcileGscProjectLinks, resolveGscProject } from "@/lib/gsc-project-links";
 import type {
   AppData,
   ConnectorRun,
@@ -45,6 +46,8 @@ export async function auditGscIndex(options: GscIndexAuditOptions = {}): Promise
   const maxUrlsPerSite = normalizeLimit(options.maxUrlsPerSite);
   const progress = options.onProgress ?? (() => undefined);
   const data = await readData();
+  const repaired = reconcileGscProjectLinks(data);
+  if (repaired.inspections || repaired.runs) await writeData(data);
   const sites = (await listGscSites())
     .filter((site) => site.siteUrl)
     .filter((site) => matchesSiteFilter(site.siteUrl, options.siteFilter, data.projects));
@@ -58,7 +61,7 @@ export async function auditGscIndex(options: GscIndexAuditOptions = {}): Promise
 
   for (const [siteIndex, site] of sites.entries()) {
     const siteUrl = site.siteUrl;
-    const project = data.projects.find((item) => item.gscProperty === siteUrl);
+    const project = resolveGscProject(data.projects, siteUrl);
     progress(`[${siteIndex + 1}/${sites.length}] Discovering URLs for ${siteUrl}...`);
     const startedAt = nowIso();
 
@@ -283,7 +286,7 @@ async function inspectUrl(
         siteUrl,
         languageCode: "en-US",
       },
-    });
+    }, { timeout: 30000, retry: false });
     const inspection = response.data.inspectionResult;
     const status = inspection?.indexStatusResult;
     const issue = classifyIssue(status);

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { DuckDBInstance, DuckDBDataChunk, JSToDuckDBValueConverter, VARCHAR, DOUBLE, BIGINT, type DuckDBConnection, type DuckDBType } from "@duckdb/node-api";
+import { createSemanticViews, publishSourceConfiguration, publishWarehouseComments } from "./warehouse-semantics";
 
 // Explicit table/column allowlist: projects contain API keys, paths and private notes.
 export const WAREHOUSE_TABLES = [
@@ -75,9 +76,13 @@ export async function replicateWarehouse(connection: DuckDBConnection, sqlite: D
     const definitions = [...p.columns.map(c => `${q(c.name)} ${c.type === "INTEGER" ? "BIGINT" : c.type === "REAL" ? "DOUBLE" : "VARCHAR"}`), "_partition_key VARCHAR"].join(", ");
     const target = `${catalog}.main.${q(table)}`;
     await connection.run(`CREATE TABLE IF NOT EXISTS ${target} (${definitions})`);
+    // Enforce stable row identity on existing cloud tables without rebuilding them.
+    await connection.run(`CREATE UNIQUE INDEX IF NOT EXISTS ${q(`of_${table}_id`)} ON ${target}(id)`);
     sqlite.exec(`DROP TABLE IF EXISTS temp._of_projection;
       CREATE TEMP TABLE _of_projection AS SELECT ${p.select} FROM ${q(table)} WHERE ${p.where};
       CREATE INDEX temp._of_partition ON _of_projection(_partition_key, id);`);
+    if (sqlite.prepare("SELECT id FROM temp._of_projection GROUP BY id HAVING id IS NULL OR count(*)>1 LIMIT 1").get()) throw new Error(`Invalid or duplicate warehouse identity: ${table}`);
+    if (p.columns.some(c => c.name === "project_id") && sqlite.prepare("SELECT project_id FROM temp._of_projection WHERE project_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.id=_of_projection.project_id) LIMIT 1").get()) throw new Error(`Unknown warehouse project reference: ${table}`);
     const hashes = new Map<string, { digest: ReturnType<typeof createHash>; count: number }>();
     for (const row of sqlite.prepare("SELECT * FROM temp._of_projection ORDER BY id").iterate() as Iterable<Record<string, unknown>>) {
       const key = String(row._partition_key);
@@ -101,7 +106,10 @@ export async function replicateWarehouse(connection: DuckDBConnection, sqlite: D
         await connection.run(`DELETE FROM ${target} WHERE _partition_key = $1`, [key]);
         await connection.run(`DELETE FROM ${catalog}.main.warehouse_sync_state WHERE table_name = $1 AND partition_key = $2`, [table, key]);
       }
-      if (changed.size) await connection.run(`INSERT INTO ${target} SELECT * FROM of_stage`);
+      if (changed.size) {
+        const names = [...p.columns.map(col => q(col.name)), "_partition_key"].join(",");
+        await connection.run(`INSERT INTO ${target} (${names}) SELECT ${names} FROM of_stage`);
+      }
       for (const key of changed) {
         const partition = local.get(key);
         if (!partition) continue;
@@ -115,7 +123,10 @@ export async function replicateWarehouse(connection: DuckDBConnection, sqlite: D
     stats.push({ table, rows, changedPartitions: changed.size });
     log(`${table}: ${rows} rows, ${changed.size} changed partitions.`);
   }
+  await publishSourceConfiguration(connection, sqlite, databaseName);
   await createWarehouseViews(connection, databaseName);
+  await createSemanticViews(connection, databaseName);
+  await publishWarehouseComments(connection, databaseName);
   return stats;
 }
 
@@ -153,7 +164,31 @@ export async function createWarehouseViews(c: DuckDBConnection, name: string) {
     warehouse_sync_state: "Per-table/project/month content hashes and snapshot timestamps. Tables publish atomically, but a failed run can leave tables at different snapshots; inspect warehouse_runs.",
     ga4: "Daily users are not unique users over the period. GA4 and Umami are separate measurements; never add them.",
     asc_analytics_metrics: "Downloads are first-time downloads. Dates before 2025-09-21 are inflated and cannot be re-fetched.",
+    project_daily_kpis: "Long-format daily metrics. Preserve source,metric,unit,currency,grain. No RevenueCat rolling snapshots or Clarity rolling windows. Unknown values stay NULL; old inflated iOS downloads excluded.",
+    project_latest_kpis: "Latest value per project/source/metric/currency; metric dates can differ. RevenueCat rows identify rolling_28d vs snapshot gauges. Not a same-day cross-source total.",
+    source_coverage: "Actual dates/rows with data and current local source configuration. Historical rows survive disabled tracking. Dates with rows do not prove continuous or exhaustive coverage.",
+    data_freshness: "Latest connector outcome, actual metric date, natural lag and stale threshold. Disabled sources are not_configured, even if old failures exist. A successful sync can return zero observations.",
+    app_store_daily_quality: "trusted_downloads is NULL before 2025-09-21; original inflated downloads retained for audit. Retention fields are missing until cohort/unit mapping is implemented; do not coalesce to zero.",
+    gsc_page_monthly: "Aggregate GSC pages by project/page/month before joining to query aggregates, using the same period. Do not join raw query rows to raw page rows (many-to-many multiplication). Partial months must be compared on aligned dates.",
+    gsc_query_monthly: "Query+page monthly aggregates, not independent traffic. Join only pre-aggregated datasets on complete matching keys and same periods; do not add page and query reports.",
+    index_audit_latest: "Latest inspection per site_url+url; inspection date is separate from GSC traffic freshness. An old audit is not evidence of current indexing state.",
   })) await c.run(`INSERT OR REPLACE INTO ${d}.metric_dictionary VALUES ($1,$2)`, [key, definition]);
+}
+
+export async function migrateWarehouseSchema(c: DuckDBConnection, database: string) {
+  const d = `${q(database)}.main`;
+  await c.run(`CREATE TABLE IF NOT EXISTS ${d}.warehouse_schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ)`);
+  const exists = (await c.runAndReadAll("SELECT count(*) FROM information_schema.tables WHERE table_catalog=$1 AND table_schema='main' AND table_name='metric_snapshots'", [database])).getRows()[0][0];
+  await c.run("BEGIN TRANSACTION");
+  try {
+    if (Number(exists)) {
+      await c.run(`ALTER TABLE ${d}.metric_snapshots ADD COLUMN IF NOT EXISTS sessions BIGINT`);
+      await c.run(`ALTER TABLE ${d}.metric_snapshots ADD COLUMN IF NOT EXISTS key_events BIGINT`);
+    }
+    await c.run(`INSERT OR IGNORE INTO ${d}.warehouse_schema_migrations VALUES (2,current_timestamp)`);
+    await c.run(`UPDATE ${d}.warehouse_metadata SET schema_version=2 WHERE owner='openfindability'`);
+    await c.run("COMMIT");
+  } catch (error) { await c.run("ROLLBACK"); throw error; }
 }
 
 export async function syncMotherDuck(options: { apply?: boolean; verifyLocal?: boolean; sqlitePath?: string; database?: string } = {}) {
@@ -187,8 +222,9 @@ export async function syncMotherDuck(options: { apply?: boolean; verifyLocal?: b
     if (existing.length && !existing.includes("warehouse_metadata")) throw new Error("Destination contains unmanaged tables. Choose a new MOTHERDUCK_DATABASE; no existing tables were changed.");
     await connection.run(`CREATE TABLE IF NOT EXISTS ${q(databaseName)}.main.warehouse_metadata (owner VARCHAR PRIMARY KEY, schema_version BIGINT)`);
     const owners = (await connection.runAndReadAll(`SELECT owner,schema_version FROM ${q(databaseName)}.main.warehouse_metadata`)).getRows();
-    if (owners.length && (owners.length !== 1 || owners[0][0] !== "openfindability" || Number(owners[0][1]) !== 1)) throw new Error("Incompatible MotherDuck warehouse ownership/schema version.");
+    if (owners.length && (owners.length !== 1 || owners[0][0] !== "openfindability" || ![1,2].includes(Number(owners[0][1])))) throw new Error("Incompatible MotherDuck warehouse ownership/schema version.");
     await connection.run(`INSERT OR IGNORE INTO ${q(databaseName)}.main.warehouse_metadata VALUES ('openfindability',1)`);
+    await migrateWarehouseSchema(connection, databaseName);
     await connection.run(`CREATE TABLE IF NOT EXISTS ${q(databaseName)}.main.warehouse_runs (id VARCHAR PRIMARY KEY, started_at VARCHAR, finished_at VARCHAR, status VARCHAR)`);
     await connection.run(`INSERT INTO ${q(databaseName)}.main.warehouse_runs VALUES ($1,$2,NULL,'running')`, [runId, new Date().toISOString()]);
     try {

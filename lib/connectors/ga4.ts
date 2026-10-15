@@ -47,6 +47,8 @@ export function normalizeGa4Days(
       // GA4 Active Users ≠ Umami visitors; keep provider separate in reports.
       visitors: activeUsers,
       pageviews: views,
+      sessions,
+      keyEvents,
       rawJson: {
         activeUsers, sessions, screenPageViews: views, keyEvents,
         ga4TimeZone: payload.metadata?.timeZone ?? null,
