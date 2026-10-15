@@ -8,12 +8,24 @@ import { makeIntervention, interventionOutcome } from "../lib/analytics/interven
 import { growthEvidenceSnapshot } from "../lib/analytics/growth-evidence";
 import { warehouseColumns } from "../lib/integrations/motherduck";
 import { readGrowthEvidenceWith, saveIntervention } from "../lib/analytics/growth-evidence-store";
+import { performanceApiKey } from "../lib/connectors/google-performance-config";
 
 const project={id:"p",slug:"site",name:"Site",type:"web" as const,websiteUrl:"https://example.org",ga4PropertyId:"123",createdAt:"2026-01-01",updatedAt:"2026-01-01"};
 const row=(landing="/",date="20261010",sessions="10",events="3",rate="0.2")=>({dimensionValues:[date,"example.org",landing,"Organic Search","google / organic","mobile"].map(value=>({value})),metricValues:[sessions,"1",events,rate].map(value=>({value}))});
 const now="2026-10-15T12:00:00Z";
 const psi={lighthouseResult:{finalUrl:"https://example.org/",lighthouseVersion:"13",categories:{performance:{score:0.9}},audits:{"largest-contentful-paint":{numericValue:1800},"cumulative-layout-shift":{numericValue:0.02},"total-blocking-time":{numericValue:40}}}};
 const crux={record:{key:{url:"https://example.org/",formFactor:"PHONE"},collectionPeriod:{firstDate:{year:2026,month:9,day:16},lastDate:{year:2026,month:10,day:13}},metrics:{largest_contentful_paint:{percentiles:{p75:2300}},cumulative_layout_shift:{percentiles:{p75:"0.03"}}}}};
+
+test("shared performance key is a fallback; dedicated keys retain precedence",()=>{
+  const names=["CRUX_API_KEY","PAGESPEED_API_KEY","GOOGLE_CLOUD_API_KEY_GOD"] as const;
+  const previous=names.map(name=>process.env[name]);
+  try{
+    delete process.env.CRUX_API_KEY;process.env.PAGESPEED_API_KEY=" ";process.env.GOOGLE_CLOUD_API_KEY_GOD=" shared-test-value ";
+    assert.equal(performanceApiKey("crux"),"shared-test-value");assert.equal(performanceApiKey("pagespeed"),"shared-test-value");
+    process.env.CRUX_API_KEY="dedicated-test-value";assert.equal(performanceApiKey("crux"),"dedicated-test-value");
+    delete process.env.GOOGLE_CLOUD_API_KEY_GOD;assert.equal(performanceApiKey("pagespeed"),undefined);
+  }finally{names.forEach((name,i)=>{if(previous[i]===undefined)delete process.env[name];else process.env[name]=previous[i];});}
+});
 
 test("landing metrics preserve the provider rate, fractional key events and quality metadata",()=>{
   const rows=normalizeLandingRows("p",{rows:[row("/","20261010","10","3.5","0.2")],metadata:{timeZone:"Europe/Rome",subjectToThresholding:true}},now);

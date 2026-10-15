@@ -1,6 +1,7 @@
 import { db, getSqliteHandle } from "@/lib/db/client";
 import { projects as projectsTable, webPerformanceMetrics, connectorRuns } from "@/lib/db/schema";
 import { createId } from "@/lib/id";
+import { performanceApiKey } from "@/lib/connectors/google-performance-config";
 import { fetchPerformance, performanceSample, publicPageUrl, type Device, type PerformanceSource, type PerformanceRow } from "@/lib/connectors/web-performance";
 import type { ConnectorRun } from "@/lib/types";
 
@@ -16,14 +17,14 @@ export async function auditPerformance(options:{slug?:string;url?:string;limit?:
     const pages=sqlite.prepare("SELECT page,sum(impressions) AS impressions FROM page_metrics WHERE project_id=? AND date>=? AND json_valid(raw_json) AND json_extract(raw_json,'$._openfindability.grain')='day' GROUP BY page ORDER BY impressions DESC LIMIT 500").all(project.id,cutoff) as {page:string;impressions:number}[];
     const urls=options.url?[publicPageUrl(options.url,project.websiteUrl!)]:performanceSample(project.websiteUrl!,pages,options.limit??3);
     const targets=sources.flatMap(source=>[...urls.map(url=>({source,url,scope:"url" as const})),...(source==="crux"?[{source,url:new URL(project.websiteUrl!).origin,scope:"origin" as const}]:[])]);
-    if (!options.apply) {output.push({slug:project.slug,device,targets,cruxConfigured:Boolean(process.env.CRUX_API_KEY),pagespeedKeyConfigured:Boolean(process.env.PAGESPEED_API_KEY)});continue;}
+    if (!options.apply) {output.push({slug:project.slug,device,targets,cruxConfigured:Boolean(performanceApiKey("crux")),pagespeedKeyConfigured:Boolean(performanceApiKey("pagespeed"))});continue;}
     const rows:PerformanceRow[]=[]; const runs:ConnectorRun[]=[];
     for (const target of targets) {
       const startedAt=new Date().toISOString();
       const cached=sqlite.prepare("SELECT id FROM web_performance_metrics WHERE project_id=? AND source=? AND url=? AND scope=? AND device=? AND date=?").get(project.id,target.source,target.url,target.scope,device,startedAt.slice(0,10));
       if (cached && !options.force) {output.push({slug:project.slug,...target,status:"cached"});continue;}
       let status:ConnectorRun["status"]="success", errorMessage:string|undefined;
-      if (target.source==="crux" && !process.env.CRUX_API_KEY) { status="skipped";errorMessage="CRUX_API_KEY missing."; }
+      if (target.source==="crux" && !performanceApiKey("crux")) { status="skipped";errorMessage="CRUX_API_KEY or GOOGLE_CLOUD_API_KEY_GOD missing."; }
       else try {const row=await fetchPerformance(project.id,target.source,target.url,target.scope,device);rows.push(row);if(row.status==="no_data")status="no_data";}
       catch(error) {status="failed";errorMessage=error instanceof Error?error.message:"Performance request failed.";}
       runs.push({id:createId("run"),projectId:project.id,source:target.source,status,startedAt,finishedAt:new Date().toISOString(),errorMessage,stats:{url:target.url,scope:target.scope,device}});

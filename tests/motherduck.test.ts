@@ -67,13 +67,15 @@ test("warehouse partitions are idempotent, replace deleted rows, exclude legacy 
   } finally { connection.closeSync(); instance.closeSync(); sqlite.close(); }
 });
 
-test("warehouse v2 migration is additive and repeatable on old tables", async () => {
+test("warehouse migrations are additive and repeatable on old tables", async () => {
   const instance=await DuckDBInstance.create(); const c=await instance.connect();
   try {
     await c.run("CREATE TABLE warehouse_metadata(owner VARCHAR,schema_version INTEGER); INSERT INTO warehouse_metadata VALUES ('openfindability',1); CREATE TABLE metric_snapshots(id VARCHAR,revenue DOUBLE,_partition_key VARCHAR); INSERT INTO metric_snapshots VALUES ('old',3,'p'); CREATE VIEW old_report AS SELECT * FROM metric_snapshots");
+    await c.run("CREATE TABLE play_install_stats(id VARCHAR,uninstalls BIGINT); INSERT INTO play_install_stats VALUES ('old-play',0)");
     await migrateWarehouseSchema(c,"memory"); await migrateWarehouseSchema(c,"memory");
     const row=(await c.runAndReadAll("SELECT revenue,sessions,key_events FROM metric_snapshots WHERE id='old'")).getRows()[0];
     assert.deepEqual(row,[3,null,null]);
+    assert.deepEqual((await c.runAndReadAll("SELECT uninstalls,user_installs,user_uninstalls,install_events,uninstall_events FROM play_install_stats")).getRows()[0],[0n,null,null,null,null]);
     assert.equal(Number((await c.runAndReadAll("SELECT schema_version FROM warehouse_metadata")).getRows()[0][0]),4);
   } finally { c.closeSync(); instance.closeSync(); }
 });

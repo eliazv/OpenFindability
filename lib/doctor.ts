@@ -2,6 +2,7 @@ import { access } from "node:fs/promises";
 import { getDataFilePath, readData } from "@/lib/store";
 import type { AppData, SourceType } from "@/lib/types";
 import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
+import { performanceApiKey } from "@/lib/connectors/google-performance-config";
 
 const STALE_AFTER_DAYS = 3;
 
@@ -203,7 +204,7 @@ export function getLatestSyncProblems(data: Pick<AppData, "projects" | "connecto
     const configured: Partial<Record<typeof run.source, boolean>> = {
       ga4_landing: Boolean(project.ga4PropertyId && project.websiteUrl),
       pagespeed: Boolean(project.websiteUrl && (project.gscProperty || project.ga4PropertyId || project.umamiWebsiteId)),
-      crux: Boolean(process.env.CRUX_API_KEY && project.websiteUrl && (project.gscProperty || project.ga4PropertyId || project.umamiWebsiteId)),
+      crux: Boolean(performanceApiKey("crux") && project.websiteUrl && (project.gscProperty || project.ga4PropertyId || project.umamiWebsiteId)),
       gsc: Boolean(project.gscProperty), gsc_index: Boolean(project.gscProperty),
       ga4: Boolean(project.ga4PropertyId), umami: Boolean(project.umamiWebsiteId),
       bing_webmaster: Boolean(project.bingSiteUrl), cloudflare_ai: Boolean(project.cloudflareZoneId), clarity: Boolean(project.clarityTokenEnv),

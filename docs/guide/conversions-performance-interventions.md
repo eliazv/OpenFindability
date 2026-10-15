@@ -22,7 +22,7 @@ Fonti: [Data API](https://developers.google.com/analytics/devguides/reporting/da
 
 ## Prestazioni PageSpeed e CrUX
 
-In `.env` configurare `CRUX_API_KEY` e, consigliata, `PAGESPEED_API_KEY`. Abilitare **Chrome UX Report API** e **PageSpeed Insights API** nel progetto Google Cloud della chiave. Una stessa chiave può essere assegnata alle due variabili se autorizzata per entrambe le API, con restrizioni compatibili con lo script locale. Non vengono riutilizzate automaticamente chiavi di altri servizi.
+In `.env` configurare `CRUX_API_KEY` e, consigliata, `PAGESPEED_API_KEY`. In alternativa, `GOOGLE_CLOUD_API_KEY_GOD` viene usata come chiave condivisa di fallback per entrambe; le variabili dedicate hanno precedenza. Abilitare **Chrome UX Report API** e **PageSpeed Insights API** nel progetto Google Cloud della chiave. La chiave deve essere autorizzata per le API richieste, con restrizioni compatibili con lo script locale. Non vengono riutilizzate credenziali OAuth o del service account. Per questi connettori non occorrono accessi ad altre API.
 
 ```powershell
 # Anteprima: nessuna chiamata API o salvataggio di osservazioni.

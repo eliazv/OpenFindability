@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import { z } from "zod";
+import { performanceApiKey } from "./google-performance-config";
 import type { AppData } from "@/lib/types";
 
 export type PerformanceRow = NonNullable<AppData["webPerformanceMetrics"]>[number];
@@ -57,16 +58,17 @@ export function normalizeCrux(projectId:string,url:string,scope:"url"|"origin",d
 
 export async function fetchPerformance(projectId:string,source:PerformanceSource,url:string,scope:"url"|"origin",device:Device,request:typeof fetch=fetch):Promise<PerformanceRow> {
   const fetchedAt=new Date().toISOString();
+  const apiKey=performanceApiKey(source);
   let endpoint:URL, options:RequestInit;
   if (source==="crux") {
-    if (!process.env.CRUX_API_KEY) throw new Error("Configure CRUX_API_KEY for Chrome UX Report API.");
-    endpoint=new URL("https://chromeuxreport.googleapis.com/v1/records:queryRecord"); endpoint.searchParams.set("key",process.env.CRUX_API_KEY);
+    if (!apiKey) throw new Error("Configure CRUX_API_KEY or GOOGLE_CLOUD_API_KEY_GOD for Chrome UX Report API.");
+    endpoint=new URL("https://chromeuxreport.googleapis.com/v1/records:queryRecord"); endpoint.searchParams.set("key",apiKey);
     options={method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({[scope]:url,formFactor:device==="mobile"?"PHONE":"DESKTOP",metrics:["largest_contentful_paint","interaction_to_next_paint","cumulative_layout_shift"]})};
   } else {
     if (scope!=="url") throw new Error("PageSpeed supports URL lab measurements only.");
     endpoint=new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
     endpoint.searchParams.set("url",url); endpoint.searchParams.set("strategy",device); endpoint.searchParams.set("category","performance");
-    if (process.env.PAGESPEED_API_KEY) endpoint.searchParams.set("key",process.env.PAGESPEED_API_KEY);
+    if (apiKey) endpoint.searchParams.set("key",apiKey);
     options={};
   }
   let response:Response;

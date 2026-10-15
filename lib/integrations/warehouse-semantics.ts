@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
+import { performanceApiKey } from "@/lib/connectors/google-performance-config";
 import { createGrowthWarehouseViews } from "./growth-warehouse";
 
 const q = (s: string) => `"${s.replaceAll('"', '""')}"`;
@@ -15,7 +16,7 @@ export async function publishSourceConfiguration(c: DuckDBConnection, sqlite: Da
   } as const;
   // Export booleans only; token/key values and private project fields never leave SQLite.
   const activeWeb="NULLIF(website_url,'') IS NOT NULL AND (NULLIF(gsc_property,'') IS NOT NULL OR NULLIF(ga4_property_id,'') IS NOT NULL OR NULLIF(umami_website_id,'') IS NOT NULL)";
-  const configured = sqlite.prepare(`SELECT id, (${activeWeb}) AS pagespeed, (${activeWeb} AND ${process.env.CRUX_API_KEY?1:0}) AS crux,
+  const configured = sqlite.prepare(`SELECT id, (${activeWeb}) AS pagespeed, (${activeWeb} AND ${performanceApiKey("crux")?1:0}) AS crux,
     ${Object.entries(fields).map(([source, field]) => `${source === "aso" ? "json_valid(aso_keywords) AND json_array_length(aso_keywords)>0" : source === "ga4_landing" ? "NULLIF(ga4_property_id,'') IS NOT NULL AND NULLIF(website_url,'') IS NOT NULL" : `NULLIF(${q(field)},'') IS NOT NULL`} AS ${q(source)}`).join(",")},
     (NULLIF(admob_app_id,'') IS NOT NULL OR NULLIF(admob_app_id_ios,'') IS NOT NULL) AS admob FROM projects`).all() as Record<string, string | number>[];
   await c.run("BEGIN TRANSACTION");
