@@ -221,6 +221,10 @@ export type PlayInstallStat = {
   installs?: number;
   uninstalls?: number;
   activeDeviceInstalls?: number;
+  userInstalls?: number;
+  userUninstalls?: number;
+  installEvents?: number;
+  uninstallEvents?: number;
   rawJson?: unknown;
   createdAt: string;
 };

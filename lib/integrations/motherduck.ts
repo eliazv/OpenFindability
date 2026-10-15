@@ -187,6 +187,7 @@ export async function migrateWarehouseSchema(c: DuckDBConnection, database: stri
   const d = `${q(database)}.main`;
   await c.run(`CREATE TABLE IF NOT EXISTS ${d}.warehouse_schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ)`);
   const exists = (await c.runAndReadAll("SELECT count(*) FROM information_schema.tables WHERE table_catalog=$1 AND table_schema='main' AND table_name='metric_snapshots'", [database])).getRows()[0][0];
+  const playExists=(await c.runAndReadAll("SELECT count(*) FROM information_schema.tables WHERE table_catalog=$1 AND table_schema='main' AND table_name='play_install_stats'",[database])).getRows()[0][0];
   await c.run("BEGIN TRANSACTION");
   try {
     if (Number(exists)) {
@@ -195,7 +196,9 @@ export async function migrateWarehouseSchema(c: DuckDBConnection, database: stri
     }
     await c.run(`INSERT OR IGNORE INTO ${d}.warehouse_schema_migrations VALUES (2,current_timestamp)`);
     await c.run(`INSERT OR IGNORE INTO ${d}.warehouse_schema_migrations VALUES (3,current_timestamp)`);
-    await c.run(`UPDATE ${d}.warehouse_metadata SET schema_version=3 WHERE owner='openfindability'`);
+    if(Number(playExists))for(const column of ["user_installs","user_uninstalls","install_events","uninstall_events"])await c.run(`ALTER TABLE ${d}.play_install_stats ADD COLUMN IF NOT EXISTS ${q(column)} BIGINT`);
+    await c.run(`INSERT OR IGNORE INTO ${d}.warehouse_schema_migrations VALUES (4,current_timestamp)`);
+    await c.run(`UPDATE ${d}.warehouse_metadata SET schema_version=4 WHERE owner='openfindability'`);
     await c.run("COMMIT");
   } catch (error) { await c.run("ROLLBACK"); throw error; }
 }
@@ -231,7 +234,7 @@ export async function syncMotherDuck(options: { apply?: boolean; verifyLocal?: b
     if (existing.length && !existing.includes("warehouse_metadata")) throw new Error("Destination contains unmanaged tables. Choose a new MOTHERDUCK_DATABASE; no existing tables were changed.");
     await connection.run(`CREATE TABLE IF NOT EXISTS ${q(databaseName)}.main.warehouse_metadata (owner VARCHAR PRIMARY KEY, schema_version BIGINT)`);
     const owners = (await connection.runAndReadAll(`SELECT owner,schema_version FROM ${q(databaseName)}.main.warehouse_metadata`)).getRows();
-    if (owners.length && (owners.length !== 1 || owners[0][0] !== "openfindability" || ![1,2,3].includes(Number(owners[0][1])))) throw new Error("Incompatible MotherDuck warehouse ownership/schema version.");
+    if (owners.length && (owners.length !== 1 || owners[0][0] !== "openfindability" || ![1,2,3,4].includes(Number(owners[0][1])))) throw new Error("Incompatible MotherDuck warehouse ownership/schema version.");
     await connection.run(`INSERT OR IGNORE INTO ${q(databaseName)}.main.warehouse_metadata VALUES ('openfindability',1)`);
     await migrateWarehouseSchema(connection, databaseName);
     await connection.run(`CREATE TABLE IF NOT EXISTS ${q(databaseName)}.main.warehouse_runs (id VARCHAR PRIMARY KEY, started_at VARCHAR, finished_at VARCHAR, status VARCHAR)`);

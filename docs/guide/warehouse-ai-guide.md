@@ -4,6 +4,8 @@ Database: `openfindability.main`. Leggere `metric_dictionary`, `warehouse_runs`,
 
 ## Scelta delle viste
 
+Per Play usare `play_install_quality`: `installs`/`uninstalls` sono conteggi dispositivi; `user_installs`/`user_uninstalls` e `install_events`/`uninstall_events` sono altre serie. Zero dispositivi non implica assenza di attività nelle altre colonne. Non usare le serie come fallback, non sommarle tra loro e non ricavarne retention o churn di coorte.
+
 Per conversioni per pagina e canale usare `ga4_landing_daily` o `ga4_landing_monthly`, mantenendo hostname, dispositivo, fuso orario e qualità. `session_key_event_rate` è il tasso fornito da Google, pesato sulle sessioni in aggregazione: non è `key_events/sessions`. I dettagli non si aggiungono ai totali GA4; sessioni cross-domain possono comparire su più hostname.
 
 `web_performance_latest` separa CrUX (`field_p75_rolling`) da Lighthouse (`lighthouse_lab_snapshot`). Verificare ambito URL/origine, dispositivo, periodo e `age_days`. `no_data` e percentili mancanti restano sconosciuti; TBT non è INP. Non sommare percentili o punteggi.

@@ -74,6 +74,6 @@ test("warehouse v2 migration is additive and repeatable on old tables", async ()
     await migrateWarehouseSchema(c,"memory"); await migrateWarehouseSchema(c,"memory");
     const row=(await c.runAndReadAll("SELECT revenue,sessions,key_events FROM metric_snapshots WHERE id='old'")).getRows()[0];
     assert.deepEqual(row,[3,null,null]);
-    assert.equal(Number((await c.runAndReadAll("SELECT schema_version FROM warehouse_metadata")).getRows()[0][0]),3);
+    assert.equal(Number((await c.runAndReadAll("SELECT schema_version FROM warehouse_metadata")).getRows()[0][0]),4);
   } finally { c.closeSync(); instance.closeSync(); }
 });

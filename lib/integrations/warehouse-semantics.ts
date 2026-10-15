@@ -50,7 +50,7 @@ export async function createSemanticViews(c: DuckDBConnection, database: string)
     UNION ALL SELECT a.project_id,p.slug,a.source,a.date,'ad_revenue',a.revenue,'currency',a.currency,'day' FROM ${d}.daily_ad_revenue a JOIN ${d}.projects p ON p.id=a.project_id WHERE a.revenue IS NOT NULL
     UNION ALL SELECT a.project_id,p.slug,'asc_analytics',a.date,'first_time_downloads',a.trusted_downloads::DOUBLE,'count',NULL,'day' FROM ${d}.app_store_daily_quality a JOIN ${d}.projects p ON p.id=a.project_id WHERE a.trusted_downloads IS NOT NULL
     UNION ALL SELECT a.project_id,p.slug,'play_stats',a.date,v.metric,v.value,'count',NULL,'day' FROM ${d}.play_install_stats a JOIN ${d}.projects p ON p.id=a.project_id,
-      LATERAL (VALUES ('installs',a.installs::DOUBLE),('uninstalls',a.uninstalls::DOUBLE)) v(metric,value) WHERE v.value IS NOT NULL`);
+      LATERAL (VALUES ('installs',a.installs::DOUBLE),('uninstalls',a.uninstalls::DOUBLE),('user_installs',a.user_installs::DOUBLE),('user_uninstalls',a.user_uninstalls::DOUBLE),('install_events',a.install_events::DOUBLE),('uninstall_events',a.uninstall_events::DOUBLE)) v(metric,value) WHERE v.value IS NOT NULL`);
   await c.run(`CREATE OR REPLACE VIEW ${d}.project_latest_kpis AS
     SELECT * FROM ${d}.project_daily_kpis QUALIFY row_number() OVER(PARTITION BY project_id,source,metric,currency ORDER BY date DESC)=1
     UNION ALL SELECT r.project_id,p.slug,'revenuecat',r.date,v.metric,v.value,v.unit,CASE WHEN v.unit='currency' THEN r.currency ELSE NULL END,v.grain
@@ -96,9 +96,19 @@ export async function createSemanticViews(c: DuckDBConnection, database: string)
     'sampled proxy requests; observed hours are not proof of full-day coverage or citations' coverage_note
     FROM ${d}.ai_crawler_requests GROUP BY project_id,substr(window_start,1,10),crawler,host,http_status`);
   await createGrowthWarehouseViews(c,d);
+  await c.run(`CREATE OR REPLACE VIEW ${d}.play_install_quality AS SELECT *,
+    uninstalls=0 AND (coalesce(user_uninstalls,0)>0 OR coalesce(uninstall_events,0)>0) AS device_zero_with_uninstall_activity,
+    'installs/uninstalls are device series; user counts and event counts are separate, never fallbacks or a combined total' AS interpretation
+    FROM ${d}.play_install_stats`);
+  await c.run(`INSERT OR REPLACE INTO ${d}.metric_dictionary VALUES ('play_install_quality','Device, user and event uninstall counts are distinct CSV columns. A zero device count does not establish absence of user uninstalls or uninstall events. Do not replace device zeros with another metric, sum these series together, or infer retention from them. Missing columns stay NULL.')`);
 }
 
 const COMMENTS: Record<string, string> = {
+  user_installs:"Play CSV Daily User Installs. Distinct from Daily Device Installs and Install events; never add these series or treat them as fallbacks.",
+  user_uninstalls:"Play CSV Daily User Uninstalls. Can be positive when device uninstalls are zero. Not a cohort retention or churn rate.",
+  install_events:"Play CSV Install events, if supplied. Event count, not distinct devices or users.",
+  uninstall_events:"Play CSV Uninstall events, if supplied. Event count; can differ from user/device counts. Missing is unknown.",
+  uninstalls:"Play Daily Device Uninstalls only. Inspect play_install_quality.user_uninstalls and uninstall_events independently before interpreting zeros.",
   session_key_event_rate: "GA4 fraction (0..1) of sessions triggering any configured key event. NOT key_events/sessions. Weight by sessions only within compatible scopes; hostname cross-domain sessions can overlap.",
   lcp_ms: "LCP in milliseconds. CrUX is rolling field p75; PageSpeed is one Lighthouse lab run. Never combine or sum these sources.",
   inp_ms: "CrUX field INP p75 in milliseconds. NULL for Lighthouse lab runs: TBT is not INP.",

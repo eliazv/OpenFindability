@@ -12,6 +12,19 @@ import type { PlayInstallStat, Project, SyncResult } from "@/lib/types";
 // (looks like `pubsite_prod_<id>`), so it's read from an env var rather than derived.
 const STORAGE_SCOPE = "https://www.googleapis.com/auth/devstorage.read_only";
 
+// Device, user and event counts are distinct provider series, never fallbacks.
+export function readPlayInstallMetrics(raw: Record<string,string>) {
+  return {
+    installs:parseNonnegativeInteger(raw["Daily Device Installs"]),
+    uninstalls:parseNonnegativeInteger(raw["Daily Device Uninstalls"]),
+    activeDeviceInstalls:parseNonnegativeInteger(raw["Active Device Installs"]),
+    userInstalls:parseNonnegativeInteger(raw["Daily User Installs"]),
+    userUninstalls:parseNonnegativeInteger(raw["Daily User Uninstalls"]),
+    installEvents:parseNonnegativeInteger(raw["Install events"]),
+    uninstallEvents:parseNonnegativeInteger(raw["Uninstall events"]),
+  };
+}
+
 async function getStorageAuth() {
   const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
   const file = process.env.GOOGLE_SERVICE_ACCOUNT_FILE?.trim();
@@ -90,7 +103,7 @@ export async function syncPlayInstallStatsProject(
   const storage = google.storage({ version: "v1", auth });
   const packageName = project.playConsolePackageName;
   const createdAt = new Date().toISOString();
-  const byDate = new Map<string, { installs?: number; uninstalls?: number; activeDeviceInstalls?: number; raw: Record<string, string> }>();
+  const byDate = new Map<string, ReturnType<typeof readPlayInstallMetrics> & { raw: Record<string, string> }>();
 
   for (const monthKey of monthKeys(startDate, endDate)) {
     const object = `stats/installs/installs_${packageName}_${monthKey}_overview.csv`;
@@ -99,9 +112,6 @@ export async function syncPlayInstallStatsProject(
 
     const { headers, rows } = parseCsv(decodeCsv(buffer));
     const dateIdx = headers.indexOf("Date");
-    const installsIdx = headers.indexOf("Daily Device Installs");
-    const uninstallsIdx = headers.indexOf("Daily Device Uninstalls");
-    const activeIdx = headers.indexOf("Active Device Installs");
     if (dateIdx === -1) throw new Error(`Missing Date header in Play export: ${object}`);
 
     for (const cells of rows) {
@@ -113,9 +123,7 @@ export async function syncPlayInstallStatsProject(
         raw[header] = cells[idx];
       });
       byDate.set(date, {
-        installs: installsIdx >= 0 ? parseNonnegativeInteger(cells[installsIdx]) : undefined,
-        uninstalls: uninstallsIdx >= 0 ? parseNonnegativeInteger(cells[uninstallsIdx]) : undefined,
-        activeDeviceInstalls: activeIdx >= 0 ? parseNonnegativeInteger(cells[activeIdx]) : undefined,
+        ...readPlayInstallMetrics(raw),
         raw,
       });
     }
@@ -130,6 +138,10 @@ export async function syncPlayInstallStatsProject(
       installs: values.installs,
       uninstalls: values.uninstalls,
       activeDeviceInstalls: values.activeDeviceInstalls,
+      userInstalls: values.userInstalls,
+      userUninstalls: values.userUninstalls,
+      installEvents: values.installEvents,
+      uninstallEvents: values.uninstallEvents,
       rawJson: values.raw,
       createdAt,
     }));
