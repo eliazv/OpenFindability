@@ -5,6 +5,9 @@ import { createId } from "@/lib/id";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncGa4Project } from "@/lib/connectors/ga4";
 import { syncUmamiProject } from "@/lib/connectors/umami";
+import { syncBingProject } from "@/lib/connectors/bing";
+import { syncCloudflareProject } from "@/lib/connectors/cloudflare-ai";
+import { syncClarityProject } from "@/lib/connectors/clarity";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
 import { syncAsoProject } from "@/lib/connectors/aso";
 import { syncRevenueCatProject } from "@/lib/connectors/revenuecat";
@@ -98,6 +101,26 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
   const startedAt = nowIso();
 
   for (const project of data.projects) {
+    for (const provider of ["bing_webmaster", "cloudflare_ai", "clarity"] as const) {
+      if (source && source !== provider) continue;
+      try {
+        const synced = await (provider === "bing_webmaster" ? syncBingProject(project, daysAgo(backfillDays), daysAgo(1))
+          : provider === "cloudflare_ai" ? syncCloudflareProject(project) : syncClarityProject(project));
+        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
+        if ("replaceWindow" in synced && synced.replaceWindow) {
+          const window = synced.replaceWindow;
+          data.seoGeoObservations = (data.seoGeoObservations ?? []).filter(row =>
+            row.projectId !== project.id || row.source !== provider || row.kind !== window.kind || row.windowStart < window.start || row.windowEnd > window.end);
+        }
+        data.seoGeoObservations = upsertByKey(data.seoGeoObservations ?? [], synced.observations, row => row.id);
+        results.push(synced.result);
+        data.connectorRuns.push(toRun(provider, project.id, startedAt, synced.result));
+      } catch (error) {
+        const result = failed(provider, project.id, error);
+        results.push(result);
+        data.connectorRuns.push(toRun(provider, project.id, startedAt, result));
+      }
+    }
     if (!source || source === "gsc") {
       try {
         const synced = await syncGscProject(project, daysAgo(backfillDays), daysAgo(2));

@@ -71,6 +71,13 @@
       "when": 1791753225250,
       "tag": "0009_puzzling_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792063384835,
+      "tag": "0010_gigantic_black_bird",
+      "breakpoints": true
     }
   ]
 }

@@ -45,6 +45,11 @@ pnpm run sync:gsc | sync:ga4 | sync:umami | sync:play-console
 pnpm run sync:revenuecat | sync:admob | sync:adsense
 pnpm run sync:play-vitals | sync:play-stats | sync:asc-analytics
 pnpm run sync:aso                   # opt-in, needs local RespectASO
+pnpm run sync:bing | sync:cloudflare-ai | sync:clarity
+pnpm run discover:seo-geo           # local mapping preview; --apply to save
+pnpm run sync:warehouse             # MotherDuck export preview; --apply to upload
+pnpm run report:seo-geo -- <slug>
+pnpm run test:seo-geo
 pnpm run sync:admob:backfill | sync:adsense:backfill | sync:play-stats:backfill | sync:asc-analytics:backfill
 
 # Reports and exports

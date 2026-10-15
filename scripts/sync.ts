@@ -5,6 +5,7 @@ import type { SourceType } from "@/lib/types";
 async function main() {
   const arg = process.argv[2];
   const validSources: SourceType[] = [
+    "bing_webmaster", "cloudflare_ai", "clarity",
     "gsc",
     "ga4",
     "umami",
@@ -17,6 +18,7 @@ async function main() {
     "play_stats",
     "asc_analytics",
   ];
+  if (arg && !validSources.includes(arg as SourceType)) throw new Error(`Unknown source: ${arg}`);
   const source = validSources.includes(arg as SourceType) ? (arg as SourceType) : undefined;
   // e.g. `pnpm run sync:admob -- 1500` backfills ~4 years instead of the default 30 days.
   const backfillArg = process.argv[3];
@@ -28,6 +30,7 @@ async function main() {
     const parts = [`${inserted.snapshots} snapshots`, `${inserted.queries} queries`, `${inserted.pages} pages`];
     if (inserted.keywords !== undefined) parts.push(`${inserted.keywords} keywords`);
     if (inserted.reviews !== undefined) parts.push(`${inserted.reviews} reviews`);
+    if (inserted.observations !== undefined) parts.push(`${inserted.observations} observations`);
     console.log(`${result.status.toUpperCase()} ${result.source} ${result.projectId}: ${result.message} (${parts.join(", ")})`);
   }
 

@@ -1,4 +1,7 @@
 export type SourceType =
+  | "bing_webmaster"
+  | "cloudflare_ai"
+  | "clarity"
   | "gsc"
   | "ga4"
   | "umami"
@@ -20,6 +23,10 @@ export type Project = {
   type: ProjectType;
   category?: string;
   websiteUrl?: string;
+  bingSiteUrl?: string;
+  cloudflareZoneId?: string;
+  clarityProjectId?: string;
+  clarityTokenEnv?: string;
   gscProperty?: string;
   ga4PropertyId?: string;
   umamiWebsiteId?: string;
@@ -347,6 +354,7 @@ export type Opportunity = {
 
 export type ConnectorSource =
   | SourceType
+  | "motherduck"
   | "gsc_index"
   | "asc_metadata"
   | "asc_experiments"
@@ -366,6 +374,7 @@ export type ConnectorRun = {
 };
 
 export type AppData = {
+  seoGeoObservations?: SeoGeoObservation[];
   projects: Project[];
   metricSnapshots: MetricSnapshot[];
   searchQueries: SearchQueryMetric[];
@@ -393,6 +402,23 @@ export type SyncOptions = {
   backfillDays?: number;
 };
 
+export type SeoGeoSource = "bing_webmaster" | "cloudflare_ai" | "clarity";
+export type SeoGeoObservation = {
+  id: string;
+  projectId: string;
+  source: SeoGeoSource;
+  kind: string;
+  recordKey: string;
+  windowStart: string;
+  windowEnd: string;
+  grain: "day" | "hour" | "rolling_window" | "provider_period";
+  scope: string;
+  metrics: Record<string, unknown>;
+  coverage: Record<string, unknown>;
+  rawJson: unknown;
+  fetchedAt: string;
+};
+
 export type SyncResult = {
   source: SourceType;
   projectId: string;
@@ -400,6 +426,7 @@ export type SyncResult = {
   message: string;
   inserted: {
     snapshots: number;
+    observations?: number;
     queries: number;
     pages: number;
     reviews?: number;

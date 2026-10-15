@@ -20,6 +20,7 @@ import {
   playVitalsMetrics as playVitalsMetricsTable,
   projects as projectsTable,
   searchQueries as searchQueriesTable,
+  seoGeoObservations as seoGeoObservationsTable,
 } from "@/lib/db/schema";
 import type {
   AdmobMediationMetric,
@@ -174,6 +175,7 @@ export function readDataWith(database: AppDb): AppData {
     .map(denull) as AscAnalyticsMetric[];
 
   const snapshot: AppData = {
+    seoGeoObservations: database.select().from(seoGeoObservationsTable).all() as NonNullable<AppData["seoGeoObservations"]>,
     projects,
     metricSnapshots,
     searchQueries,
@@ -282,6 +284,7 @@ export function writeDataWith(database: AppDb, data: AppData): void {
       }
     }
 
+    if (changed.has("seoGeoObservations")) tx.delete(seoGeoObservationsTable).run();
     if (changed.has("searchQueries")) tx.delete(searchQueriesTable).run();
     if (changed.has("pageMetrics")) tx.delete(pageMetricsTable).run();
     if (changed.has("opportunities")) tx.delete(opportunitiesTable).run();
@@ -308,6 +311,9 @@ export function writeDataWith(database: AppDb, data: AppData): void {
     }
     if (changed.has("metricSnapshots")) for (const batch of chunk(data.metricSnapshots, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(metricSnapshotsTable).values(batch).run();
+    }
+    if (changed.has("seoGeoObservations")) for (const batch of chunk(data.seoGeoObservations ?? [], INSERT_CHUNK_SIZE)) {
+      if (batch.length > 0) tx.insert(seoGeoObservationsTable).values(batch).run();
     }
     if (changed.has("searchQueries")) for (const batch of chunk(data.searchQueries, INSERT_CHUNK_SIZE)) {
       if (batch.length > 0) tx.insert(searchQueriesTable).values(batch).run();

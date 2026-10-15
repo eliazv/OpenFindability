@@ -1,6 +1,6 @@
 import { access } from "node:fs/promises";
 import { getDataFilePath, readData } from "@/lib/store";
-import type { AppData } from "@/lib/types";
+import type { AppData, SourceType } from "@/lib/types";
 import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
 
 const STALE_AFTER_DAYS = 3;
@@ -8,7 +8,16 @@ const STALE_AFTER_DAYS = 3;
 export async function getDoctorReport() {
   const data = await readData();
   const dataFile = getDataFilePath();
+  const warehouseRun = data.connectorRuns.filter(run => run.source === "motherduck").sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
   const checks = [
+    { name: "MotherDuck warehouse export", status: warehouseRun?.status === "success", required: false,
+      detail: warehouseRun ? `${warehouseRun.status} at ${warehouseRun.finishedAt}` : "Not exported yet; sync:warehouse previews, --apply uploads." },
+    ...[
+      ["MotherDuck", Boolean(process.env.MOTHERDUCK_API_TOKEN), "MOTHERDUCK_API_TOKEN"],
+      ["Bing Webmaster", Boolean(process.env.BING_WEBMASTER_API_KEY), "BING_WEBMASTER_API_KEY"],
+      ["Cloudflare AI", Boolean(process.env.CLOUDFLARE_API_TOKEN_2 || process.env.CLOUDFLARE_API_TOKEN), "CLOUDFLARE_API_TOKEN_2 or CLOUDFLARE_API_TOKEN"],
+      ["Microsoft Clarity", data.projects.some(p => p.clarityTokenEnv && process.env[p.clarityTokenEnv]), "Project clarityTokenEnv mapping and token"],
+    ].map(([name, status, detail]) => ({ name: String(name), status: Boolean(status), detail: String(detail), required: false })),
     {
       name: "Data file",
       status: await exists(dataFile),
@@ -149,7 +158,10 @@ function getStaleProjects(data: AppData, staleAfterDays: number): { slug: string
   const stale: { slug: string; source: string; ageDays: number | null }[] = [];
 
   for (const project of data.projects) {
-    const sources: ("gsc" | "ga4" | "umami" | "revenuecat" | "admob" | "adsense" | "play_vitals" | "play_stats" | "asc_analytics")[] = [];
+    const sources: SourceType[] = [];
+    if (project.bingSiteUrl) sources.push("bing_webmaster");
+    if (project.cloudflareZoneId) sources.push("cloudflare_ai");
+    if (project.clarityTokenEnv) sources.push("clarity");
     if (project.gscProperty) sources.push("gsc");
     if (project.ga4PropertyId) sources.push("ga4");
     if (project.umamiWebsiteId) sources.push("umami");

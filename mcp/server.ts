@@ -15,6 +15,7 @@ import { buildOpportunities } from "@/lib/insights";
 import { aggregateDailyQueryRows, aggregateDailyPageRows } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
 import { getGrowthSnapshot } from "@/lib/analytics/growth-snapshot";
+import { seoGeoSnapshot } from "@/lib/analytics/seo-geo";
 import type { AppData, Project, ProjectType } from "@/lib/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -80,6 +81,15 @@ const server = new McpServer({
   name: "openfindability",
   version: "0.1.0",
 });
+
+server.tool("get_seo_geo_snapshot", "Read stored Bing SEO, Cloudflare crawler and Clarity UX observations with coverage. Crawler requests are not citations; Clarity windows overlap.",
+  { slug: z.string(), limit: z.number().int().min(1).max(500).default(100) },
+  async ({ slug, limit }) => {
+    const data = await readStoredData();
+    const project = findProject(data.projects, slug);
+    if (!project) return { content: [{ type: "text", text: "Project not found." }], isError: true };
+    return { content: [{ type: "text", text: JSON.stringify(seoGeoSnapshot(project, data.seoGeoObservations ?? [], limit)) }] };
+  });
 
 server.tool(
   "list_projects",

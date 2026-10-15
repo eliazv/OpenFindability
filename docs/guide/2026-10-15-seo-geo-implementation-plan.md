@@ -1,5 +1,7 @@
 # Piano di implementazione SEO + GEO in OpenFindability
 
+> Implementazione disponibile per MotherDuck, Bing SEO, Cloudflare crawler e Clarity: [guida operativa](./seo-geo-warehouse.md). Le sezioni restanti di questo documento rimangono una proposta; il caricamento cloud richiede `sync:warehouse --apply`. L'implementazione usa una tabella osservazioni comune con provider/kind/grana/coverage, senza migrare i dettagli GSC.
+
 > Stato: proposta tecnica, **non implementazione**. Data: 15 ottobre 2026.
 > Repository analizzato: `eliazv/OpenFindability`, branch base `master`.
 > Documento complementare: [strumenti e ricerca](./2026-10-15-seo-geo-tools.md).

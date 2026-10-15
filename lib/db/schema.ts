@@ -7,6 +7,10 @@ export const projects = sqliteTable("projects", {
   type: text("type", { enum: ["web", "app", "web_app"] }).notNull(),
   category: text("category"),
   websiteUrl: text("website_url"),
+  bingSiteUrl: text("bing_site_url"),
+  cloudflareZoneId: text("cloudflare_zone_id"),
+  clarityProjectId: text("clarity_project_id"),
+  clarityTokenEnv: text("clarity_token_env"),
   gscProperty: text("gsc_property"),
   ga4PropertyId: text("ga4_property_id"),
   umamiWebsiteId: text("umami_website_id"),
@@ -35,6 +39,7 @@ export const metricSnapshots = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     source: text("source", {
       enum: [
+        "bing_webmaster", "cloudflare_ai", "clarity",
         "gsc",
         "ga4",
         "umami",
@@ -249,6 +254,7 @@ export const connectorRuns = sqliteTable(
     id: text("id").primaryKey(),
     source: text("source", {
       enum: [
+        "bing_webmaster", "cloudflare_ai", "clarity", "motherduck",
         "gsc",
         "gsc_index",
         "ga4",
@@ -497,7 +503,27 @@ export const ascAnalyticsMetrics = sqliteTable(
   (table) => [uniqueIndex("asc_analytics_metrics_project_date").on(table.projectId, table.date)],
 );
 
+export const seoGeoObservations = sqliteTable("seo_geo_observations", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  source: text("source", { enum: ["bing_webmaster", "cloudflare_ai", "clarity"] }).notNull(),
+  kind: text("kind").notNull(),
+  recordKey: text("record_key").notNull(),
+  windowStart: text("window_start").notNull(),
+  windowEnd: text("window_end").notNull(),
+  grain: text("grain", { enum: ["day", "hour", "rolling_window", "provider_period"] }).notNull(),
+  scope: text("scope").notNull(),
+  metrics: text("metrics", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+  coverage: text("coverage", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+  rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
+  fetchedAt: text("fetched_at").notNull(),
+}, table => [
+  uniqueIndex("seo_geo_source_project_kind_key").on(table.source, table.projectId, table.kind, table.recordKey),
+  index("seo_geo_project_source_window").on(table.projectId, table.source, table.windowEnd),
+]);
+
 export const schema = {
+  seoGeoObservations,
   projects,
   metricSnapshots,
   searchQueries,

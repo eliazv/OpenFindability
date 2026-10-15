@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createDb, getSqliteHandle } from "../lib/db/client";
 import { readDataWith, StaleStoreSnapshotError, writeDataWith } from "../lib/store";
+import { observation } from "../lib/connectors/seo-geo-common";
 
 test("two SQLite connections cannot silently overwrite each other", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "openfindability-revision-"));
@@ -54,6 +55,20 @@ test("untracked data objects may not trigger an unsafe full-store rewrite", () =
     getSqliteHandle(db).close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("SEO/GEO observations survive project replacement and preserve original payload", () => {
+  const database = createDb(":memory:", path.join(process.cwd(), "drizzle"));
+  try {
+    const data = readDataWith(database);
+    data.projects.push({ id: "p", slug: "site", name: "Site", type: "web", createdAt: "2026-10-01", updatedAt: "2026-10-01" });
+    data.seoGeoObservations = [observation({ projectId: "p", source: "clarity", kind: "Traffic", windowStart: "start", windowEnd: "end", grain: "rolling_window", scope: "https://example.com", metrics: { sessions: 0 }, coverage: { overlapping: true }, rawJson: { original: "payload" }, fetchedAt: "now" })];
+    writeDataWith(database, data);
+    const edit = readDataWith(database);
+    edit.projects[0].name = "Renamed";
+    writeDataWith(database, edit);
+    assert.deepEqual(readDataWith(database).seoGeoObservations, data.seoGeoObservations);
+  } finally { getSqliteHandle(database).close(); }
 });
 
 test("GSC row-level delta replaces refreshed rows but preserves unrelated history", () => {

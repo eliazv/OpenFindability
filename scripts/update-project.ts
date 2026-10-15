@@ -6,6 +6,10 @@ type Args = {
   name?: string;
   category?: string;
   url?: string;
+  bing?: string;
+  cloudflare?: string;
+  clarity?: string;
+  clarityTokenEnv?: string;
   gsc?: string;
   ga4?: string;
   umami?: string;
@@ -36,6 +40,10 @@ function parseArgs(argv: string[]): Args {
       case "name": args.name = value; break;
       case "category": args.category = value; break;
       case "url": args.url = value; break;
+      case "bing": args.bing = value; break;
+      case "cloudflare-zone": args.cloudflare = value; break;
+      case "clarity-project": args.clarity = value; break;
+      case "clarity-token-env": args.clarityTokenEnv = value; break;
       case "gsc": args.gsc = value; break;
       case "ga4": args.ga4 = value; break;
       case "umami": args.umami = value; break;
@@ -88,6 +96,10 @@ async function main() {
   if (args.name !== undefined) updates.name = args.name;
   if (args.category !== undefined) updates.category = args.category;
   if (args.url !== undefined) updates.websiteUrl = args.url;
+  if (args.bing !== undefined) updates.bingSiteUrl = args.bing;
+  if (args.cloudflare !== undefined) updates.cloudflareZoneId = args.cloudflare;
+  if (args.clarity !== undefined) updates.clarityProjectId = args.clarity;
+  if (args.clarityTokenEnv !== undefined) updates.clarityTokenEnv = args.clarityTokenEnv;
   if (args.gsc !== undefined) updates.gscProperty = args.gsc;
   if (args.ga4 !== undefined) updates.ga4PropertyId = args.ga4;
   if (args.umami !== undefined) updates.umamiWebsiteId = args.umami;

@@ -14,6 +14,13 @@
     "test:reliability": "tsx --test tests/csv.test.ts tests/store-concurrency.test.ts tests/metrics-summary.test.ts tests/growth-snapshot.test.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "sync": "tsx scripts/sync.ts",
+    "sync:bing": "tsx scripts/sync.ts bing_webmaster",
+    "sync:cloudflare-ai": "tsx scripts/sync.ts cloudflare_ai",
+    "sync:clarity": "tsx scripts/sync.ts clarity",
+    "sync:warehouse": "tsx scripts/sync-warehouse.ts",
+    "discover:seo-geo": "tsx scripts/discover-seo-geo.ts",
+    "report:seo-geo": "tsx scripts/seo-geo-report.ts",
+    "test:seo-geo": "tsx --test tests/seo-geo.test.ts tests/motherduck.test.ts",
     "sync:gsc": "tsx scripts/sync.ts gsc",
     "sync:ga4": "tsx scripts/sync.ts ga4",
     "sync:umami": "tsx scripts/sync.ts umami",
@@ -60,6 +67,7 @@
     "db:migrate-json": "tsx scripts/migrate-json-to-sqlite.ts"
   },
   "dependencies": {
+    "@duckdb/node-api": "1.5.6-r.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@radix-ui/react-dialog": "^1.1.17",
     "@radix-ui/react-separator": "^1.1.8",

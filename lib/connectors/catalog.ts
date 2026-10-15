@@ -15,6 +15,18 @@ export type ConnectorDescriptor = {
 };
 
 export const CONNECTOR_CATALOG = {
+  bing_webmaster: {
+    label: "Bing Webmaster", category: "seo", grain: "mixed", typicalLagDays: 3,
+    staleAfterDays: 7, syncSafety: "read_only", docs: "docs/guide/seo-geo-warehouse.md",
+  },
+  cloudflare_ai: {
+    label: "Cloudflare AI crawlers", category: "seo", grain: "mixed", typicalLagDays: 0,
+    staleAfterDays: 1, syncSafety: "read_only", docs: "docs/guide/seo-geo-warehouse.md",
+  },
+  clarity: {
+    label: "Microsoft Clarity", category: "web_analytics", grain: "rolling_snapshot", typicalLagDays: 0,
+    staleAfterDays: 1, syncSafety: "read_only", docs: "docs/guide/seo-geo-warehouse.md",
+  },
   gsc: {
     label: "Google Search Console", category: "seo", grain: "daily",
     typicalLagDays: 2, staleAfterDays: 4, syncSafety: "read_only", docs: "docs/guide/gsc-google-sheets-appscript-integration.md",
