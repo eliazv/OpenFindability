@@ -1,8 +1,8 @@
 .next/
 node_modules/
-data/*.json
-data/*.db*
-!.gitkeep
+# Runtime analytics data (including nested exports/backups): track only the marker.
+/data/**
+!/data/.gitkeep
 .env
 .env.*
 .env*
@@ -18,7 +18,23 @@ private-notes/
 secrets/
 sensibili/
 
-data/backups/
+# Local export folders, DB copies and structured analytics dumps.
+/exports/
+/backups/
+/tmp/
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.ods
+*.parquet
+*.arrow
+*.feather
+*.duckdb
+*.duckdb.wal
+*.ndjson
+*.jsonl
+*.sqlite-journal
 
 # Public repository: never commit local customer reports or provider credentials.
 project-reports/
