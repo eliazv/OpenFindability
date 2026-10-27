@@ -16,6 +16,8 @@ Verifiche eseguite su Windows: typecheck TypeScript, 5 test offline CLI/connecto
 
 ## Identificativi già letti dal progetto locale
 
+L'identità Scadenzario è stata successivamente confermata via API Apple e il mapping `iosReleaseConfig` è già salvato nello store locale. L'inventario completo delle build è nel report privato `project/scadenzario/reports/2026-10-27-ios-setup-verification.json`; il preflight reale è riuscito senza dispatch o upload. Non serve reinserire l'Apple ID per questo progetto; l'esempio JSON sotto resta utile per nuove installazioni.
+
 Ho verificato `C:/Users/zavat/Desktop/Progetti/scadenziario/ios/Runner.xcodeproj/project.pbxproj` e gli entitlements presenti sul PC:
 
 | Elemento | Valore |
@@ -96,7 +98,7 @@ Nel runner creare Environment **`ios-release`**, limitato al default branch. Con
 
 La GitHub App deve avere **Contents: read**, installata solo sui repository sorgenti abilitati. Il token locale `OPENFINDABILITY_RELEASE_RUNNER_TOKEN` è distinto: fine-grained, **Actions: write** e Metadata read sul solo repository runner; salvarlo nella `.env` locale. Non serve dare al runner scrittura sui repository delle app.
 
-Prima di abilitare firma: sul Mac risolvere e committare `Gemfile.lock`, fissare le action ancora a tag a SHA revisionati, verificare disponibilità dell'Xcode scelto nell'immagine `macos-15`, costo/quote GitHub e accessi ai due repository. Flutter `3.47.6` nel template viene dal piano: va confermato con la toolchain realmente usata. L'Environment con reviewer è opzionale e dipende dal piano GitHub; allowlist privata e SHA approvati restano obbligatori.
+Prima di abilitare firma: sul Mac risolvere e committare `Gemfile.lock`, verificare disponibilità dell'Xcode scelto nell'immagine `macos-15`, costo/quote GitHub e accessi ai due repository. Le action del runner sono già fissate a SHA verificati nei rispettivi repository ufficiali. Flutter `3.47.6` nel template viene dal piano: va confermato con la toolchain realmente usata. L'Environment con reviewer è opzionale e dipende dal piano GitHub; allowlist privata e SHA approvati restano obbligatori.
 
 ## 5. Bootstrap Match dal Mac
 

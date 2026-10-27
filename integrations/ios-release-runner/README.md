@@ -8,7 +8,7 @@ Il workflow non deve essere attivato nel repository pubblico OpenFindability.
 2. Compilare `appId`, versione Xcode e SHA approvato in `apps.json`; verificare Flutter e impostare `enabled: true` solo dopo la revisione.
 3. Creare Environment `ios-release`, limitato al default branch; impostare secrets e variabile Match come indicato nella guida. I reviewer dell'Environment sono opzionali secondo le funzionalità disponibili nel piano GitHub.
 4. Prima esecuzione `mode=unsigned`; non richiede segreti Apple, richiede checkout via GitHub App.
-5. Su Mac eseguire `bundle install`, verificare e committare `Gemfile.lock`. Fissare a SHA revisionati le action che nel template usano ancora tag (`create-github-app-token`, Xcode, Flutter, Ruby, artifact) prima di abilitare la firma. Il template usa macos-15: verificare che l'Xcode scelto sia disponibile sull'immagine.
+5. Su Mac eseguire `bundle install`, verificare e committare `Gemfile.lock`. Le action sono fissate a SHA dei rispettivi repository; aggiornare questi riferimenti solo con una revisione esplicita. Il template usa macos-15: verificare che l'Xcode scelto sia disponibile sull'immagine.
 6. Configurare Match sul Mac, importare certificato esistente e profili senza revocarli; CI usa soltanto `readonly: true`.
 7. `mode=build` produce IPA firmato verificato; `mode=testflight` aggiunge upload senza submission/review o distribuzione esterna automatica.
 

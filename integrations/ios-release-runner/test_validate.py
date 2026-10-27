@@ -1,11 +1,18 @@
 import copy
 import json
+import re
 import unittest
 from pathlib import Path
 from validate import validate
 
 
 class RunnerPolicyTests(unittest.TestCase):
+    def test_actions_are_pinned_to_immutable_commits(self):
+        workflow = Path(__file__).with_name("release-ios.yml").read_text()
+        refs = re.findall(r"uses:\s+([^\s]+)", workflow)
+        self.assertGreater(len(refs), 5)
+        self.assertTrue(all(re.fullmatch(r"[^@]+@[a-f0-9]{40}", ref) for ref in refs))
+
     def setUp(self):
         self.apps = json.loads(Path(__file__).with_name("apps.json").read_text())
         self.inputs = dict(slug="scadenzario", sha="a" * 40, mode="unsigned", build_name="1.2.3", build_number="104", correlation_id="12345678-1234-1234-1234-123456789abc")

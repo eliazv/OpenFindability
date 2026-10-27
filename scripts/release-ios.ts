@@ -24,7 +24,14 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   if (app.bundleId !== config.bundleIds[0]) throw new Error("ASC app bundle ID does not match the configured main bundle ID.");
   const builds = await listAscBuilds(String(config.appId));
   if (command === "ios-status") {
-    console.log(JSON.stringify({ app, builds }, null, 2));
+    const recentBuilds = [...builds].sort((a, b) => Date.parse(b.uploadedDate ?? "") - Date.parse(a.uploadedDate ?? ""))
+      .slice(0, 10).map(({ id, version, processingState, uploadedDate }) => ({ id, version, processingState, uploadedDate }));
+    console.log(JSON.stringify({ app, totalBuilds: builds.length, recentBuilds }, null, 2));
+    const missing = ["OPENFINDABILITY_RELEASE_RUNNER_REPO", "OPENFINDABILITY_RELEASE_RUNNER_TOKEN"].filter((key) => !process.env[key]?.trim());
+    if (missing.length > 0) {
+      console.log(JSON.stringify({ runner: { configured: false, missing }, note: "Apple status available; finish private GitHub runner setup to read job status." }, null, 2));
+      return;
+    }
     const github = new GitHubActionsClient(releaseRunnerFromEnv());
     await github.assertPrivate();
     console.log(JSON.stringify({ runs: (await github.runs()).filter((run) => run.display_title.startsWith(`ios:${project.slug}:`)) }, null, 2));
