@@ -1,0 +1,38 @@
+{
+  "scadenzario": {
+    "enabled": false,
+    "repository": "eliazv/scadenziario",
+    "appId": null,
+    "teamId": "TP72E87G5R",
+    "bundleIds": [
+      "com.eliazavatta.scadenzario",
+      "com.eliazavatta.scadenzario.ScadenzarioWidget",
+      "com.eliazavatta.scadenzario.ShareExtension"
+    ],
+    "framework": "flutter",
+    "workingDirectory": ".",
+    "flutterVersion": "3.47.6",
+    "xcodeVersion": "",
+    "scheme": "Runner",
+    "targets": {
+      "Runner": "com.eliazavatta.scadenzario",
+      "ScadenzarioWidget": "com.eliazavatta.scadenzario.ScadenzarioWidget",
+      "ScadenzarioShareExtension": "com.eliazavatta.scadenzario.ShareExtension"
+    },
+    "requiredEntitlements": {
+      "com.eliazavatta.scadenzario": {
+        "aps-environment": "production",
+        "com.apple.developer.applesignin": ["Default"],
+        "com.apple.developer.associated-domains": ["applinks:www.scadenzario.app", "applinks:scadenzario.eliazavatta.it"],
+        "com.apple.security.application-groups": ["group.com.eliazavatta.scadenzario"]
+      },
+      "com.eliazavatta.scadenzario.ScadenzarioWidget": {
+        "com.apple.security.application-groups": ["group.com.eliazavatta.scadenzario"]
+      },
+      "com.eliazavatta.scadenzario.ShareExtension": {
+        "com.apple.security.application-groups": ["group.com.eliazavatta.scadenzario"]
+      }
+    },
+    "approvedShas": []
+  }
+}

@@ -1,0 +1,113 @@
+require "json"
+require "fileutils"
+require "open3"
+
+default_platform(:ios)
+
+def release_context
+  root = File.expand_path("..", __dir__)
+  app = JSON.parse(File.read(File.join(root, "apps.json"))).fetch(ENV.fetch("SLUG"))
+  # Validation is repeated here so a manual lane invocation cannot bypass the guard.
+  sh("python3", File.join(root, "validate.py"))
+  source = File.expand_path(File.join(root, "source", app.fetch("workingDirectory")))
+  sha, ok = Open3.capture2("git", "-C", source, "rev-parse", "HEAD")
+  UI.user_error!("Checkout SHA mismatch") unless ok.success? && sha.strip == ENV.fetch("SHA")
+  UI.user_error!("Commit Podfile.lock before building") unless File.file?(File.join(source, "ios", "Podfile.lock"))
+  [root, app, source]
+end
+
+def prepare_flutter(source)
+  Dir.chdir(source) do
+    sh("flutter", "pub", "get", "--enforce-lockfile")
+    # Generate Flutter's xcconfig before resolving Pods; preserve native project/workarounds.
+    sh("flutter", "build", "ios", "--config-only", "--release", "--no-codesign",
+       "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
+    Dir.chdir("ios") { sh("pod", "install", "--deployment") }
+  end
+end
+
+def receipt(root, state)
+  FileUtils.mkdir_p(File.join(root, "output"))
+  File.write(File.join(root, "output", "release.json"), JSON.pretty_generate({
+    slug: ENV.fetch("SLUG"), sha: ENV.fetch("SHA"), version: ENV.fetch("BUILD_NAME"),
+    build: ENV.fetch("BUILD_NUMBER"), correlationId: ENV.fetch("CORRELATION_ID"),
+    state: state, runId: ENV["GITHUB_RUN_ID"]
+  }))
+end
+
+platform :ios do
+  lane :unsigned do
+    root, app, source = release_context
+    prepare_flutter(source)
+    Dir.chdir(source) do
+      sh("flutter", "build", "ios", "--release", "--no-codesign", "--no-pub",
+         "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
+    end
+    FileUtils.mkdir_p(File.join(root, "output"))
+    sh("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", File.join(source, "build", "ios", "iphoneos", "Runner.app"), File.join(root, "output", "unsigned-app.zip"))
+    receipt(root, "built_unsigned")
+  end
+
+  lane :release do
+    root, app, source = release_context
+    keychain = "ios-release-#{ENV.fetch('GITHUB_RUN_ID')}"
+    api_key = app_store_connect_api_key(key_id: ENV.fetch("ASC_KEY_ID"), issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_CONTENT"), in_house: false)
+    remote = Spaceship::ConnectAPI::App.get(app_id: app.fetch("appId").to_s)
+    UI.user_error!("ASC identity mismatch") unless remote.bundle_id == app.fetch("bundleIds").first
+    check_number = lambda do
+      builds = Spaceship::ConnectAPI::Build.all(app_id: app.fetch("appId").to_s)
+      UI.user_error!("Non-integer ASC build numbering needs manual reconciliation") if builds.any? { |b| b.version !~ /\A[1-9][0-9]*\z/ }
+      highest = builds.map { |b| b.version.to_i }.max || 0
+      UI.user_error!("Build number already consumed; re-plan from Windows") unless ENV.fetch("BUILD_NUMBER").to_i > highest
+    end
+    check_number.call
+    prepare_flutter(source)
+    setup_ci(provider: "github", keychain_name: keychain, timeout: 3600)
+    match(type: "appstore", readonly: true, api_key: api_key, team_id: app.fetch("teamId"),
+      app_identifier: app.fetch("bundleIds"), git_url: ENV.fetch("MATCH_GIT_URL"), keychain_name: keychain)
+    profiles = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
+    UI.user_error!("Missing profiles") unless (app.fetch("bundleIds") - profiles.keys).empty?
+    app.fetch("targets").each do |target, bundle|
+      update_code_signing_settings(use_automatic_signing: false, path: File.join(source, "ios", "Runner.xcodeproj"),
+        targets: [target], team_id: app.fetch("teamId"), bundle_identifier: bundle,
+        code_sign_identity: "Apple Distribution", profile_name: profiles.fetch(bundle), build_configurations: ["Release"])
+    end
+    # The pilot keeps development push entitlements in source. Change only the
+    # disposable CI checkout; never rewrite the developer's project repository.
+    require "xcodeproj"
+    project = Xcodeproj::Project.open(File.join(source, "ios", "Runner.xcodeproj"))
+    app.fetch("targets").each do |target_name, bundle|
+      target = project.targets.find { |t| t.name == target_name }
+      UI.user_error!("Missing Xcode target #{target_name}") unless target
+      settings = target.build_configurations.find { |c| c.name == "Release" }.build_settings
+      file = settings["CODE_SIGN_ENTITLEMENTS"]
+      next unless file && app.fetch("requiredEntitlements", {}).fetch(bundle, {}).key?("aps-environment")
+      entitlement_path = File.expand_path(file, File.join(source, "ios"))
+      UI.user_error!("Entitlements outside checkout") unless entitlement_path.start_with?(source + File::SEPARATOR)
+      entitlement_data = Xcodeproj::Plist.read_from_path(entitlement_path)
+      entitlement_data["aps-environment"] = "production"
+      Xcodeproj::Plist.write_to_path(entitlement_data, entitlement_path)
+    end
+    export = File.join(ENV.fetch("RUNNER_TEMP"), "ExportOptions.plist")
+    require "plist"
+    File.write(export, { method: "app-store-connect", signingStyle: "manual", teamID: app.fetch("teamId"), provisioningProfiles: profiles }.to_plist)
+    Dir.chdir(source) do
+      sh("flutter", "build", "ipa", "--release", "--no-pub", "--export-options-plist", export,
+        "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
+    end
+    ipas = Dir[File.join(source, "build", "ios", "ipa", "*.ipa")]
+    UI.user_error!("Expected exactly one IPA") unless ipas.length == 1
+    sh("python3", File.join(root, "verify_ipa.py"), ipas.first)
+    FileUtils.mkdir_p(File.join(root, "output"))
+    FileUtils.cp(ipas.first, File.join(root, "output", "release.ipa"))
+    receipt(root, "built")
+    if ENV.fetch("MODE") == "testflight"
+      check_number.call
+      upload_to_testflight(api_key: api_key, app_identifier: app.fetch("bundleIds").first,
+        apple_id: app.fetch("appId").to_s, ipa: ipas.first,
+        skip_waiting_for_build_processing: true, skip_submission: true, distribute_external: false)
+      receipt(root, "uploaded_processing_unconfirmed")
+    end
+  end
+end

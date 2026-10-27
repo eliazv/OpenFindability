@@ -408,6 +408,24 @@ export async function writeData(data: AppData): Promise<void> {
   writeDataWith(db, data);
 }
 
+/** Only the projects table: avoids loading the whole store for CLI lookups. */
+export async function readProjects(): Promise<Project[]> {
+  return db.select().from(projectsTable).all().map(denull) as Project[];
+}
+
+/**
+ * Appends one connector run without a full read/write of the store, which
+ * exhausts the Node heap once the database grows to hundreds of MB.
+ */
+export async function appendConnectorRun(run: ConnectorRun): Promise<void> {
+  db.transaction((tx) => {
+    tx.insert(connectorRunsTable).values(run).run();
+    getSqliteHandle(db)
+      .prepare("UPDATE _openfindability_store_revision SET revision = revision + 1 WHERE id = 1")
+      .run();
+  });
+}
+
 export async function updateData(mutator: (data: AppData) => AppData | void): Promise<AppData> {
   // Retry the synchronous mutation against a fresh snapshot after a conflict.
   for (let attempt = 0; attempt < 3; attempt++) {

@@ -1,5 +1,7 @@
 # Release iOS centralizzate: OpenFindability + runner macOS
 
+> **Implementazione iniziale preparata:** CLI iOS, metadata progetto, migrazione additiva e pacchetto runner privato sono ora nel repository. Il testo seguente conserva il piano originale; per lo stato operativo, i limiti e i dati necessari da Mac/Apple seguire [Setup e consegna iOS](ios-release-setup-handoff.md). Nessun runner remoto attivato e nessuna build/upload macOS eseguita durante questa preparazione.
+
 **Data:** 27 ottobre 2026  
 **Stato:** proposta architetturale verificata sul codice (non implementata, nessun build/upload eseguito)  
 **Fonte:** \`master\` di OpenFindability e \`develop\` di \`eliazv/scadenziario\`.

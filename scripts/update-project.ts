@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { readFile } from "node:fs/promises";
+import { validateIosConfig } from "@/lib/release-ios";
 import { updateData } from "@/lib/store";
 
 type Args = {
@@ -24,6 +26,7 @@ type Args = {
   admobAppIdIos?: string;
   adsenseSiteDomain?: string;
   flutterPath?: string;
+  iosConfig?: string;
   notes?: string;
 };
 
@@ -58,6 +61,7 @@ function parseArgs(argv: string[]): Args {
       case "admob-app-id-ios": args.admobAppIdIos = value; break;
       case "adsense-domain": args.adsenseSiteDomain = value; break;
       case "flutter-path": args.flutterPath = value; break;
+      case "ios-config": args.iosConfig = value; break;
       case "notes": args.notes = value; break;
       default:
         throw new Error(`Unknown argument --${key}`);
@@ -114,6 +118,7 @@ async function main() {
   if (args.admobAppIdIos !== undefined) updates.admobAppIdIos = args.admobAppIdIos;
   if (args.adsenseSiteDomain !== undefined) updates.adsenseSiteDomain = args.adsenseSiteDomain;
   if (args.flutterPath !== undefined) updates.flutterProjectPath = args.flutterPath;
+  if (args.iosConfig !== undefined) updates.iosReleaseConfig = validateIosConfig(JSON.parse(await readFile(args.iosConfig, "utf8")));
   if (args.notes !== undefined) updates.notes = args.notes;
 
   if (Object.keys(updates).length === 0) {

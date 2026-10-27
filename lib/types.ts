@@ -44,6 +44,7 @@ export type Project = {
   admobAppIdIos?: string;
   adsenseSiteDomain?: string;
   flutterProjectPath?: string;
+  iosReleaseConfig?: import("@/lib/release-ios").IosReleaseConfig;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -369,6 +370,7 @@ export type ConnectorSource =
   | "asc_experiments"
   | "app_discovery"
   | "play_release"
+  | "ios_release"
   | "all";
 
 export type ConnectorRun = {

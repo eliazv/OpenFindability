@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { getPlayTracks, type PlayReleaseStatus } from "@/lib/connectors/play-console";
 import { createId } from "@/lib/id";
 import { readFlutterProject, releaseAndroid, type ReleaseMode } from "@/lib/release";
-import { readData, updateData } from "@/lib/store";
+import { appendConnectorRun, readProjects } from "@/lib/store";
 import type { Project } from "@/lib/types";
 
 type Args = {
@@ -101,11 +101,15 @@ async function printStatus(project: Project, packageName: string) {
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2).filter((token) => token !== "--");
+  if (command === "ios" || command === "ios-status") {
+    const { runIosReleaseCli } = await import("@/scripts/release-ios");
+    await runIosReleaseCli(command, rest);
+    return;
+  }
   if (command !== "android" && command !== "status") throw new Error(USAGE);
   const args = parseArgs(rest);
 
-  const data = await readData();
-  const project = await resolveProject(data.projects, args);
+  const project = await resolveProject(await readProjects(), args);
   if (!project.playConsolePackageName) {
     throw new Error(`Project "${project.slug}" has no playConsolePackageName configured.`);
   }
@@ -198,17 +202,15 @@ async function recordRun(
   errorMessage: string | undefined,
   stats: Record<string, unknown>,
 ) {
-  await updateData((d) => {
-    d.connectorRuns.push({
-      id: createId("run"),
-      source: "play_release",
-      projectId,
-      status,
-      startedAt,
-      finishedAt: new Date().toISOString(),
-      errorMessage,
-      stats,
-    });
+  await appendConnectorRun({
+    id: createId("run"),
+    source: "play_release",
+    projectId,
+    status,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    errorMessage,
+    stats,
   });
 }
 

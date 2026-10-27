@@ -1,0 +1,9 @@
+vendor/
+.bundle/
+output/
+*.p8
+*.p12
+*.mobileprovision
+fastlane/report.xml
+fastlane/README.md
+__pycache__/

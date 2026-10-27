@@ -96,6 +96,23 @@ async function ascFetchAllPages(path: string): Promise<JsonApiResource[]> {
 
 export type AscApp = { id: string; bundleId?: string; name?: string; sku?: string; primaryLocale?: string };
 
+/** Includes expired/processing builds and all pages; never infer build numbers from store versions. */
+export async function listAscBuilds(appId: string): Promise<import("@/lib/release-ios").IosBuild[]> {
+  const builds = await ascFetchAllPages(`/apps/${encodeURIComponent(appId)}/builds?limit=200`);
+  return builds.map((build) => ({
+    id: build.id,
+    version: String(build.attributes?.version ?? ""),
+    processingState: build.attributes?.processingState as string | undefined,
+    uploadedDate: build.attributes?.uploadedDate as string | undefined,
+    rawJson: build,
+  }));
+}
+
+export async function getAscApp(appId: string): Promise<AscApp> {
+  const { data } = await ascFetch<JsonApiDocument>(`/apps/${encodeURIComponent(appId)}`);
+  return { id: data.id, bundleId: data.attributes?.bundleId as string | undefined, name: data.attributes?.name as string | undefined };
+}
+
 export async function listAscApps(): Promise<AscApp[]> {
   const apps = await ascFetchAllPages("/apps?limit=200");
   return apps.map((app) => ({

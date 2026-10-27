@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `ios_release_config` text;
