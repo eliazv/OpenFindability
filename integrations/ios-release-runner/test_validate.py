@@ -15,11 +15,11 @@ class RunnerPolicyTests(unittest.TestCase):
 
     def setUp(self):
         self.apps = json.loads(Path(__file__).with_name("apps.json").read_text())
-        self.inputs = dict(slug="scadenzario", sha="a" * 40, mode="unsigned", build_name="1.2.3", build_number="104", correlation_id="12345678-1234-1234-1234-123456789abc")
+        self.inputs = dict(slug="demo", sha="a" * 40, mode="unsigned", build_name="1.2.3", build_number="104", correlation_id="12345678-1234-1234-1234-123456789abc")
 
     def enabled(self):
         apps = copy.deepcopy(self.apps)
-        apps["scadenzario"].update(enabled=True, appId=123, xcodeVersion="26.0", approvedShas=["a" * 40])
+        apps["demo"].update(enabled=True, appId=123, xcodeVersion="26.0", approvedShas=["a" * 40])
         return apps
 
     def test_template_cannot_release(self):
@@ -27,7 +27,7 @@ class RunnerPolicyTests(unittest.TestCase):
             validate(self.apps, self.inputs)
 
     def test_explicitly_approved_commit(self):
-        self.assertEqual(validate(self.enabled(), self.inputs)["teamId"], "TP72E87G5R")
+        self.assertEqual(validate(self.enabled(), self.inputs)["teamId"], "ABCDEFGHIJ")
 
     def test_arbitrary_commit_and_pull_ref_rejected(self):
         for sha in ["b" * 40, "refs/pull/1/head", "main"]:
@@ -37,18 +37,18 @@ class RunnerPolicyTests(unittest.TestCase):
     def test_path_and_shell_inputs_rejected(self):
         for key, value in [("workingDirectory", "../escape"), ("workingDirectory", "/tmp"), ("repository", "owner/repo;echo bad"), ("scheme", "$(bad)")]:
             apps = self.enabled()
-            apps["scadenzario"][key] = value
+            apps["demo"][key] = value
             with self.assertRaises(ValueError):
                 validate(apps, self.inputs)
 
     def test_missing_extension_mapping_rejected(self):
         apps = self.enabled()
-        del apps["scadenzario"]["targets"]["ScadenzarioWidget"]
+        del apps["demo"]["targets"]["Widget"]
         with self.assertRaises(ValueError):
             validate(apps, self.inputs)
 
     def test_production_and_invalid_versions_rejected(self):
-        for key, value in [("mode", "production"), ("build_name", "1.2.3;echo bad"), ("build_number", "-1"), ("slug", "../scadenzario")]:
+        for key, value in [("mode", "production"), ("build_name", "1.2.3;echo bad"), ("build_number", "-1"), ("slug", "../demo")]:
             with self.assertRaises(ValueError):
                 validate(self.enabled(), dict(self.inputs, **{key: value}))
 

@@ -1,151 +1,88 @@
-# Setup release iOS: cosa manca e cosa passarmi
+# Setup release iOS centralizzate
 
-Preparato il **27 ottobre 2026**. Obiettivo: avviare da Windows build centralizzate e upload **TestFlight** per Scadenzario, poi riusare il runner per altre app.
+OpenFindability rimane il punto di comando per tutte le app. Sorgenti, firma e compilazione sono configurati una volta per progetto; non serve un workflow nel repository di ogni app. Le build iOS richiedono macOS e Xcode: Windows puo' avviare e controllare il lavoro, ma non compilare un IPA da solo.
 
-## Già preparato in OpenFindability
+Questa guida pubblica contiene solo esempi fittizi. Inventari reali, percorsi personali, Team ID, Bundle ID, profili e stato del setup vanno in `private-notes/ios-release/`; configurazioni operative in `secrets/ios/` e nel database locale. Credenziali in `.env`, `secrets/` o GitHub Secrets. Non committare output Apple o configurazioni reali nel template pubblico `integrations/ios-release-runner/apps.json`.
 
-- `release:ios` e `release:ios-status`, senza modificare il comportamento Android.
-- Preflight read-only con app Apple verificata, SHA completo e versione esplicita. Numero build `auto` basato su tutte le build ASC paginate, comprese processing/expired. Numerazione intera crescente globale; build Apple con numeri puntati bloccano il piano e richiedono riconciliazione.
-- Identità remota per progetto in `iosReleaseConfig`; migrazione additiva generata, non applicata durante la preparazione. Non usa il percorso Windows sul runner.
-- Dispatch verso repository privato, storico locale in `connectorRuns` e correlation ID. Nessun endpoint web di pubblicazione.
-- Pacchetto runner in `integrations/ios-release-runner/`: workflow, allowlist, Fastlane Match readonly, controllo IPA e tre target, compilazione senza firma separata dall'upload.
+## Quanti repository servono?
 
-**Non è una release già funzionante:** repository privato e deposito Match vanno predisposti, credenziali installate, toolchain macOS verificata e prima build provata. Nessun upload o rilascio Apple è stato eseguito. Il template lascia Scadenzario disabilitato e senza SHA approvati.
-
-Verifiche eseguite su Windows: typecheck TypeScript, 5 test offline CLI/connector, 6 test della policy runner, sintassi Ruby/Python, parsing YAML e migrazione su SQLite in memoria. Il tentativo read-only `asc:apps` ha restituito `fetch failed` in questo ambiente: Apple ID e build reali non sono stati confermati via API. Il backup locale è stato tentato e bloccato dal mismatch Node/SQLite descritto sotto; database reale e migrazione non sono stati toccati.
-
-## Identificativi già letti dal progetto locale
-
-L'identità Scadenzario è stata successivamente confermata via API Apple e il mapping `iosReleaseConfig` è già salvato nello store locale. L'inventario completo delle build è nel report privato `project/scadenzario/reports/2026-10-27-ios-setup-verification.json`; il preflight reale è riuscito senza dispatch o upload. Non serve reinserire l'Apple ID per questo progetto; l'esempio JSON sotto resta utile per nuove installazioni.
-
-Ho verificato `C:/Users/zavat/Desktop/Progetti/scadenziario/ios/Runner.xcodeproj/project.pbxproj` e gli entitlements presenti sul PC:
-
-| Elemento | Valore |
-| --- | --- |
-| Repository previsto | `eliazv/scadenziario` |
-| Apple Team | `TP72E87G5R` |
-| Target principale | `Runner` → `com.eliazavatta.scadenzario` |
-| Widget | `ScadenzarioWidget` → `com.eliazavatta.scadenzario.ScadenzarioWidget` |
-| Share Extension | `ScadenzarioShareExtension` → `com.eliazavatta.scadenzario.ShareExtension` |
-| App Group sui tre target | `group.com.eliazavatta.scadenzario` |
-| Runner | Sign in with Apple, Associated Domains, push |
-| Associated Domains | `applinks:www.scadenzario.app`, `applinks:scadenzario.eliazavatta.it` |
-
-Il nome target share è **ScadenzarioShareExtension**, non ShareExtension. Il Bundle ID termina invece con `.ShareExtension`. Gli entitlements sorgente push sono `development`: il runner li imposta a `production` nel solo checkout temporaneo e verifica il risultato firmato. Serve un profilo App Store coerente.
-
-## 1. Dal Mac: dati e file da preparare
-
-Passami il testo dei seguenti comandi e l'esito dell'ultima build iOS riuscita; non contengono password:
-
-```bash
-xcodebuild -version
-xcode-select -p
-flutter --version
-pod --version
-ruby --version
-security find-identity -v -p codesigning
-# Dalla cartella Scadenzario:
-git rev-parse HEAD
-git status --short
-xcodebuild -list -project ios/Runner.xcodeproj
-```
-
-Indica quale commit è stato provato su iPhone e quale vuoi autorizzare nel runner. Modifiche solo locali sul Mac devono essere revisionate e committate prima: il cloud compila lo SHA remoto, non la cartella del Mac. Non passare dump completi di Keychain, `.env`, DerivedData o `xcodebuild -showBuildSettings` senza revisarli.
-
-Per il certificato Apple Distribution esistente: apri **Accesso Portachiavi → I miei certificati**, espandi la voce e verifica che includa **la chiave privata**. Esporta certificato e chiave privata come `.p12` protetto da password. Un `.cer` da solo non basta. Servono anche i tre profili **App Store Connect** `.mobileprovision` dei Bundle ID sopra, tutti collegati al certificato valido e allo stesso Team.
-
-**Non incollare qui `.p12`, password o chiavi private.** Conserva i file in una posizione protetta sul Mac per il bootstrap Match, con backup cifrato. Passami soltanto conferma della presenza, scadenza e percorso locale. La password Match e quella `.p12` si impostano fuori dal repository. Non revocare certificati esistenti e non usare `match nuke`.
-
-## 2. Dal portale Apple Developer
-
-In **Certificates, Identifiers & Profiles**, conferma:
-
-- membership attiva e Team ID corretto;
-- i tre App ID espliciti, con App Group condiviso configurato;
-- sul Runner: Push Notifications, Sign in with Apple e Associated Domains;
-- certificato Distribution valido con chiave privata disponibile sul Mac;
-- tre profili App Store validi, ricreati solo se necessario dopo variazioni capability.
-
-Passami nomi e scadenze di certificato/profili e conferma delle capability. Se una capability manca, va abilitata e il profilo rigenerato. Non serve registrare UDID per i profili App Store/TestFlight.
-
-## 3. Da App Store Connect
-
-In **Le mie app → Scadenzario → Informazioni app**, passami l'**Apple ID numerico** e conferma il Bundle ID. In TestFlight indica l'ultima coppia versione/build, eventuali build ancora processing e stato export compliance. Il codice interroga comunque Apple prima di scegliere il numero successivo.
-
-In **Utenti e accesso → Integrazioni → API App Store Connect**: verifica se la Team Key già usata da OpenFindability ha accesso all'app e ruolo adeguato all'upload (App Manager è la scelta pratica da verificare con l'amministratore). Servono **Key ID**, **Issuer ID** e file `.p8` originale. Apple consente di scaricare la privata una sola volta. Questa non è la chiave Sign in with Apple usata da Firebase.
-
-Passami Key ID/Issuer ID e il percorso del `.p8`, oppure conferma che la chiave locale configurata è quella giusta. Il contenuto privato va direttamente in GitHub Secret `ASC_KEY_CONTENT` (PEM completo multilinea, non base64) e non in chat. Conferma anche accordi Apple accettati e quale gruppo tester interno useremo. La pipeline non pubblica sull'App Store e non invita automaticamente tester esterni.
-
-## 4. GitHub: setup una volta sola
-
-Creare due repository **privati**:
-
-1. `eliazv/mobile-release-runner`: copiare il pacchetto runner alla radice, spostando lo YAML in `.github/workflows/release-ios.yml`, sul default branch `main`.
-2. Un deposito firme, ad esempio `eliazv/mobile-signing`: archiviazione cifrata Fastlane Match; scrittura solo nel bootstrap controllato sul Mac, sola lettura in CI.
-
-Nel runner creare Environment **`ios-release`**, limitato al default branch. Configurare:
-
-| Tipo | Nome | Contenuto |
+| Modalita' | Repository aggiuntivi | Stato |
 | --- | --- | --- |
-| Secret | `SOURCE_APP_ID` | ID della GitHub App per checkout |
-| Secret | `SOURCE_APP_PRIVATE_KEY` | PEM della GitHub App |
-| Secret | `ASC_KEY_ID` | ID chiave Apple |
-| Secret | `ASC_ISSUER_ID` | Issuer Apple |
-| Secret | `ASC_KEY_CONTENT` | `.p8` completo |
-| Secret | `MATCH_PASSWORD` | password cifratura deposito Match |
-| Secret | `MATCH_GIT_BASIC_AUTHORIZATION` | base64 di `utente:token`, token read-only sul solo deposito firme |
-| Variable | `MATCH_GIT_URL` | URL HTTPS del deposito privato Match |
+| GitHub Actions macOS, runner centrale privato | Uno per tutte le app | Backend predisposto; richiede bootstrap e prova macOS |
+| Deposito Match nello stesso runner, branch separato `signing` | Nessuno oltre al runner | Supportato tramite `MATCH_GIT_BRANCH` |
+| Deposito Match privato separato | Uno opzionale | Separazione degli accessi, non requisito |
+| Mac proprio/remoto controllato direttamente | Nessuno obbligatorio | Possibile architettura, backend SSH non implementato |
 
-La GitHub App deve avere **Contents: read**, installata solo sui repository sorgenti abilitati. Il token locale `OPENFINDABILITY_RELEASE_RUNNER_TOKEN` è distinto: fine-grained, **Actions: write** e Metadata read sul solo repository runner; salvarlo nella `.env` locale. Non serve dare al runner scrittura sui repository delle app.
+Il repository pubblico OpenFindability conserva il codice generico e la CLI. Il runner privato ospita allowlist reale e workflow privilegiato; il suo branch `signing` contiene solo il deposito cifrato Match, senza workflow. `main` contiene il runner. Match usa `clone_branch_directly: true`: non deve interpretare il codice del runner come deposito firme.
 
-Prima di abilitare firma: sul Mac risolvere e committare `Gemfile.lock`, verificare disponibilità dell'Xcode scelto nell'immagine `macos-15`, costo/quote GitHub e accessi ai due repository. Le action del runner sono già fissate a SHA verificati nei rispettivi repository ufficiali. Flutter `3.47.6` nel template viene dal piano: va confermato con la toolchain realmente usata. L'Environment con reviewer è opzionale e dipende dal piano GitHub; allowlist privata e SHA approvati restano obbligatori.
+Quindi non servono due repository nuovi ne' un repository nuovo per ogni app. Tutte le operazioni abituali partono da OpenFindability. Il Mac remoto e' l'esecutore; il secondo repository firme rimane opzionale. Non viene creato alcun repository automaticamente.
 
-## 5. Bootstrap Match dal Mac
+## Compatibilita' e mapping per app
 
-Dal repository runner privato, dopo `bundle install`, usare `bundle exec fastlane match import --type appstore` seguendo i prompt per importare `.p12`, eventuale `.cer` richiesto e profili esistenti. Ripetere per tutti i profili. Impostare deposito Git privato e Team corretti: la credenziale di bootstrap deve poter scrivere nel deposito. Non salvare password nei comandi committati o nella history.
+- Flutter: progetto iOS e Pods esistenti, target/estensioni espliciti, versione Flutter fissata.
+- Capacitor: build web con script npm configurato, `cap sync ios --deployment`, progetto/workspace Xcode e Pods esistenti, versione Node fissata.
+- Repository con piu' app: `workingDirectory` indica la sottocartella di ciascuna app. La radice da sola non basta se contiene piu' identita' iOS.
+- Ogni app richiede App ID/profili/capability propri. Lo stesso certificato Distribution puo' servire app dello stesso Team; non elimina i profili delle estensioni.
+- Configurazioni particolari (flavor Flutter, SPM senza CocoaPods, altri framework) richiedono un adattamento e vengono rifiutate finche' non supportate. La compatibilita' del builder non equivale a una release macOS gia' verificata per tutte le app.
 
-Verificare poi la lettura con `bundle exec fastlane match appstore --readonly --app_identifier com.eliazavatta.scadenzario,com.eliazavatta.scadenzario.ScadenzarioWidget,com.eliazavatta.scadenzario.ShareExtension --team_id TP72E87G5R`. Match richiede auth e configurazione del deposito: completarle tramite variabili sicure o prompt. La CI non crea né ripara profili.
+Il mapping locale contiene `repository`, `appId`, `teamId`, `bundleIds` (app per prima), `framework` e, per sottocartelle, `workingDirectory`. Il runner verifica una propria allowlist privata con SHA approvati, target, entitlements e toolchain: i dati inviati dalla CLI non possono sostituirla.
 
-## 6. Attivazione da Windows
+## Setup una volta sola
 
-Usare Node 24 (indicato in `.node-version` e `package.json`). Dopo un cambio runtime eseguire `pnpm rebuild better-sqlite3`: il progetto autorizza esplicitamente questo script nativo. Il backup reale ? stato eseguito e verificato dopo la correzione. Continuare a eseguire `pnpm run db:backup` prima di modifiche rischiose: le migrazioni si applicano automaticamente aprendo lo store.
+1. Creare un repository runner privato; copiare il pacchetto `integrations/ios-release-runner/` alla radice e spostare il solo YAML in `.github/workflows/release-ios.yml`. Lasciare workflow_dispatch sul default branch.
+2. Per usare un solo repository, inizializzare un branch separato `signing` per Match, senza copiare il codice del runner. Un secondo deposito privato resta un'alternativa.
+3. Creare Environment `ios-release`, limitato al default branch. Configurare le credenziali qui sotto. Reviewer opzionali secondo il piano GitHub.
+4. Sul Mac risolvere e committare `Gemfile.lock`, importare certificato/profili in Match e provare la lettura readonly. Non revocare certificati esistenti e non usare `match nuke`.
+5. Compilare l'allowlist privata, confermare Xcode disponibile su `macos-15`, Flutter/Node e lockfile, poi approvare un commit e abilitare l'app. Le action del template sono fissate a SHA.
+6. Prima prova senza firma, poi IPA firmato, poi upload TestFlight esplicitamente richiesto. Verificare costi e quote macOS del runner privato.
 
-Creare `secrets/ios/scadenzario.json` con questa configurazione, sostituendo `123` con l'Apple ID reale:
+| Tipo | Nome | Scopo |
+| --- | --- | --- |
+| Secret runner | `SOURCE_APP_ID`, `SOURCE_APP_PRIVATE_KEY` | GitHub App con Contents read sui soli sorgenti autorizzati |
+| Secret runner | `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_CONTENT` | Team API Key Apple; contenuto PEM `.p8` completo |
+| Secret runner | `MATCH_PASSWORD` | Password cifratura deposito Match |
+| Secret runner | `MATCH_GIT_BASIC_AUTHORIZATION` | Base64 di utente:token per lettura deposito firme |
+| Variable runner | `MATCH_GIT_URL` | URL HTTPS del runner stesso oppure del deposito separato |
+| Variable runner | `MATCH_GIT_BRANCH` | `signing` nel caso di repository unico |
+| `.env` locale | `OPENFINDABILITY_RELEASE_RUNNER_REPO`, `_REF`, `_TOKEN` | Dispatch; token Actions write limitato al runner |
 
-```json
-{
-  "repository": "eliazv/scadenziario",
-  "appId": 123,
-  "teamId": "TP72E87G5R",
-  "bundleIds": ["com.eliazavatta.scadenzario", "com.eliazavatta.scadenzario.ScadenzarioWidget", "com.eliazavatta.scadenzario.ShareExtension"],
-  "framework": "flutter"
-}
-```
+Se codice runner e firme condividono repository, il token Match read-only legge comunque quel repository: i branch non sono confini di autorizzazione. La cifratura Match e gli accessi al repository restano necessari. La credenziale di bootstrap ha scrittura; la CI soltanto lettura.
+
+## Dati da raccogliere su Mac e Apple
+
+Salvare i risultati nel documento privato del setup:
+
+- `xcodebuild -version`, `xcode-select -p`, `flutter --version` oppure `node --version`, `pod --version`, `ruby --version`.
+- Dal repository app: SHA remoto e stato modifiche, elenco scheme/target Xcode, eventuali passaggi web o nativi particolari. Non inviare dump indiscriminati di build settings o Keychain.
+- Certificato Apple Distribution valido con chiave privata esportabile in `.p12`; un `.cer` da solo non basta. Scadenza e backup protetto.
+- Profili App Store Connect per app ed estensioni, stesso Team e certificato, capability coerenti. Non servono UDID per questi profili.
+- Membership/accordi Apple attivi, Apple ID numerico e Bundle ID dell'app, Team ID, App Group e altre capability richieste.
+- API Key ASC con ruolo/accesso adeguati all'upload: Key ID, Issuer ID e `.p8` originale. La chiave Sign in with Apple e' un'altra cosa.
+- Ultima build TestFlight, processing/compliance e gruppo tester interno scelto.
+
+Non mettere `.p12`, `.p8`, password o chiavi GitHub nei documenti o in chat. Tenerli sul Mac o trasferirli direttamente nelle posizioni protette e nei Secrets del runner.
+
+## Uso dai repository delle app
+
+Eseguire la CLI con OpenFindability come directory corrente, passando il percorso dell'app:
 
 ```powershell
-npx tsx scripts/update-project.ts --slug scadenzario --ios-config secrets/ios/scadenzario.json --app-store-track-id <APPLE_ID>
-# .env: OPENFINDABILITY_RELEASE_RUNNER_REPO, _REF, _TOKEN + credenziali ASC già supportate
-npx tsx scripts/release.ts ios --slug scadenzario --sha <SHA_40_CARATTERI> --build-name <X.Y.Z> --build-number auto
-# Prima abilitare appId, Xcode, approvedShas ed enabled nel apps.json PRIVATO.
-npx tsx scripts/release.ts ios --slug scadenzario --sha <SHA_40_CARATTERI> --build-name <X.Y.Z> --build --unsigned
-# Poi, dopo bootstrap firma:
-npx tsx scripts/release.ts ios --slug scadenzario --sha <SHA_40_CARATTERI> --build-name <X.Y.Z> --build
-npx tsx scripts/release.ts ios --slug scadenzario --sha <SHA_40_CARATTERI> --build-name <X.Y.Z> --build-number auto --apply
-npx tsx scripts/release.ts ios-status --slug scadenzario
+npx tsx scripts/release.ts ios --path C:/work/demo-app --sha <SHA_COMPLETO> --build-name 1.2.3 --build-number auto
+# Compilazione remota senza firma
+npx tsx scripts/release.ts ios --path C:/work/demo-app --sha <SHA_COMPLETO> --build-name 1.2.3 --build --unsigned
+# IPA firmato, nessun upload
+npx tsx scripts/release.ts ios --path C:/work/demo-app --sha <SHA_COMPLETO> --build-name 1.2.3 --build
+# Upload TestFlight, nessuna pubblicazione App Store
+npx tsx scripts/release.ts ios --path C:/work/demo-app --sha <SHA_COMPLETO> --build-name 1.2.3 --build-number auto --apply
+npx tsx scripts/release.ts ios-status --path C:/work/demo-app
 ```
 
-I segnaposto `<...>` vanno sostituiti, non sono comandi da copiare letteralmente. Il preflight richiede credenziali Apple read-only ma non il token runner. `--build` avvia un job remoto con costi GitHub; `--apply` autorizza anche l'upload TestFlight. Usare una richiesta per app alla volta. In caso di timeout non ripetere il dispatch prima di aver cercato il correlation ID nelle run.
+I segnaposto vanno sostituiti. In alternativa usare `--slug demo`. La prima associazione del progetto si salva con `project:update --ios-config secrets/ios/demo.json`. `--path` identifica soltanto la configurazione locale: la build remota usa il repository configurato e lo SHA esplicito, non carica la cartella Windows o modifiche non committate.
 
-## 7. Criteri per dichiarare il setup finito
+Usare Node 24 e pnpm 10. Dopo cambi runtime: `pnpm rebuild better-sqlite3`; prima di modifiche rischiose allo store: `pnpm run db:backup`. I problemi di rete EACCES del sandbox si verificano ripetendo la lettura con accesso rete autorizzato, senza disabilitare TLS.
 
-Build unsigned riuscita → IPA firmato con tutti e tre i Bundle ID e versioni coerenti → upload confermato → build esatta `VALID` in ASC → export compliance risolta e disponibile al gruppo interno → installazione iPhone e prova login Apple/Google, RevenueCat/IAP, push, widget, Share Extension. Lo storico iniziale conserva dispatch e correlation ID; `ios-status` legge run GitHub e build Apple live, senza fingere che dispatch accettato significhi build processata. Non è ancora una dashboard release o un reconciler automatico degli stati.
+## Quando il setup e' finito
 
-## Risposta minima da passarmi
+Build senza firma riuscita, IPA verificato con tutti i target, upload confermato e build esatta `VALID` in ASC, compliance risolta, installazione da TestFlight e prova delle funzionalita' native e acquisti. Dispatch accettato non significa TestFlight pronto. Dopo timeout cercare il correlation ID prima di riprovare. Una richiesta per app alla volta.
 
-1. Output toolchain Mac e SHA remoto da autorizzare.
-2. Apple ID app, conferma Team/capability e ultima versione/build TestFlight.
-3. Presenza e scadenze `.p12` con chiave privata + tre profili; percorso protetto sul Mac.
-4. Key ID/Issuer ID e conferma disponibilità `.p8` (contenuto privato solo nei secrets).
-5. URL runner privato e deposito Match, GitHub App installata, secrets configurati.
-
-Riferimenti ufficiali: [dispatch GitHub](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event), [Fastlane Match](https://docs.fastlane.tools/actions/match/), [upload TestFlight](https://docs.fastlane.tools/actions/pilot/), [build Apple](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-apps-_id_-builds).
+Fonti: [Capacitor iOS](https://capacitorjs.com/docs/ios), [sync con lockfile](https://capacitorjs.com/docs/cli/commands/sync), [Match e branch](https://docs.fastlane.tools/actions/match/), [build Xcode/Fastlane](https://docs.fastlane.tools/actions/build_app/).

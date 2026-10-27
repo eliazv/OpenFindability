@@ -100,7 +100,7 @@ Elenca i track dell'app con nome del rilascio, version code, stato e percentuale
 sola lettura.
 
 ```txt
-Play tracks for "scadenzario" (com.eliazavatta.scadenzario):
+Play tracks for "demo" (com.example.demo):
 
   production: 1.20.6 — codes 97 — completed
   beta: (unnamed) — codes - — draft
@@ -142,9 +142,9 @@ Le opzioni:
 Esempio di preflight:
 
 ```txt
-Release (preflight only) for "scadenzario":
+Release (preflight only) for "demo":
 
-  package:      com.eliazavatta.scadenzario
+  package:      com.example.demo
   version:      1.20.6 (code 98)
   highest live: 97
   track:        internal (completed)
@@ -157,15 +157,15 @@ Esempi d'uso:
 
 ```bash
 # Test interno, version code calcolato da Play
-npx tsx scripts/release.ts android --slug scadenzario --build-number auto --apply
+npx tsx scripts/release.ts android --slug demo --build-number auto --apply
 
 # Produzione al 20% con note di rilascio
-npx tsx scripts/release.ts android --slug scadenzario --track production --rollout 0.2 \
+npx tsx scripts/release.ts android --slug demo --track production --rollout 0.2 \
   --notes-file novita.txt --apply
 
 # Compilare e controllare ora, caricare dopo lo stesso bundle
-npx tsx scripts/release.ts android --slug scadenzario --build
-npx tsx scripts/release.ts android --slug scadenzario \
+npx tsx scripts/release.ts android --slug demo --build
+npx tsx scripts/release.ts android --slug demo \
   --aab C:/percorso/app/build/app/outputs/bundle/release/app-release.aab --apply
 ```
 
@@ -280,7 +280,7 @@ Per consultarlo: `pnpm run db:studio`, tabella `connector_runs`, filtro `source 
 ## Limiti noti
 
 - **L'upload non è ancora stato eseguito su un'app reale.** Stato dei track, preflight, build con
-  firma centrale e verifica della firma sono stati provati su Scadenzario. Il primo `--apply`
+  firma centrale e verifica della firma sono stati provati su Demo App. Il primo `--apply`
   conviene farlo su `internal`.
 - Solo Android e solo progetti Flutter.
 - Nessuna sezione Release nella dashboard: lo storico si legge da `connectorRuns`.
