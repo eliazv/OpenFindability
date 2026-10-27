@@ -5,7 +5,7 @@ Google Play. Fastlane non serve e le credenziali Play non vanno copiate nei sing
 riusa il service account già configurato qui (`GOOGLE_SERVICE_ACCOUNT_FILE` o
 `GOOGLE_SERVICE_ACCOUNT_JSON`, API Android Publisher).
 
-Copre solo Android. Una build iOS richiede macOS e Xcode, quindi non è prevista.
+**Attualmente la pipeline implementata copre soltanto Android.** Per la futura centralizzazione delle release iOS, senza workflow/Secrets in ogni repository app, vedere [Release iOS centralizzate: architettura proposta](ios-central-release-architecture.md). Le build iOS richiederanno macOS/Xcode su un runner remoto; il progetto centrale fungerà da orchestratore. La proposta non è ancora implementata.
 
 Indice:
 
