@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import { validateIosConfig } from "@/lib/release-ios";
-import { updateData } from "@/lib/store";
+import { updateProject, type ProjectUpdates } from "@/lib/store";
 
 type Args = {
   slug?: string;
@@ -96,7 +96,7 @@ async function main() {
 
   const slug = args.slug;
 
-  const updates: Record<string, unknown> = {};
+  const updates: ProjectUpdates = {};
   if (args.name !== undefined) updates.name = args.name;
   if (args.category !== undefined) updates.category = args.category;
   if (args.url !== undefined) updates.websiteUrl = args.url;
@@ -125,21 +125,8 @@ async function main() {
     throw new Error("No fields to update — pass at least one field besides --slug.");
   }
 
-  let found = false;
-  const data = await updateData((current) => {
-    const project = current.projects.find((p) => p.slug === slug);
-    if (!project) {
-      throw new Error(`No project with slug "${slug}" found. Use \`pnpm run project:add\` to create it first.`);
-    }
-    found = true;
-    Object.assign(project, updates, { updatedAt: new Date().toISOString() });
-    return current;
-  });
-
-  if (found) {
-    console.log(`Updated project "${slug}": ${Object.keys(updates).join(", ")}`);
-    console.log(`Total projects: ${data.projects.length}`);
-  }
+  await updateProject(slug, updates);
+  console.log(`Updated project "${slug}": ${Object.keys(updates).join(", ")}`);
 }
 
 main().catch((error) => {

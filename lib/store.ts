@@ -1,4 +1,5 @@
 import { db, getSqliteHandle, type AppDb } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
 import {
   ga4LandingMetrics as ga4LandingMetricsTable,
   webPerformanceMetrics as webPerformanceMetricsTable,
@@ -411,6 +412,25 @@ export async function writeData(data: AppData): Promise<void> {
 /** Only the projects table: avoids loading the whole store for CLI lookups. */
 export async function readProjects(): Promise<Project[]> {
   return db.select().from(projectsTable).all().map(denull) as Project[];
+}
+
+export type ProjectUpdates = Partial<Omit<Project, "id" | "slug" | "createdAt" | "updatedAt">>;
+
+/** Update one metadata row without materializing or replacing analytical tables. */
+export function updateProjectWith(database: AppDb, slug: string, changes: ProjectUpdates): Project {
+  if (["id", "slug", "createdAt", "updatedAt"].some((key) => Object.hasOwn(changes, key))) throw new Error("Project identity and timestamps cannot be supplied as updates.");
+  const native = getSqliteHandle(database);
+  return native.transaction(() => {
+    const project = database.update(projectsTable).set({ ...changes, updatedAt: new Date().toISOString() })
+      .where(eq(projectsTable.slug, slug)).returning().get();
+    if (!project) throw new Error(`No project with slug "${slug}" found. Use project:add first.`);
+    native.prepare("UPDATE _openfindability_store_revision SET revision = revision + 1 WHERE id = 1").run();
+    return denull(project) as Project;
+  }).immediate();
+}
+
+export async function updateProject(slug: string, changes: ProjectUpdates): Promise<Project> {
+  return updateProjectWith(db, slug, changes);
 }
 
 /**

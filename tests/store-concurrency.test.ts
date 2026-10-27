@@ -4,8 +4,29 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createDb, getSqliteHandle } from "../lib/db/client";
-import { readDataWith, StaleStoreSnapshotError, writeDataWith } from "../lib/store";
+import { readDataWith, StaleStoreSnapshotError, updateProjectWith, writeDataWith } from "../lib/store";
 import { observation } from "../lib/connectors/seo-geo-common";
+
+test("targeted metadata updates preserve analytics and invalidate stale full-store snapshots", () => {
+  const database = createDb(":memory:", path.join(process.cwd(), "drizzle"));
+  try {
+    const data = readDataWith(database);
+    data.projects.push({ id: "p", slug: "app", name: "App", type: "app", createdAt: "2026-10-01", updatedAt: "2026-10-01" });
+    data.metricSnapshots.push({ id: "metric", projectId: "p", source: "gsc", date: "2026-10-01", clicks: 42, rawJson: { untouched: true }, createdAt: "2026-10-01" });
+    writeDataWith(database, data);
+    const stale = readDataWith(database);
+    const updated = updateProjectWith(database, "app", { name: "New name", flutterProjectPath: "C:/example" });
+    assert.equal(updated.id, "p");
+    assert.equal(updated.createdAt, "2026-10-01");
+    assert.equal(updated.name, "New name");
+    assert.deepEqual(readDataWith(database).metricSnapshots, stale.metricSnapshots);
+    assert.throws(() => writeDataWith(database, stale), StaleStoreSnapshotError);
+    const current = readDataWith(database);
+    assert.throws(() => updateProjectWith(database, "missing", { name: "Fail" }), /No project/);
+    assert.throws(() => updateProjectWith(database, "app", { id: "replacement" } as never), /identity/);
+    writeDataWith(database, current); // Rejected edits did not increment the revision.
+  } finally { getSqliteHandle(database).close(); }
+});
 
 test("two SQLite connections cannot silently overwrite each other", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "openfindability-revision-"));

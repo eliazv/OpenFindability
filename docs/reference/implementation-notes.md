@@ -4,6 +4,8 @@ Detailed, per-topic notes on how each part of OpenFindability works and why: API
 
 ## Storage (SQLite, Drizzle, store API)
 
+- `project:update` uses `updateProjectWith`/`updateProject` to update only one projects row under an immediate transaction, incrementing the store revision atomically. It does not load metric/raw JSON tables or replace child rows, avoiding heap exhaustion on large stores. Immutable identity/timestamps are protected; the existing full-snapshot stale-write guard detects these targeted edits. Release lookups/logging likewise use the bounded projects query and connector-run append helpers.
+
 - Startup migrations retain Drizzle's files, timestamps, hashes and journal table but run through `migrateSqlite` inside one `BEGIN IMMEDIATE` transaction. The writer lock is acquired before reading the last applied migration, preventing two CLI/UI/test processes from applying the same ALTER concurrently. Busy timeout is set before setup; failed initialization closes the native handle. Tests cover concurrent connections and rollback/retry without real project data.
 
 - Runtime is Node 24 (`.node-version`, package engines); pnpm explicitly allows the `better-sqlite3` build script through `onlyBuiltDependencies`. A copied/stale Node 22 native binary fails with ABI 127 vs 137; `pnpm rebuild better-sqlite3` installs the matching binary without touching the database. The backup command uses SQLite's online backup plus integrity verification and must succeed before pending migrations are opened. Build/cache download permissions are separate from SQLite data access.
