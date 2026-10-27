@@ -10,7 +10,8 @@ function git(args, encoding = "utf8") {
 }
 const badPaths = [
   /(^|\/)\.env(?:\..+)?$/i,
-  /(^|\/)(secrets|sensibili|private-notes|project-reports|project)\/.+/i,
+  /(^|\/)(secrets|sensibili|private-notes|project-reports)\/.+/i,
+  /^project\/.+/i, // Private reports at repo root; app/project/[slug] is application source.
   /(^|\/)(data|exports|backups|tmp)\/.+/i,
   /\.(csv|tsv|xls|xlsx|ods|parquet|arrow|feather|duckdb|ndjson|jsonl)$/i,
   /\.(p8|p12|pfx|pem|key|keystore|jks)$/i,
