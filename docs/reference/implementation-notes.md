@@ -4,6 +4,8 @@ Detailed, per-topic notes on how each part of OpenFindability works and why: API
 
 ## Storage (SQLite, Drizzle, store API)
 
+- Startup migrations retain Drizzle's files, timestamps, hashes and journal table but run through `migrateSqlite` inside one `BEGIN IMMEDIATE` transaction. The writer lock is acquired before reading the last applied migration, preventing two CLI/UI/test processes from applying the same ALTER concurrently. Busy timeout is set before setup; failed initialization closes the native handle. Tests cover concurrent connections and rollback/retry without real project data.
+
 - Runtime is Node 24 (`.node-version`, package engines); pnpm explicitly allows the `better-sqlite3` build script through `onlyBuiltDependencies`. A copied/stale Node 22 native binary fails with ABI 127 vs 137; `pnpm rebuild better-sqlite3` installs the matching binary without touching the database. The backup command uses SQLite's online backup plus integrity verification and must succeed before pending migrations are opened. Build/cache download permissions are separate from SQLite data access.
 
 - Changed warehouse partitions are staged, then merged by stable ID and reconciled by row count in the same per-table transaction. Only obsolete IDs are deleted. Manifest rows use an upsert. This avoids DuckDB indexed delete/reinsert conflicts on large vectorized partitions while preserving unique ID constraints, idempotency, removals and atomic publication. Regression coverage includes a partition above two vectors (4,100 rows), modified existing IDs and new rows.

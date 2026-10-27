@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { migrateSqlite } from "@/lib/db/migrate";
 
 import { schema } from "@/lib/db/schema";
 
@@ -23,19 +23,24 @@ export function createDb(dbFilePath: string, migrationsFolder: string): AppDb {
   mkdirSync(path.dirname(dbFilePath), { recursive: true });
 
   const sqlite = new Database(dbFilePath);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder });
-  // Operational metadata, intentionally outside Drizzle migrations: compatible
-  // with existing local databases and every independently created MCP handle.
-  sqlite.exec("CREATE TABLE IF NOT EXISTS _openfindability_store_revision (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL)");
-  sqlite.prepare("INSERT OR IGNORE INTO _openfindability_store_revision (id, revision) VALUES (1, 0)").run();
   sqlite.pragma("busy_timeout = 15000");
-  sqliteHandles.set(db, sqlite);
+  try {
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
 
-  return db;
+    const db = drizzle(sqlite, { schema });
+    migrateSqlite(sqlite, migrationsFolder);
+    // Operational metadata, intentionally outside Drizzle migrations: compatible
+    // with existing local databases and every independently created MCP handle.
+    sqlite.exec("CREATE TABLE IF NOT EXISTS _openfindability_store_revision (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL)");
+    sqlite.prepare("INSERT OR IGNORE INTO _openfindability_store_revision (id, revision) VALUES (1, 0)").run();
+    sqliteHandles.set(db, sqlite);
+
+    return db;
+  } catch (error) {
+    sqlite.close();
+    throw error;
+  }
 }
 
 export function getDbFilePath(): string {
