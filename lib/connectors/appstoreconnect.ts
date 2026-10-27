@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createSign } from "node:crypto";
+import { requestAscJson } from "@/lib/connectors/asc-request";
 
-const API_BASE = "https://api.appstoreconnect.apple.com/v1";
 const TOKEN_TTL_SECONDS = 19 * 60; // Apple allows up to 20 minutes; refresh a minute early.
 
 // Versions in these states are not yet live/submitted, so metadata writes only ever target them.
@@ -60,34 +60,18 @@ export async function getAscToken(): Promise<string> {
 
 async function ascFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getAscToken();
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...init.headers,
-    },
-  });
-
-  if (response.status === 204) return undefined as T;
-
-  const body = await response.json().catch(() => undefined);
-  if (!response.ok) {
-    const detail = (body as { errors?: { title?: string; detail?: string }[] } | undefined)?.errors
-      ?.map((e) => e.detail ?? e.title)
-      .filter(Boolean)
-      .join("; ");
-    throw new Error(`App Store Connect API ${response.status} on ${path}${detail ? `: ${detail}` : ""}`);
-  }
-  return body as T;
+  return requestAscJson<T>(path, token, init);
 }
 
 async function ascFetchAllPages(path: string): Promise<JsonApiResource[]> {
   const results: JsonApiResource[] = [];
   let next: string | undefined = path;
+  const visited = new Set<string>();
   while (next) {
+    if (visited.has(next)) throw new Error("App Store Connect returned a repeated pagination URL.");
+    visited.add(next);
     const page: JsonApiListDocument = await ascFetch<JsonApiListDocument>(next);
+    if (!Array.isArray(page.data)) throw new Error("App Store Connect returned an invalid resource list.");
     results.push(...page.data);
     next = page.links?.next;
   }
