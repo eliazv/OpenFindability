@@ -19,5 +19,23 @@
     },
     "requiredEntitlements": {},
     "approvedShas": []
+  },
+  "demo-capacitor": {
+    "enabled": false,
+    "repository": "example/web-app",
+    "appId": null,
+    "teamId": "ABCDEFGHIJ",
+    "bundleIds": ["com.example.webapp"],
+    "framework": "capacitor",
+    "workingDirectory": ".",
+    "nodeVersion": "24.20.0",
+    "webBuildScript": "build",
+    "xcodeVersion": "",
+    "xcodeProject": "ios/App/App.xcodeproj",
+    "workspace": "ios/App/App.xcworkspace",
+    "scheme": "App",
+    "targets": {"App": "com.example.webapp"},
+    "requiredEntitlements": {},
+    "approvedShas": []
   }
 }

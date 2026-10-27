@@ -70,7 +70,7 @@
     "release:android": "tsx scripts/release.ts android",
     "release:ios": "tsx scripts/release.ts ios",
     "release:ios-status": "tsx scripts/release.ts ios-status",
-    "test:ios-release": "tsx --test tests/release-ios.test.ts tests/asc-request.test.ts",
+    "test:ios-release": "tsx --test tests/release-ios.test.ts tests/release-ios-project.test.ts tests/asc-request.test.ts",
     "release:status": "tsx scripts/release.ts status",
     "gsc:sites": "tsx scripts/gsc-sites.ts",
     "audit:index": "tsx scripts/gsc-index-audit.ts",

@@ -3,6 +3,12 @@ import test from "node:test";
 import { GitHubActionsClient, type ReleaseRunner } from "../lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease, validateIosConfig, type IosReleaseConfig } from "../lib/release-ios";
 
+test("Capacitor configurations and two-component marketing versions are supported", () => {
+  assert.equal(planIosRelease({ ...options, config: { ...config, framework: "capacitor", workingDirectory: "apps/demo" }, buildName: "2.130" }).buildName, "2.130");
+  assert.throws(() => validateIosConfig({ ...config, workingDirectory: "../demo" }), /relative/);
+  assert.throws(() => validateIosConfig({ ...config, framework: "native" } as never), /Supported/);
+});
+
 const config: IosReleaseConfig = { repository: "owner/app", appId: 123, teamId: "ABCDEFGHIJ", bundleIds: ["com.example.app", "com.example.app.Widget"], framework: "flutter" };
 const options = { slug: "demo", config, sha: "a".repeat(40), buildName: "1.2.3", builds: [{ id: "old", version: "7", processingState: "PROCESSING", rawJson: {} }] };
 const runner: ReleaseRunner = { repository: "owner/runner", ref: "main", workflow: "release-ios.yml", token: "offline-test" };

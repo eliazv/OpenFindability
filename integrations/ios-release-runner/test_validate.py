@@ -47,6 +47,22 @@ class RunnerPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate(apps, self.inputs)
 
+    def test_capacitor_and_two_component_version(self):
+        apps = self.enabled()
+        apps["demo-capacitor"].update(enabled=True, appId=456, xcodeVersion="26.0", approvedShas=["a" * 40])
+        inputs = dict(self.inputs, slug="demo-capacitor", build_name="2.130")
+        self.assertEqual(validate(apps, inputs)["scheme"], "App")
+        for key, value in [("nodeVersion", "latest"), ("webBuildScript", "build;rm -rf"), ("workspace", "../App.xcworkspace"), ("xcodeProject", "/tmp/App.xcodeproj")]:
+            invalid = copy.deepcopy(apps)
+            invalid["demo-capacitor"][key] = value
+            with self.assertRaises(ValueError):
+                validate(invalid, inputs)
+
+    def test_flutter_subdirectory_without_changing_framework(self):
+        apps = self.enabled()
+        apps["demo"]["workingDirectory"] = "apps/demo"
+        self.assertEqual(validate(apps, self.inputs)["framework"], "flutter")
+
     def test_production_and_invalid_versions_rejected(self):
         for key, value in [("mode", "production"), ("build_name", "1.2.3;echo bad"), ("build_number", "-1"), ("slug", "../demo")]:
             with self.assertRaises(ValueError):

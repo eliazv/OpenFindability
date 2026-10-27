@@ -4,6 +4,7 @@ import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/gith
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
 import { appendConnectorRun, readProjects } from "@/lib/store";
 import { createId } from "@/lib/id";
+import { resolveIosProject } from "@/lib/release-ios-project";
 
 export async function runIosReleaseCli(command: string, argv: string[]): Promise<void> {
   const args: Record<string, string> = {};
@@ -11,12 +12,11 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
     if (["--build", "--apply", "--unsigned"].includes(key)) { flags.add(key); continue; }
-    if (!["--slug", "--sha", "--build-name", "--build-number"].includes(key) || !argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error(`Invalid/missing iOS argument: ${key}`);
+    if (!["--slug", "--path", "--sha", "--build-name", "--build-number"].includes(key) || !argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error(`Invalid/missing iOS argument: ${key}`);
     args[key] = argv[++i];
   }
-  if (!args["--slug"]) throw new Error("iOS requires --slug. Configure its remote identity with project:update --ios-config <json>.");
   if (flags.has("--unsigned") && (!flags.has("--build") || flags.has("--apply"))) throw new Error("--unsigned requires --build and cannot be used with --apply.");
-  const project = (await readProjects()).find((p) => p.slug === args["--slug"]);
+  const project = await resolveIosProject(await readProjects(), { slug: args["--slug"], path: args["--path"] });
   if (!project?.iosReleaseConfig) throw new Error("Project has no iosReleaseConfig. See docs/guide/ios-release-setup-handoff.md.");
   const config = project.iosReleaseConfig;
   if (project.appStoreTrackId !== config.appId) throw new Error("iosReleaseConfig.appId must match project.appStoreTrackId.");

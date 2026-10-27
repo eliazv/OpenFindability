@@ -5,7 +5,8 @@ export type IosReleaseConfig = {
   appId: number;
   teamId: string;
   bundleIds: string[];
-  framework: "flutter";
+  framework: "flutter" | "capacitor";
+  workingDirectory?: string;
 };
 export type IosBuild = { id: string; version: string; processingState?: string; uploadedDate?: string; rawJson: unknown };
 export type IosPlan = {
@@ -17,7 +18,8 @@ export function validateIosConfig(config: IosReleaseConfig): IosReleaseConfig {
   validateRepository(config.repository);
   if (!Number.isSafeInteger(config.appId) || config.appId < 1) throw new Error("A numeric App Store Connect appId is required.");
   if (!/^[A-Z0-9]{10}$/.test(config.teamId)) throw new Error("Apple Team ID must have 10 uppercase characters.");
-  if (config.framework !== "flutter") throw new Error("Only Flutter is supported by the initial runner; Capacitor needs a separate builder.");
+  if (!["flutter", "capacitor"].includes(config.framework)) throw new Error("Supported iOS frameworks: flutter, capacitor.");
+  if (config.workingDirectory !== undefined && config.workingDirectory !== "." && !/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(config.workingDirectory)) throw new Error("workingDirectory must be a safe relative app folder.");
   if (!Array.isArray(config.bundleIds) || config.bundleIds.length === 0 || config.bundleIds.some((id) => !/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(id)) || new Set(config.bundleIds).size !== config.bundleIds.length) throw new Error("Expected unique explicit bundle IDs: app first, then every extension.");
   return config;
 }
@@ -30,7 +32,7 @@ export function planIosRelease(options: {
   const config = validateIosConfig(options.config);
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(options.slug)) throw new Error("Invalid project slug.");
   if (!/^[a-f0-9]{40}$/.test(options.sha)) throw new Error("--sha requires an explicitly reviewed full 40-character commit SHA (no branch/PR refs).");
-  if (!/^\d+\.\d+\.\d+$/.test(options.buildName)) throw new Error("--build-name must be a numeric x.y.z version.");
+  if (!/^\d+\.\d+(?:\.\d+)?$/.test(options.buildName)) throw new Error("--build-name must be a numeric x.y or x.y.z version.");
   if (options.builds.some((build) => !/^[1-9]\d*$/.test(build.version) || !Number.isSafeInteger(Number(build.version)))) throw new Error("ASC has non-integer build numbers; automatic ordering is ambiguous. Reconcile numbering before dispatch.");
   const highest = Math.max(0, ...options.builds.map((build) => Number(build.version)));
   const number = options.buildNumber && options.buildNumber !== "auto" ? options.buildNumber : String(highest + 1);

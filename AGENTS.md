@@ -79,6 +79,8 @@ pnpm run play:pull-copy | play:push-copy -- --slug <slug> --language it-IT
 pnpm run asc:experiments -- --slug <slug>
 pnpm run release:status -- --slug <slug>
 pnpm run release:android -- --slug <slug> [--path <flutter dir>] [--build] [--apply]
+pnpm run release:ios -- --slug <slug> [--path <app dir>] --sha <commit> --build-name <version> [--build] [--apply]
+pnpm run release:ios-status -- --slug <slug>
 
 # Database
 pnpm run db:backup                  # verified snapshot in data/backups/

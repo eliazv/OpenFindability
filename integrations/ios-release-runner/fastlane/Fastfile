@@ -12,8 +12,16 @@ def release_context
   source = File.expand_path(File.join(root, "source", app.fetch("workingDirectory")))
   sha, ok = Open3.capture2("git", "-C", source, "rev-parse", "HEAD")
   UI.user_error!("Checkout SHA mismatch") unless ok.success? && sha.strip == ENV.fetch("SHA")
-  UI.user_error!("Commit Podfile.lock before building") unless File.file?(File.join(source, "ios", "Podfile.lock"))
+  UI.user_error!("Commit Podfile.lock before building") unless File.file?(File.join(source, File.dirname(native_project(app)), "Podfile.lock"))
   [root, app, source]
+end
+
+def native_project(app)
+  app.fetch("xcodeProject", app.fetch("framework") == "flutter" ? "ios/Runner.xcodeproj" : "ios/App/App.xcodeproj")
+end
+
+def native_workspace(app)
+  app.fetch("workspace", app.fetch("framework") == "flutter" ? "ios/Runner.xcworkspace" : "ios/App/App.xcworkspace")
 end
 
 def prepare_flutter(source)
@@ -24,6 +32,27 @@ def prepare_flutter(source)
        "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
     Dir.chdir("ios") { sh("pod", "install", "--deployment") }
   end
+end
+
+def prepare_app(app, source)
+  return prepare_flutter(source) if app.fetch("framework") == "flutter"
+  UI.user_error!("Capacitor requires committed package-lock.json") unless File.file?(File.join(source, "package-lock.json"))
+  Dir.chdir(source) do
+    sh("npm", "ci")
+    sh("npm", "run", app.fetch("webBuildScript", "build"))
+    sh("npx", "--no-install", "cap", "sync", "ios", "--deployment")
+  end
+  require "xcodeproj"
+  project = Xcodeproj::Project.open(File.join(source, native_project(app)))
+  app.fetch("targets").each_key do |name|
+    target = project.targets.find { |t| t.name == name }
+    UI.user_error!("Missing Xcode target #{name}") unless target
+    target.build_configurations.each do |configuration|
+      configuration.build_settings["CURRENT_PROJECT_VERSION"] = ENV.fetch("BUILD_NUMBER")
+      configuration.build_settings["MARKETING_VERSION"] = ENV.fetch("BUILD_NAME")
+    end
+  end
+  project.save
 end
 
 def receipt(root, state)
@@ -38,13 +67,22 @@ end
 platform :ios do
   lane :unsigned do
     root, app, source = release_context
-    prepare_flutter(source)
-    Dir.chdir(source) do
-      sh("flutter", "build", "ios", "--release", "--no-codesign", "--no-pub",
-         "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
+    prepare_app(app, source)
+    if app.fetch("framework") == "flutter"
+      Dir.chdir(source) do
+        sh("flutter", "build", "ios", "--release", "--no-codesign", "--no-pub",
+           "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
+      end
+      apps = Dir[File.join(source, "build", "ios", "iphoneos", "*.app")]
+    else
+      derived = File.join(source, "build", "ios", "unsigned")
+      sh("xcodebuild", "-workspace", File.join(source, native_workspace(app)), "-scheme", app.fetch("scheme"),
+         "-configuration", "Release", "-sdk", "iphoneos", "-destination", "generic/platform=iOS", "-derivedDataPath", derived, "CODE_SIGNING_ALLOWED=NO", "build")
+      apps = Dir[File.join(derived, "Build", "Products", "Release-iphoneos", "*.app")]
     end
+    UI.user_error!("Expected one unsigned app") unless apps.length == 1
     FileUtils.mkdir_p(File.join(root, "output"))
-    sh("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", File.join(source, "build", "ios", "iphoneos", "Runner.app"), File.join(root, "output", "unsigned-app.zip"))
+    sh("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", apps.first, File.join(root, "output", "unsigned-app.zip"))
     receipt(root, "built_unsigned")
   end
 
@@ -62,28 +100,29 @@ platform :ios do
       UI.user_error!("Build number already consumed; re-plan from Windows") unless ENV.fetch("BUILD_NUMBER").to_i > highest
     end
     check_number.call
-    prepare_flutter(source)
+    prepare_app(app, source)
     setup_ci(provider: "github", keychain_name: keychain, timeout: 3600)
     match(type: "appstore", readonly: true, api_key: api_key, team_id: app.fetch("teamId"),
-      app_identifier: app.fetch("bundleIds"), git_url: ENV.fetch("MATCH_GIT_URL"), keychain_name: keychain)
+      app_identifier: app.fetch("bundleIds"), git_url: ENV.fetch("MATCH_GIT_URL"),
+      git_branch: ENV.fetch("MATCH_GIT_BRANCH", "signing"), clone_branch_directly: true, keychain_name: keychain)
     profiles = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
     UI.user_error!("Missing profiles") unless (app.fetch("bundleIds") - profiles.keys).empty?
     app.fetch("targets").each do |target, bundle|
-      update_code_signing_settings(use_automatic_signing: false, path: File.join(source, "ios", "Runner.xcodeproj"),
+      update_code_signing_settings(use_automatic_signing: false, path: File.join(source, native_project(app)),
         targets: [target], team_id: app.fetch("teamId"), bundle_identifier: bundle,
         code_sign_identity: "Apple Distribution", profile_name: profiles.fetch(bundle), build_configurations: ["Release"])
     end
-    # The pilot keeps development push entitlements in source. Change only the
+    # Projects can keep development push entitlements in source. Change only the
     # disposable CI checkout; never rewrite the developer's project repository.
     require "xcodeproj"
-    project = Xcodeproj::Project.open(File.join(source, "ios", "Runner.xcodeproj"))
+    project = Xcodeproj::Project.open(File.join(source, native_project(app)))
     app.fetch("targets").each do |target_name, bundle|
       target = project.targets.find { |t| t.name == target_name }
       UI.user_error!("Missing Xcode target #{target_name}") unless target
       settings = target.build_configurations.find { |c| c.name == "Release" }.build_settings
       file = settings["CODE_SIGN_ENTITLEMENTS"]
       next unless file && app.fetch("requiredEntitlements", {}).fetch(bundle, {}).key?("aps-environment")
-      entitlement_path = File.expand_path(file, File.join(source, "ios"))
+      entitlement_path = File.expand_path(file, File.dirname(File.join(source, native_project(app))))
       UI.user_error!("Entitlements outside checkout") unless entitlement_path.start_with?(source + File::SEPARATOR)
       entitlement_data = Xcodeproj::Plist.read_from_path(entitlement_path)
       entitlement_data["aps-environment"] = "production"
@@ -92,9 +131,16 @@ platform :ios do
     export = File.join(ENV.fetch("RUNNER_TEMP"), "ExportOptions.plist")
     require "plist"
     File.write(export, { method: "app-store-connect", signingStyle: "manual", teamID: app.fetch("teamId"), provisioningProfiles: profiles }.to_plist)
-    Dir.chdir(source) do
-      sh("flutter", "build", "ipa", "--release", "--no-pub", "--export-options-plist", export,
-        "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
+    if app.fetch("framework") == "flutter"
+      Dir.chdir(source) do
+        sh("flutter", "build", "ipa", "--release", "--no-pub", "--export-options-plist", export,
+          "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
+      end
+    else
+      build_app(workspace: File.join(source, native_workspace(app)), scheme: app.fetch("scheme"),
+        configuration: "Release", clean: true, export_options: export,
+        output_directory: File.join(source, "build", "ios", "ipa"), output_name: "release.ipa",
+        archive_path: File.join(source, "build", "ios", "App.xcarchive"))
     end
     ipas = Dir[File.join(source, "build", "ios", "ipa", "*.ipa")]
     UI.user_error!("Expected exactly one IPA") unless ipas.length == 1
