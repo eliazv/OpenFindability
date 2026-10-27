@@ -4,6 +4,8 @@ OpenFindability rimane il punto di comando per tutte le app. Sorgenti, firma e c
 
 Questa guida pubblica contiene solo esempi fittizi. Inventari reali, percorsi personali, Team ID, Bundle ID, profili e stato del setup vanno in `private-notes/ios-release/`; configurazioni operative in `secrets/ios/` e nel database locale. Credenziali in `.env`, `secrets/` o GitHub Secrets. Non committare output Apple o configurazioni reali nel template pubblico `integrations/ios-release-runner/apps.json`.
 
+La rimozione da un file attuale non cancella le versioni gia' committate: l'eventuale bonifica della cronologia Git e' un'operazione distinta.
+
 ## Quanti repository servono?
 
 | Modalita' | Repository aggiuntivi | Stato |

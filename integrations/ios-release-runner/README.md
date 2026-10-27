@@ -28,4 +28,6 @@ Artifact: solo `output/`, conservato per tre giorni. `release.json` distingue `b
 
 Verifica offline della policy: `python -m unittest discover -s integrations/ios-release-runner -p test_validate.py` da OpenFindability; `python -m unittest test_validate.py` dal repo runner.
 
+Verifica offline della preparazione dei builder senza Xcode/Fastlane: `ruby integrations/ios-release-runner/test_builders.rb`. Controlla lockfile, cartelle di lavoro, comandi Flutter/Capacitor e override della versione nativa dopo la build web; non sostituisce una build su Mac.
+
 Il pacchetto e i builder Flutter/Capacitor sono verificati offline su Windows. La compilazione Xcode, la risoluzione Gemfile.lock, la firma e i comportamenti nativi richiedono una prova macOS per ogni app. Un backend Mac/SSH senza GitHub rimane un'estensione futura.
