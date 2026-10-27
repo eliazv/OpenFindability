@@ -2,6 +2,12 @@
   "name": "openfindability",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3"]
+  },
   "license": "MIT",
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",

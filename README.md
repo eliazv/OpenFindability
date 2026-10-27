@@ -25,6 +25,11 @@ No SaaS, no monorepo, no server process beyond `next dev`: a local Next.js app b
 
 ## Quick start
 
+Use Node.js 24 and pnpm 10. The repository permits the `better-sqlite3` install
+script so its native binary matches the active Node runtime. After changing Node
+versions, run `pnpm rebuild better-sqlite3`, then `pnpm run db:backup` to verify it.
+Do not copy `node_modules` between Node versions or operating systems.
+
 ```bash
 pnpm install
 pnpm seed:demo

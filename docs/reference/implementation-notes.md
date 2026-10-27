@@ -4,6 +4,8 @@ Detailed, per-topic notes on how each part of OpenFindability works and why: API
 
 ## Storage (SQLite, Drizzle, store API)
 
+- Runtime is Node 24 (`.node-version`, package engines); pnpm explicitly allows the `better-sqlite3` build script through `onlyBuiltDependencies`. A copied/stale Node 22 native binary fails with ABI 127 vs 137; `pnpm rebuild better-sqlite3` installs the matching binary without touching the database. The backup command uses SQLite's online backup plus integrity verification and must succeed before pending migrations are opened. Build/cache download permissions are separate from SQLite data access.
+
 - Changed warehouse partitions are staged, then merged by stable ID and reconciled by row count in the same per-table transaction. Only obsolete IDs are deleted. Manifest rows use an upsert. This avoids DuckDB indexed delete/reinsert conflicts on large vectorized partitions while preserving unique ID constraints, idempotency, removals and atomic publication. Regression coverage includes a partition above two vectors (4,100 rows), modified existing IDs and new rows.
 
 - Warehouse schema v2 adds explicit GA4 `sessions`/`key_events`, populated by the connector and recoverable from existing validated JSON values via `repair:analytics` (dry-run unless `--apply`). Cloud migration is additive and recorded in `warehouse_schema_migrations`; partition insertions name their columns to survive physical-column order changes. Stable IDs receive unique indexes; staging preflight rejects missing/duplicate IDs and dangling non-null project references. Cloud FK dependencies are intentionally not introduced across independently replaced tables.

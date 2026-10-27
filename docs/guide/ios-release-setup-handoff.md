@@ -106,7 +106,7 @@ Verificare poi la lettura con `bundle exec fastlane match appstore --readonly --
 
 ## 6. Attivazione da Windows
 
-Prima risolvere il mismatch Node/SQLite trovato durante la preparazione: `better-sqlite3` locale usa ABI 127 (Node 22), mentre Node attivo usa ABI 137. Usare Node 22 con le dipendenze attuali oppure ricompilare il modulo per il runtime scelto. Poi eseguire `pnpm run db:backup`: deve terminare con backup verificato **prima** della prima apertura con lo schema nuovo. Le migrazioni si applicano automaticamente aprendo lo store; non lanciare un comando store prima del backup.
+Usare Node 24 (indicato in `.node-version` e `package.json`). Dopo un cambio runtime eseguire `pnpm rebuild better-sqlite3`: il progetto autorizza esplicitamente questo script nativo. Il backup reale ? stato eseguito e verificato dopo la correzione. Continuare a eseguire `pnpm run db:backup` prima di modifiche rischiose: le migrazioni si applicano automaticamente aprendo lo store.
 
 Creare `secrets/ios/scadenzario.json` con questa configurazione, sostituendo `123` con l'Apple ID reale:
 
