@@ -48,6 +48,8 @@ export function codemagicBuildRequest(plan: IosPlan, correlationId: string, runn
   if (plan.config.xcodeVersion) softwareVersions.xcode = plan.config.xcodeVersion;
   if (plan.config.framework === "flutter" && plan.config.flutterVersion)
     softwareVersions.flutter = plan.config.flutterVersion;
+  if (plan.config.framework === "capacitor" && plan.config.nodeVersion)
+    softwareVersions.node = plan.config.nodeVersion;
   return {
     appId: runner.appId,
     workflowId: plan.mode === "unsigned" ? "ios-central-unsigned" : "ios-central-signed",
