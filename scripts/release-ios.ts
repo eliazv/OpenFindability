@@ -1,63 +1,109 @@
 import { randomUUID } from "node:crypto";
 import { getAscApp, listAscBuilds } from "@/lib/connectors/appstoreconnect";
+import { CodemagicClient, codemagicRunnerFromEnv } from "@/lib/connectors/codemagic";
 import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
 import { appendConnectorRun, readProjects } from "@/lib/store";
 import { createId } from "@/lib/id";
 import { resolveIosProject } from "@/lib/release-ios-project";
 
+type Provider = "codemagic" | "github";
+
+/** Codemagic is the explicit default to avoid unintended GitHub Actions minutes. */
 export async function runIosReleaseCli(command: string, argv: string[]): Promise<void> {
   const args: Record<string, string> = {};
   const flags = new Set<string>();
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
     if (["--build", "--apply", "--unsigned"].includes(key)) { flags.add(key); continue; }
-    if (!["--slug", "--path", "--sha", "--build-name", "--build-number"].includes(key) || !argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error(`Invalid/missing iOS argument: ${key}`);
+    if (!["--slug", "--path", "--sha", "--build-name", "--build-number", "--provider", "--build-id"].includes(key) ||
+        !argv[i + 1] || argv[i + 1].startsWith("--"))
+      throw new Error("Invalid/missing iOS argument: " + key);
     args[key] = argv[++i];
   }
-  if (flags.has("--unsigned") && (!flags.has("--build") || flags.has("--apply"))) throw new Error("--unsigned requires --build and cannot be used with --apply.");
+  if (flags.has("--unsigned") && (!flags.has("--build") || flags.has("--apply")))
+    throw new Error("--unsigned requires --build and cannot be used with --apply.");
+  if (flags.has("--apply") && !flags.has("--build"))
+    throw new Error("--apply requires --build; upload must be explicitly approved.");
+  const provider = args["--provider"] ?? "codemagic";
+  if (provider !== "codemagic" && provider !== "github")
+    throw new Error("--provider must be codemagic or github.");
+  if (args["--build-id"] && command !== "ios-status")
+    throw new Error("--build-id is only supported by ios-status.");
+
   const project = await resolveIosProject(await readProjects(), { slug: args["--slug"], path: args["--path"] });
   if (!project?.iosReleaseConfig) throw new Error("Project has no iosReleaseConfig. See docs/guide/ios-release-setup-handoff.md.");
   const config = project.iosReleaseConfig;
-  if (project.appStoreTrackId !== config.appId) throw new Error("iosReleaseConfig.appId must match project.appStoreTrackId.");
+  if (project.appStoreTrackId !== config.appId)
+    throw new Error("iosReleaseConfig.appId must match project.appStoreTrackId.");
   const app = await getAscApp(String(config.appId));
-  if (app.bundleId !== config.bundleIds[0]) throw new Error("ASC app bundle ID does not match the configured main bundle ID.");
+  if (app.bundleId !== config.bundleIds[0])
+    throw new Error("ASC app bundle ID does not match the configured main bundle ID.");
   const builds = await listAscBuilds(String(config.appId));
+
   if (command === "ios-status") {
     const recentBuilds = [...builds].sort((a, b) => Date.parse(b.uploadedDate ?? "") - Date.parse(a.uploadedDate ?? ""))
       .slice(0, 10).map(({ id, version, processingState, uploadedDate }) => ({ id, version, processingState, uploadedDate }));
     console.log(JSON.stringify({ app, totalBuilds: builds.length, recentBuilds }, null, 2));
-    const missing = ["OPENFINDABILITY_RELEASE_RUNNER_REPO", "OPENFINDABILITY_RELEASE_RUNNER_TOKEN"].filter((key) => !process.env[key]?.trim());
-    if (missing.length > 0) {
-      console.log(JSON.stringify({ runner: { configured: false, missing }, note: "Apple status available; finish private GitHub runner setup to read job status." }, null, 2));
-      return;
+    if (provider === "codemagic") {
+      const missing = ["CODEMAGIC_API_TOKEN", "CODEMAGIC_RUNNER_APP_ID"].filter((key) => !process.env[key]?.trim());
+      if (missing.length) {
+        console.log(JSON.stringify({ provider, configured: false, missing }, null, 2));
+      } else if (args["--build-id"]) {
+        const client = new CodemagicClient(codemagicRunnerFromEnv());
+        console.log(JSON.stringify({ provider, build: await client.getBuild(args["--build-id"]) }, null, 2));
+      } else {
+        console.log("Specify --build-id <Codemagic build ID> to inspect runner status; Apple processing status is above.");
+      }
+    } else {
+      const missing = ["OPENFINDABILITY_RELEASE_RUNNER_REPO", "OPENFINDABILITY_RELEASE_RUNNER_TOKEN"].filter((key) => !process.env[key]?.trim());
+      if (missing.length) {
+        console.log(JSON.stringify({ provider, configured: false, missing }, null, 2));
+      } else {
+        const github = new GitHubActionsClient(releaseRunnerFromEnv());
+        await github.assertPrivate();
+        console.log(JSON.stringify({ runs: (await github.runs()).filter((run) => run.display_title.startsWith("ios:" + project.slug + ":")) }, null, 2));
+      }
     }
-    const github = new GitHubActionsClient(releaseRunnerFromEnv());
-    await github.assertPrivate();
-    console.log(JSON.stringify({ runs: (await github.runs()).filter((run) => run.display_title.startsWith(`ios:${project.slug}:`)) }, null, 2));
-    console.log("GitHub success alone does not confirm TestFlight readiness. Check the matching version/build and ASC processingState (VALID), then tester availability in Apple UI.");
+    console.log("Runner success is not TestFlight readiness. Confirm the exact build number is VALID on Apple and resolve compliance.");
     return;
   }
-  const plan = planIosRelease({ slug: project.slug, config, sha: args["--sha"] ?? "", buildName: args["--build-name"] ?? "", buildNumber: args["--build-number"], builds,
-    mode: flags.has("--apply") ? "testflight" : flags.has("--unsigned") ? "unsigned" : flags.has("--build") ? "build" : "check" });
-  console.log(JSON.stringify(plan, null, 2));
-  if (plan.mode === "check") { console.log("Preflight only: no workflow dispatched, no history written."); return; }
-  const github = new GitHubActionsClient(releaseRunnerFromEnv());
-  await github.assertPrivate();
+
+  const plan = planIosRelease({
+    slug: project.slug, config, sha: args["--sha"] ?? "", buildName: args["--build-name"] ?? "",
+    buildNumber: args["--build-number"], builds,
+    mode: flags.has("--apply") ? "testflight" : flags.has("--unsigned") ? "unsigned" : flags.has("--build") ? "build" : "check",
+  });
+  console.log(JSON.stringify({ provider, plan }, null, 2));
+  if (plan.mode === "check") {
+    console.log("Preflight only: no remote build and no CI minutes consumed.");
+    return;
+  }
+
   const correlationId = randomUUID();
   const startedAt = new Date().toISOString();
-  // Persist intent BEFORE the external request. On timeout do not retry automatically.
+  // Persist intent BEFORE dispatch. On timeout never retry automatically.
   await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "success", startedAt,
-    finishedAt: startedAt, stats: { state: "dispatching", correlationId, plan } });
+    finishedAt: startedAt, stats: { state: "dispatching", provider, correlationId, plan } });
   try {
-    const response = await github.dispatch(iosWorkflowInputs(plan, correlationId));
+    let dispatch: unknown;
+    if (provider === "codemagic") {
+      const client = new CodemagicClient(codemagicRunnerFromEnv());
+      dispatch = await client.dispatch(plan, correlationId);
+    } else {
+      const github = new GitHubActionsClient(releaseRunnerFromEnv());
+      await github.assertPrivate();
+      dispatch = await github.dispatch(iosWorkflowInputs(plan, correlationId));
+    }
     await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "success", startedAt,
-      finishedAt: new Date().toISOString(), stats: { state: "dispatch_accepted", correlationId, plan, rawJson: response } });
-    console.log(JSON.stringify({ correlationId, dispatch: response ?? "Accepted without run details; locate correlation ID in ios-status." }, null, 2));
-    console.log("Dispatch accepted; build/upload/processing are not yet confirmed. Use ios-status and the GitHub run URL.");
+      finishedAt: new Date().toISOString(), stats: { state: "dispatch_accepted", provider, correlationId, plan, dispatch } });
+    console.log(JSON.stringify({ provider, correlationId, dispatch }, null, 2));
+    console.log("Build queued, not necessarily compiled or uploaded. Check ios-status and App Store Connect.");
   } catch (error) {
     await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "failed", startedAt,
-      finishedAt: new Date().toISOString(), errorMessage: (error as Error).message, stats: { state: "dispatch_unknown_or_failed", correlationId, plan } });
-    throw new Error(`Dispatch outcome may be ambiguous. Check ios-status for ${correlationId} before retrying. ${(error as Error).message}`);
+      finishedAt: new Date().toISOString(), errorMessage: (error as Error).message,
+      stats: { state: "dispatch_unknown_or_failed", provider, correlationId, plan } });
+    throw new Error("Dispatch outcome may be ambiguous. Check " + provider + " for correlation ID " +
+      correlationId + " before retrying. " + (error as Error).message);
   }
 }
