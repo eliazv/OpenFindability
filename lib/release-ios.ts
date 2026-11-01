@@ -7,6 +7,9 @@ export type IosReleaseConfig = {
   bundleIds: string[];
   framework: "flutter" | "capacitor";
   workingDirectory?: string;
+  /** Optional Codemagic software selection, pinned per app (also checked in private runner). */
+  flutterVersion?: string;
+  xcodeVersion?: string;
 };
 export type IosBuild = { id: string; version: string; processingState?: string; uploadedDate?: string; rawJson: unknown };
 export type IosPlan = {
@@ -21,6 +24,8 @@ export function validateIosConfig(config: IosReleaseConfig): IosReleaseConfig {
   if (!["flutter", "capacitor"].includes(config.framework)) throw new Error("Supported iOS frameworks: flutter, capacitor.");
   if (config.workingDirectory !== undefined && config.workingDirectory !== "." && !/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(config.workingDirectory)) throw new Error("workingDirectory must be a safe relative app folder.");
   if (!Array.isArray(config.bundleIds) || config.bundleIds.length === 0 || config.bundleIds.some((id) => !/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(id)) || new Set(config.bundleIds).size !== config.bundleIds.length) throw new Error("Expected unique explicit bundle IDs: app first, then every extension.");
+  if (config.flutterVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(config.flutterVersion)) throw new Error("Invalid Flutter version.");
+  if (config.xcodeVersion !== undefined && !/^\d+\.\d+(?:\.\d+)?$/.test(config.xcodeVersion)) throw new Error("Invalid Xcode version.");
   return config;
 }
 
