@@ -1,0 +1,62 @@
+# COPY THIS FILE to the ROOT of the PRIVATE runner repo registered on Codemagic.
+# Workflows are API-only: do not configure a GitHub webhook.
+# ios_source: encrypted SOURCE_READ_TOKEN (Contents:read on approved source repos).
+# ios_signing: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_CONTENT, MATCH_PASSWORD,
+#              MATCH_GIT_BASIC_AUTHORIZATION; MATCH_GIT_URL, MATCH_GIT_BRANCH.
+definitions:
+  common_environment: &common_environment
+    xcode: latest
+    flutter: stable
+    node: lts
+    cocoapods: default
+  checkout_unsigned: &checkout_unsigned
+    name: Validate approval and checkout source (unsigned)
+    script: python3 codemagic_runner.py checkout --scope unsigned
+  checkout_signed: &checkout_signed
+    name: Validate approval and checkout source (signed)
+    script: python3 codemagic_runner.py checkout --scope signed
+  toolchain: &toolchain
+    name: Verify per-app toolchain and install pinned Fastlane gems
+    script: |
+      python3 codemagic_runner.py toolchain
+      bundle install --deployment
+  build_unsigned: &build_unsigned
+    name: Compile without Apple signing
+    script: bundle exec fastlane ios unsigned
+  build_signed: &build_signed
+    name: Sign IPA and optionally upload to TestFlight
+    script: bundle exec fastlane ios release
+
+workflows:
+  ios-central-unsigned:
+    name: Central iOS compile without signing
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+    environment:
+      <<: *common_environment
+      groups:
+        - ios_source
+    scripts:
+      - *checkout_unsigned
+      - *toolchain
+      - *build_unsigned
+    artifacts:
+      - output/unsigned-app.zip
+      - output/release.json
+
+  ios-central-signed:
+    name: Central iOS signed build or TestFlight upload
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+    environment:
+      <<: *common_environment
+      groups:
+        - ios_source
+        - ios_signing
+    scripts:
+      - *checkout_signed
+      - *toolchain
+      - *build_signed
+    artifacts:
+      - output/release.ipa
+      - output/release.json
