@@ -1,5 +1,7 @@
 # Setup release iOS centralizzate
 
+> **Codemagic (provider predefinito dal 2026-11):** per compilare iOS senza consumare minuti GitHub Actions usa [la guida Codemagic](codemagic-ios-release.md). Il resto di questo documento descrive il provider GitHub alternativo (`--provider github`).
+
 OpenFindability rimane il punto di comando per tutte le app. Sorgenti, firma e compilazione sono configurati una volta per progetto; non serve un workflow nel repository di ogni app. Le build iOS richiedono macOS e Xcode: Windows puo' avviare e controllare il lavoro, ma non compilare un IPA da solo.
 
 Questa guida pubblica contiene solo esempi fittizi. Inventari reali, percorsi personali, Team ID, Bundle ID, profili e stato del setup vanno in `private-notes/ios-release/`; configurazioni operative in `secrets/ios/` e nel database locale. Credenziali in `.env`, `secrets/` o GitHub Secrets. Non committare output Apple o configurazioni reali nel template pubblico `integrations/ios-release-runner/apps.json`.
