@@ -1,6 +1,7 @@
 require "json"
 require "fileutils"
 require "open3"
+require "tmpdir"
 
 default_platform(:ios)
 
@@ -60,7 +61,7 @@ def receipt(root, state)
   File.write(File.join(root, "output", "release.json"), JSON.pretty_generate({
     slug: ENV.fetch("SLUG"), sha: ENV.fetch("SHA"), version: ENV.fetch("BUILD_NAME"),
     build: ENV.fetch("BUILD_NUMBER"), correlationId: ENV.fetch("CORRELATION_ID"),
-    state: state, runId: ENV["GITHUB_RUN_ID"]
+    state: state, runId: ENV["GITHUB_RUN_ID"] || ENV["CM_BUILD_ID"]
   }))
 end
 
@@ -88,7 +89,7 @@ platform :ios do
 
   lane :release do
     root, app, source = release_context
-    keychain = "ios-release-#{ENV.fetch('GITHUB_RUN_ID')}"
+    keychain = "ios-release-#{ENV["GITHUB_RUN_ID"] || ENV["CM_BUILD_ID"] || ENV.fetch("CORRELATION_ID")}"
     api_key = app_store_connect_api_key(key_id: ENV.fetch("ASC_KEY_ID"), issuer_id: ENV.fetch("ASC_ISSUER_ID"),
       key_content: ENV.fetch("ASC_KEY_CONTENT"), in_house: false)
     remote = Spaceship::ConnectAPI::App.get(app_id: app.fetch("appId").to_s)
@@ -101,7 +102,7 @@ platform :ios do
     end
     check_number.call
     prepare_app(app, source)
-    setup_ci(provider: "github", keychain_name: keychain, timeout: 3600)
+    setup_ci(keychain_name: keychain, timeout: 3600)
     match(type: "appstore", readonly: true, api_key: api_key, team_id: app.fetch("teamId"),
       app_identifier: app.fetch("bundleIds"), git_url: ENV.fetch("MATCH_GIT_URL"),
       git_branch: ENV.fetch("MATCH_GIT_BRANCH", "signing"), clone_branch_directly: true, keychain_name: keychain)
@@ -128,7 +129,7 @@ platform :ios do
       entitlement_data["aps-environment"] = "production"
       Xcodeproj::Plist.write_to_path(entitlement_data, entitlement_path)
     end
-    export = File.join(ENV.fetch("RUNNER_TEMP"), "ExportOptions.plist")
+    export = File.join(ENV.fetch("RUNNER_TEMP", Dir.tmpdir), "ExportOptions.plist")
     require "plist"
     File.write(export, { method: "app-store-connect", signingStyle: "manual", teamID: app.fetch("teamId"), provisioningProfiles: profiles }.to_plist)
     if app.fetch("framework") == "flutter"
