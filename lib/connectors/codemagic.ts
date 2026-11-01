@@ -85,7 +85,7 @@ export class CodemagicClient {
     });
     // Never print response bodies: providers can return request parameters.
     if (!response.ok) throw new Error("Codemagic API " + response.status + " (" + (init.method ?? "GET") + " " + path + ")");
-    if (response.status === 204) return undefined as T;
+    if (response.status === 204 || response.status === 208) return undefined as T;
     return await response.json() as T;
   }
 
