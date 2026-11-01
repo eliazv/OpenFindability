@@ -59,6 +59,8 @@ if __name__ == "__main__":
     inputs = {key: os.environ[key.upper()] for key in ("slug", "sha", "mode", "build_name", "build_number", "correlation_id")}
     app = validate(json.loads(Path(__file__).with_name("apps.json").read_text()), inputs)
     owner, repo = app["repository"].split("/")
-    with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key, value in {"owner": owner, "repo": repo, "framework": app["framework"], "flutter": app.get("flutterVersion", ""), "node": app.get("nodeVersion", ""), "xcode": app["xcodeVersion"]}.items():
-            output.write(f"{key}={value}\n")
+    if os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+            for key, value in {"owner": owner, "repo": repo, "framework": app["framework"], "flutter": app.get("flutterVersion", ""), "node": app.get("nodeVersion", ""), "xcode": app["xcodeVersion"]}.items():
+                output.write(f"{key}={value}\n")
+    print("Approved iOS source: " + slug + " (" + app["framework"] + ")")
