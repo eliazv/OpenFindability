@@ -1,5 +1,7 @@
 # Release Android — pubblicare un'app Flutter su Google Play
 
+**iOS con Codemagic:** [Setup centralizzato e comandi](codemagic-ios-release.md). Il provider predefinito iOS è Codemagic, non GitHub Actions; `--provider github` va scelto esplicitamente. Il flusso Android di questa guida rimane invariato.
+
 OpenFindability compila un progetto Flutter, verifica la firma dell'AAB e lo carica su un track di
 Google Play. Fastlane non serve e le credenziali Play non vanno copiate nei singoli progetti: si
 riusa il service account già configurato qui (`GOOGLE_SERVICE_ACCOUNT_FILE` o
