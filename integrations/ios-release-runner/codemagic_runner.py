@@ -76,7 +76,9 @@ def check_toolchain():
     xcode = subprocess.check_output(["xcodebuild", "-version"], text=True).splitlines()[0]
     match = re.match(r"Xcode (\d+(?:\.\d+){0,2})", xcode)
     expected = app["xcodeVersion"]
-    if not match or match.group(1).rstrip(".0") != expected.rstrip(".0"):
+    def version_tuple(value):
+        return tuple(int(part) for part in value.split("."))
+    if not match or version_tuple(match.group(1)) != version_tuple(expected):
         raise ValueError("Wrong Xcode version: expected " + expected + ", got " + xcode)
 
     if app["framework"] == "flutter":
