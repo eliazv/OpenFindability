@@ -9,6 +9,7 @@ export type IosReleaseConfig = {
   workingDirectory?: string;
   /** Optional Codemagic software selection, pinned per app (also checked in private runner). */
   flutterVersion?: string;
+  nodeVersion?: string;
   xcodeVersion?: string;
 };
 export type IosBuild = { id: string; version: string; processingState?: string; uploadedDate?: string; rawJson: unknown };
@@ -25,6 +26,7 @@ export function validateIosConfig(config: IosReleaseConfig): IosReleaseConfig {
   if (config.workingDirectory !== undefined && config.workingDirectory !== "." && !/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(config.workingDirectory)) throw new Error("workingDirectory must be a safe relative app folder.");
   if (!Array.isArray(config.bundleIds) || config.bundleIds.length === 0 || config.bundleIds.some((id) => !/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(id)) || new Set(config.bundleIds).size !== config.bundleIds.length) throw new Error("Expected unique explicit bundle IDs: app first, then every extension.");
   if (config.flutterVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(config.flutterVersion)) throw new Error("Invalid Flutter version.");
+  if (config.nodeVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(config.nodeVersion)) throw new Error("Invalid Node version.");
   if (config.xcodeVersion !== undefined && !/^\d+\.\d+(?:\.\d+)?$/.test(config.xcodeVersion)) throw new Error("Invalid Xcode version.");
   return config;
 }
