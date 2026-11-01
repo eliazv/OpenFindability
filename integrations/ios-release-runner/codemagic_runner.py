@@ -77,7 +77,10 @@ def check_toolchain():
     match = re.match(r"Xcode (\d+(?:\.\d+){0,2})", xcode)
     expected = app["xcodeVersion"]
     def version_tuple(value):
-        return tuple(int(part) for part in value.split("."))
+        parts = [int(part) for part in value.split(".")]
+        while len(parts) > 2 and parts[-1] == 0:
+            parts.pop()
+        return tuple(parts)
     if not match or version_tuple(match.group(1)) != version_tuple(expected):
         raise ValueError("Wrong Xcode version: expected " + expected + ", got " + xcode)
 
