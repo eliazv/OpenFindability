@@ -63,4 +63,4 @@ if __name__ == "__main__":
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
             for key, value in {"owner": owner, "repo": repo, "framework": app["framework"], "flutter": app.get("flutterVersion", ""), "node": app.get("nodeVersion", ""), "xcode": app["xcodeVersion"]}.items():
                 output.write(f"{key}={value}\n")
-    print("Approved iOS source: " + slug + " (" + app["framework"] + ")")
+    print("Approved iOS source: " + inputs["slug"] + " (" + app["framework"] + ")")
