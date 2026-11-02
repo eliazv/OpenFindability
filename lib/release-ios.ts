@@ -23,6 +23,8 @@ export type IosBuild = { id: string; version: string; processingState?: string; 
 export type IosPlan = {
   slug: string; sha: string; buildName: string; buildNumber: string;
   mode: "check" | "unsigned" | "build" | "testflight"; config: IosReleaseConfig;
+  /** The runner resolves native pods again instead of enforcing a Podfile.lock older than the dependencies. */
+  refreshPods?: boolean;
 };
 
 export function validateIosConfig(config: IosReleaseConfig): IosReleaseConfig {
@@ -41,7 +43,7 @@ export function validateIosConfig(config: IosReleaseConfig): IosReleaseConfig {
 /** Pure planning: caller supplies the complete paginated ASC inventory. Never writes. */
 export function planIosRelease(options: {
   slug: string; config: IosReleaseConfig; sha: string; buildName: string;
-  buildNumber?: string; mode?: IosPlan["mode"]; builds: IosBuild[];
+  buildNumber?: string; mode?: IosPlan["mode"]; builds: IosBuild[]; refreshPods?: boolean;
 }): IosPlan {
   const config = validateIosConfig(options.config);
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(options.slug)) throw new Error("Invalid project slug.");
@@ -51,7 +53,7 @@ export function planIosRelease(options: {
   const highest = Math.max(0, ...options.builds.map((build) => Number(build.version)));
   const number = options.buildNumber && options.buildNumber !== "auto" ? options.buildNumber : String(highest + 1);
   if (!/^[1-9]\d*$/.test(number) || !Number.isSafeInteger(Number(number)) || Number(number) <= highest) throw new Error(`Build number must be an integer greater than all ASC builds (${highest}).`);
-  return { slug: options.slug, config, sha: options.sha, buildName: options.buildName, buildNumber: number, mode: options.mode ?? "check" };
+  return { slug: options.slug, config, sha: options.sha, buildName: options.buildName, buildNumber: number, mode: options.mode ?? "check", refreshPods: options.refreshPods ?? false };
 }
 
 export function iosWorkflowInputs(plan: IosPlan, correlationId: string): Record<string, string> {

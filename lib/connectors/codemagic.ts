@@ -86,6 +86,7 @@ export function codemagicBuildRequest(plan: IosPlan, correlationId: string, runn
         BUILD_NUMBER: plan.buildNumber,
         CORRELATION_ID: correlationId,
         RUNNER_APPS_B64: runnerPolicy(plan),
+        REFRESH_PODS: plan.refreshPods ? "1" : "0",
       },
       ...(Object.keys(softwareVersions).length ? { softwareVersions } : {}),
     },

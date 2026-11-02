@@ -57,6 +57,8 @@ npx tsx scripts/release.ts ios-cancel --path C:\percorso\app --build-id <id> [--
 
 Con `--path` la CLI usa l'ultimo commit del branch corrente e si ferma se ci sono modifiche non committate o il branch non coincide con GitHub. La versione viene da `pubspec.yaml` (Flutter) o dal progetto Xcode (Capacitor) e il build number è il successivo a quelli su App Store Connect. `--sha`, `--build-name` e `--build-number` li sostituiscono. La build usa sempre il commit su GitHub, mai i file locali.
 
+Se il `Podfile.lock` è più vecchio di `pubspec.lock` o `package-lock.json`, caso normale quando si sviluppa da Windows, il piano lo segnala e Codemagic risolve di nuovo i pod invece di fermarsi. `--refresh-pods` forza lo stesso comportamento. Il nuovo `Podfile.lock` è un artefatto della build: committalo nel repository dell'app per fissare quelle versioni. I pod nativi possono quindi differire da quelli dell'ultima build, perciò prova l'app su TestFlight.
+
 `--wait` attende la fine della build, fino a due ore, e restituisce un errore se non termina con successo. Interrompere l'attesa non ferma la build.
 
 ## Cosa significano i risultati

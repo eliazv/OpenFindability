@@ -3,7 +3,7 @@ import { getAscApp, listAscApps, listAscBuilds } from "@/lib/connectors/appstore
 import { CodemagicClient, codemagicPinProblems, codemagicRunnerFromEnv } from "@/lib/connectors/codemagic";
 import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
-import { buildIosConfig, ensureCodemagicAccess, localMarketingVersion, resolvePushedSha } from "@/lib/release-ios-setup";
+import { buildIosConfig, ensureCodemagicAccess, localMarketingVersion, podLockIsStale, resolvePushedSha } from "@/lib/release-ios-setup";
 import { appendConnectorRun, readProjects, updateProject } from "@/lib/store";
 import { createId } from "@/lib/id";
 import { discoverLocalIosProjects, resolveIosProject } from "@/lib/release-ios-project";
@@ -63,7 +63,7 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   const flags = new Set<string>();
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
-    if (["--build", "--apply", "--unsigned", "--wait"].includes(key)) { flags.add(key); continue; }
+    if (["--build", "--apply", "--unsigned", "--wait", "--refresh-pods"].includes(key)) { flags.add(key); continue; }
     if (!["--slug", "--path", "--sha", "--build-name", "--build-number", "--provider", "--build-id", "--xcode", "--flutter", "--node", "--web-script"].includes(key) ||
         !argv[i + 1] || argv[i + 1].startsWith("--"))
       throw new Error("Invalid/missing iOS argument: " + key);
@@ -129,10 +129,12 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   const buildName = args["--build-name"] ?? (local ? await localMarketingVersion(local) : undefined) ?? "";
   const plan = planIosRelease({
     slug: project.slug, config, sha, buildName,
+    refreshPods: flags.has("--refresh-pods") || (local ? await podLockIsStale(local) : false),
     buildNumber: args["--build-number"], builds,
     mode: flags.has("--apply") ? "testflight" : flags.has("--unsigned") ? "unsigned" : flags.has("--build") ? "build" : "check",
   });
   console.log(JSON.stringify({ provider, plan }, null, 2));
+  if (plan.refreshPods) console.log("Native pods will be resolved again: Podfile.lock is older than the dependency lockfile or --refresh-pods was passed. The new Podfile.lock is a build artifact, to commit in the app repository.");
   if (provider === "codemagic") {
     const problems = codemagicPinProblems(config);
     if (problems.length) {

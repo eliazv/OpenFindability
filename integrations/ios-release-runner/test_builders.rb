@@ -63,6 +63,20 @@ class BuilderPreparationTest < Minitest::Test
     end
   end
 
+  def test_refresh_removes_the_stale_lock_and_drops_deployment_mode
+    ENV["REFRESH_PODS"] = "1"
+    Dir.mktmpdir do |app|
+      FileUtils.mkdir_p(File.join(app, "ios"))
+      lock = File.join(app, "ios", "Podfile.lock")
+      File.write(lock, "stale")
+      prepare_app({ "framework" => "flutter" }, app)
+      refute File.exist?(lock)
+      assert_equal ["pod", "install"], $commands.last.last
+    end
+  ensure
+    ENV.delete("REFRESH_PODS")
+  end
+
   def test_profile_mapping_needs_an_app_store_profile_for_every_bundle
     app = { "teamId" => "ABCDEFGHIJ", "bundleIds" => ["com.example.demo", "com.example.demo.Widget"] }
     store = ->(name, bundle) { { "Name" => name, "TeamIdentifier" => ["ABCDEFGHIJ"], "Entitlements" => { "application-identifier" => "ABCDEFGHIJ.#{bundle}" } } }

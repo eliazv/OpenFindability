@@ -56,6 +56,7 @@ workflows:
     artifacts:
       - integrations/ios-release-runner/output/unsigned-app.zip
       - integrations/ios-release-runner/output/release.json
+      - integrations/ios-release-runner/output/Podfile.lock
 
   ios-central-signed:
     name: Central iOS signed build or TestFlight upload
@@ -73,3 +74,4 @@ workflows:
     artifacts:
       - integrations/ios-release-runner/output/release.ipa
       - integrations/ios-release-runner/output/release.json
+      - integrations/ios-release-runner/output/Podfile.lock

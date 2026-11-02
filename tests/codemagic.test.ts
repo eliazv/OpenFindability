@@ -105,6 +105,12 @@ test("each build carries a policy approving only its own SHA", () => {
   assert.deepEqual(decoded(codemagicBuildRequest(plan(), correlationId, runner).environment.variables.RUNNER_APPS_B64).demo, app);
 });
 
+test("stale native lock is passed to the runner only when planned", () => {
+  const variables = (refreshPods: boolean) => codemagicBuildRequest({ ...plan(), refreshPods }, correlationId, runner).environment.variables;
+  assert.equal(variables(true).REFRESH_PODS, "1");
+  assert.equal(variables(false).REFRESH_PODS, "0");
+});
+
 test("wait polls read-only until a final status", async () => {
   const statuses = ["queued", "building", "finished"];
   const seen: string[] = [];

@@ -243,6 +243,14 @@ export async function resolvePushedSha(path: string, repository: string): Promis
   return head;
 }
 
+/** Developing on Windows leaves Podfile.lock behind the Dart or npm lockfile, and a strict install then fails. */
+export async function podLockIsStale(local: LocalIosProject): Promise<boolean> {
+  const flutter = local.framework === "flutter";
+  const committedAt = async (file: string) => Number(await git(local.path, "log", "-1", "--format=%ct", "--", file));
+  const pods = await committedAt(flutter ? "ios/Podfile.lock" : "ios/App/Podfile.lock");
+  return pods < await committedAt(flutter ? "pubspec.lock" : "package-lock.json");
+}
+
 /** Marketing version in the app folder, used when --build-name is omitted. */
 export async function localMarketingVersion(local: LocalIosProject): Promise<string | undefined> {
   if (local.framework === "flutter") {

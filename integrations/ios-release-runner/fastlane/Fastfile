@@ -13,7 +13,7 @@ def release_context
   source = File.expand_path(File.join(root, "source", app.fetch("workingDirectory")))
   sha, ok = Open3.capture2("git", "-C", source, "rev-parse", "HEAD")
   UI.user_error!("Checkout SHA mismatch") unless ok.success? && sha.strip == ENV.fetch("SHA")
-  UI.user_error!("Commit Podfile.lock before building") unless File.file?(File.join(source, File.dirname(native_project(app)), "Podfile.lock"))
+  UI.user_error!("Commit Podfile.lock before building") unless refresh_pods? || File.file?(pod_lock(app, source))
   [root, app, source]
 end
 
@@ -25,23 +25,38 @@ def native_workspace(app)
   app.fetch("workspace", app.fetch("framework") == "flutter" ? "ios/Runner.xcworkspace" : "ios/App/App.xcworkspace")
 end
 
+def refresh_pods?
+  ENV["REFRESH_PODS"] == "1"
+end
+
+def pod_lock(app, source)
+  File.join(source, File.dirname(native_project(app)), "Podfile.lock")
+end
+
+def export_pod_lock(root, app, source)
+  return unless refresh_pods?
+  FileUtils.mkdir_p(File.join(root, "output"))
+  FileUtils.cp(pod_lock(app, source), File.join(root, "output", "Podfile.lock"))
+end
+
 def prepare_flutter(source)
   Dir.chdir(source) do
     sh("flutter", "pub", "get", "--enforce-lockfile")
     # Generate Flutter's xcconfig before resolving Pods; preserve native project/workarounds.
     sh("flutter", "build", "ios", "--config-only", "--release", "--no-codesign",
        "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
-    Dir.chdir("ios") { sh("pod", "install", "--deployment") }
+    Dir.chdir("ios") { refresh_pods? ? sh("pod", "install") : sh("pod", "install", "--deployment") }
   end
 end
 
 def prepare_app(app, source)
+  FileUtils.rm_f(pod_lock(app, source)) if refresh_pods?
   return prepare_flutter(source) if app.fetch("framework") == "flutter"
   UI.user_error!("Capacitor requires committed package-lock.json") unless File.file?(File.join(source, "package-lock.json"))
   Dir.chdir(source) do
     sh("npm", "ci")
     sh("npm", "run", app.fetch("webBuildScript", "build"))
-    sh("npx", "--no-install", "cap", "sync", "ios", "--deployment")
+    refresh_pods? ? sh("npx", "--no-install", "cap", "sync", "ios") : sh("npx", "--no-install", "cap", "sync", "ios", "--deployment")
   end
   require "xcodeproj"
   project = Xcodeproj::Project.open(File.join(source, native_project(app)))
@@ -104,6 +119,7 @@ platform :ios do
   lane :unsigned do
     root, app, source = release_context
     prepare_app(app, source)
+    export_pod_lock(root, app, source)
     if app.fetch("framework") == "flutter"
       Dir.chdir(source) do
         sh("flutter", "build", "ios", "--release", "--no-codesign", "--no-pub",
@@ -137,6 +153,7 @@ platform :ios do
     end
     check_number.call
     prepare_app(app, source)
+    export_pod_lock(root, app, source)
     if ENV["CERTIFICATE_PRIVATE_KEY"].to_s.empty?
       setup_ci(keychain_name: keychain, timeout: 3600)
       match(type: "appstore", readonly: true, api_key: api_key, team_id: app.fetch("teamId"),
