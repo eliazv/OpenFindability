@@ -93,12 +93,18 @@ async function flutterVersion(appPath: string, gitRoot: string, workflows: strin
     if (pinned) return pinned;
   }
   const fromWorkflow = exactVersion(/flutter-version:\s*['"]?([0-9.]+)/.exec(workflows)?.[1]);
-  if (fromWorkflow) return fromWorkflow;
+  let local: string | undefined;
   try {
-    // Last resort: the SDK this machine would use to build the app. The plan shows the value before saving.
     const { stdout } = await run("flutter", ["--version", "--machine"], { shell: true, timeout: 60_000 });
-    return exactVersion(JSON.parse(stdout).frameworkVersion);
-  } catch { return undefined; }
+    local = exactVersion(JSON.parse(stdout).frameworkVersion);
+  } catch { return fromWorkflow; }
+  if (!fromWorkflow) return local;
+  // The build enforces pubspec.lock, and SDK-pinned packages tie it to a Flutter version:
+  // a workflow can name a version the committed lockfile does not satisfy.
+  try {
+    await run("flutter", ["pub", "get", "--enforce-lockfile", "--dry-run"], { cwd: appPath, shell: true, timeout: 180_000 });
+    return local;
+  } catch { return fromWorkflow; }
 }
 
 async function nodeVersion(appPath: string, gitRoot: string, workflows: string): Promise<string | undefined> {

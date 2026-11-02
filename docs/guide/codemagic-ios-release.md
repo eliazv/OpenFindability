@@ -33,7 +33,7 @@ npx tsx scripts/release.ts ios-setup --path C:\percorso\app --apply  # li salva 
 
 Con `--apply` il comando salva la configurazione e aggiunge solo ciò che manca: sul repository dell'app una deploy key **in sola lettura**, e su Codemagic la relativa variabile `SOURCE_KEY_<SLUG>` nel gruppo `ios_source` e, la prima volta, le credenziali Apple nel gruppo `ios_signing`. La chiave del certificato viene generata in `secrets/appstoreconnect/ios_distribution_private_key`: non cambiarla, perché il certificato su Apple corrisponde a quella. I valori sono caricati come Secret e mai stampati. Per sostituire un valore, elimina la variabile su Codemagic e rilancia il comando.
 
-Il comando legge dalla cartella, senza eseguire codice dell'app: repository, Team ID, target, bundle ID ed entitlement. Trova l'Apple ID su App Store Connect. Le versioni arrivano da `.fvmrc`, `.nvmrc` e dai workflow del repository; per Flutter, in mancanza, dall'SDK di questo PC. **Controlla le versioni**: se sono sbagliate correggile con `--xcode`, `--flutter`, `--node` (e `--web-script` per Capacitor). Rilancia il comando quando cambi capability, target o estensioni.
+Il comando legge dalla cartella, senza eseguire codice dell'app: repository, Team ID, target, bundle ID ed entitlement. Trova l'Apple ID su App Store Connect. Le versioni arrivano da `.fvmrc`, `.nvmrc` e dai workflow del repository; per Flutter ha la precedenza sui workflow l'SDK di questo PC, se soddisfa il `pubspec.lock` committato, perché la build impone quel lockfile. **Controlla le versioni**: se sono sbagliate correggile con `--xcode`, `--flutter`, `--node` (e `--web-script` per Capacitor). Rilancia il comando quando cambi capability, target o estensioni.
 
 ## Rilasciare
 
