@@ -130,7 +130,9 @@ def fetch_codemagic_signing(app)
     sh("app-store-connect", "fetch-signing-files", bundle, "--type", "IOS_APP_STORE", "--create")
   end
   sh("keychain", "add-certificates")
-  plists = Dir[File.join(Dir.home, "Library", "MobileDevice", "Provisioning Profiles", "*.mobileprovision")].map do |file|
+  # Codemagic CLI tools save to the Xcode folder; older images used MobileDevice.
+  folders = [["Developer", "Xcode", "UserData"], ["MobileDevice"]].map { |parts| File.join(Dir.home, "Library", *parts, "Provisioning Profiles") }
+  plists = folders.flat_map { |folder| Dir[File.join(folder, "*.mobileprovision")] }.map do |file|
     decoded, ok = Open3.capture2("security", "cms", "-D", "-i", file)
     UI.user_error!("Unreadable provisioning profile") unless ok.success?
     Plist.parse_xml(decoded)
