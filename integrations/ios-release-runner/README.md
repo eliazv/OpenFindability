@@ -1,6 +1,6 @@
 # Runner iOS centrale privato
 
-**Nuovo provider Codemagic:** il pacchetto contiene anche `codemagic.yaml` e `codemagic_runner.py`. Selezionando Codemagic come provider (default) non installare la workflow GitHub; copia il file YAML nella radice del repository runner privato e segui [la guida completa](../../docs/guide/codemagic-ios-release.md). I segreti Apple vanno nel gruppo `ios_signing` di Codemagic e NON nei singoli repository app.
+**Provider Codemagic (default):** non serve alcun repository aggiuntivo. Codemagic esegue direttamente questo pacchetto da OpenFindability, tramite `codemagic.yaml` nella radice del repository, e riceve l'app da compilare e lo SHA approvato dalla CLI a ogni build. Vedi [la guida completa](../../docs/guide/codemagic-ios-release.md). Il resto di questo documento riguarda il provider GitHub alternativo.
 
 Pacchetto da copiare alla radice di un repository GitHub **privato** dedicato.
 Spostare soltanto `release-ios.yml` in `.github/workflows/release-ios.yml`.

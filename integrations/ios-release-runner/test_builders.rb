@@ -63,6 +63,17 @@ class BuilderPreparationTest < Minitest::Test
     end
   end
 
+  def test_profile_mapping_needs_an_app_store_profile_for_every_bundle
+    app = { "teamId" => "ABCDEFGHIJ", "bundleIds" => ["com.example.demo", "com.example.demo.Widget"] }
+    store = ->(name, bundle) { { "Name" => name, "TeamIdentifier" => ["ABCDEFGHIJ"], "Entitlements" => { "application-identifier" => "ABCDEFGHIJ.#{bundle}" } } }
+    main = store.call("Main", "com.example.demo")
+    widget = store.call("Widget", "com.example.demo.Widget")
+    adhoc = store.call("AdHoc", "com.example.demo").merge("ProvisionedDevices" => ["x"])
+    assert_equal({ "com.example.demo" => "Main", "com.example.demo.Widget" => "Widget" }, profile_mapping([adhoc, widget, main], app))
+    assert_raises(RuntimeError) { profile_mapping([main], app) }
+    assert_raises(RuntimeError) { profile_mapping([main.merge("TeamIdentifier" => ["OTHER"]), widget], app) }
+  end
+
   def test_capacitor_missing_lock_fails_before_install_or_build
     Dir.mktmpdir do |app|
       assert_raises(RuntimeError) { prepare_app({ "framework" => "capacitor" }, app) }

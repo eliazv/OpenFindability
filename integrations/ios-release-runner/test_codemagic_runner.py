@@ -1,4 +1,5 @@
 """Offline security checks; does not require macOS, network or Codemagic credentials."""
+import base64
 import json
 import os
 import tempfile
@@ -41,6 +42,21 @@ class CodemagicRunnerTests(unittest.TestCase):
         self.patched_root = patch.object(codemagic_runner, "ROOT", self.root)
         self.patched_root.start()
         self.addCleanup(self.patched_root.stop)
+
+    def test_policy_comes_from_the_release_cli(self):
+        encoded = base64.b64encode(json.dumps({"other": APP}).encode()).decode()
+        with patch.dict(os.environ, {"RUNNER_APPS_B64": encoded}):
+            codemagic_runner.write_policy()
+        self.assertIn("other", json.loads((self.root / "apps.json").read_text()))
+
+    def test_policy_rejects_missing_or_malformed_value(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ValueError, "missing"):
+                codemagic_runner.write_policy()
+        for value in ("{not-base64", base64.b64encode(b"{bad").decode(), base64.b64encode(b"[]").decode()):
+            with patch.dict(os.environ, {"RUNNER_APPS_B64": value}):
+                with self.assertRaisesRegex(ValueError, "RUNNER_APPS_B64"):
+                    codemagic_runner.write_policy()
 
     def test_rejects_incorrect_scope_before_git_clone(self):
         with patch.dict(os.environ, {**ENV, "MODE": "testflight", "SOURCE_READ_TOKEN": "token"}):

@@ -1,9 +1,10 @@
-"""Codemagic adapter for the PRIVATE central iOS runner.
+"""Codemagic adapter for the central iOS runner.
 
-Run 'checkout --scope unsigned|signed' before executing any application code.
-The approved source repository/SHA come ONLY from the private apps.json allowlist.
+Run 'policy', then 'checkout --scope unsigned|signed', before executing any application code.
+The approved source repository/SHA come ONLY from RUNNER_APPS_B64, sent by the release CLI.
 No signing credentials are read by this script.
 """
+import base64
 import json
 import os
 import re
@@ -15,6 +16,21 @@ from pathlib import Path
 from validate import validate
 
 ROOT = Path(__file__).resolve().parent
+
+
+def write_policy():
+    # The real identities stay out of the public repo: the release CLI sends them with
+    # each build and this disposable machine replaces the tracked example.
+    policy = os.environ.get("RUNNER_APPS_B64", "")
+    if not policy:
+        raise ValueError("RUNNER_APPS_B64 is missing: start builds from the OpenFindability release CLI.")
+    try:
+        apps = json.loads(base64.b64decode(policy, validate=True))
+    except ValueError:
+        raise ValueError("RUNNER_APPS_B64 is not valid base64 JSON.") from None
+    if not isinstance(apps, dict):
+        raise ValueError("RUNNER_APPS_B64 must be an object keyed by slug.")
+    (ROOT / "apps.json").write_text(json.dumps(apps), encoding="utf-8")
 
 
 def approved():
@@ -101,7 +117,9 @@ def check_toolchain():
 if __name__ == "__main__":
     if len(sys.argv) == 4 and sys.argv[1] == "checkout" and sys.argv[2] == "--scope":
         checkout(sys.argv[3])
+    elif sys.argv[1:] == ["policy"]:
+        write_policy()
     elif sys.argv[1:] == ["toolchain"]:
         check_toolchain()
     else:
-        raise SystemExit("Usage: python3 codemagic_runner.py checkout --scope unsigned|signed | toolchain")
+        raise SystemExit("Usage: python3 codemagic_runner.py policy | checkout --scope unsigned|signed | toolchain")

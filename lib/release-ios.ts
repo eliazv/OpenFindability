@@ -11,6 +11,13 @@ export type IosReleaseConfig = {
   flutterVersion?: string;
   nodeVersion?: string;
   xcodeVersion?: string;
+  /** Native build details written by ios-setup and sent to the runner with each Codemagic build. */
+  scheme?: string;
+  targets?: Record<string, string>;
+  webBuildScript?: string;
+  xcodeProject?: string;
+  workspace?: string;
+  requiredEntitlements?: Record<string, Record<string, unknown>>;
 };
 export type IosBuild = { id: string; version: string; processingState?: string; uploadedDate?: string; rawJson: unknown };
 export type IosPlan = {

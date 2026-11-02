@@ -56,6 +56,41 @@ def prepare_app(app, source)
   project.save
 end
 
+# Pure: picks each bundle's App Store profile from decoded .mobileprovision plists.
+def profile_mapping(plists, app)
+  app.fetch("bundleIds").to_h do |bundle|
+    profile = plists.find do |plist|
+      plist.fetch("TeamIdentifier", []).include?(app.fetch("teamId")) && !plist.key?("ProvisionedDevices") &&
+        plist.fetch("Entitlements", {})["application-identifier"].to_s.sub(/\A[^.]+\./, "") == bundle
+    end
+    UI.user_error!("Missing App Store profile for #{bundle}") unless profile
+    [bundle, profile.fetch("Name")]
+  end
+end
+
+# Apple is the source of truth: no Mac, .p12 or Match deposit. Certificates and profiles are
+# reused when they match CERTIFICATE_PRIVATE_KEY and created when missing; nothing is revoked.
+def fetch_codemagic_signing(app)
+  require "plist"
+  ENV["APP_STORE_CONNECT_KEY_IDENTIFIER"] = ENV.fetch("ASC_KEY_ID")
+  ENV["APP_STORE_CONNECT_ISSUER_ID"] = ENV.fetch("ASC_ISSUER_ID")
+  ENV["APP_STORE_CONNECT_PRIVATE_KEY"] = ENV.fetch("ASC_KEY_CONTENT")
+  sh("keychain", "initialize")
+  app.fetch("bundleIds").each do |bundle|
+    sh("app-store-connect", "fetch-signing-files", bundle, "--type", "IOS_APP_STORE", "--create")
+  end
+  sh("keychain", "add-certificates")
+  plists = Dir[File.join(Dir.home, "Library", "MobileDevice", "Provisioning Profiles", "*.mobileprovision")].map do |file|
+    decoded, ok = Open3.capture2("security", "cms", "-D", "-i", file)
+    UI.user_error!("Unreadable provisioning profile") unless ok.success?
+    Plist.parse_xml(decoded)
+  end
+  identities, ok = Open3.capture2("security", "find-identity", "-v", "-p", "codesigning")
+  identity = ok.success? && identities[/"((?:Apple|iPhone|iOS) Distribution)/, 1]
+  UI.user_error!("No distribution identity in the keychain") unless identity
+  [profile_mapping(plists, app), identity]
+end
+
 def receipt(root, state)
   FileUtils.mkdir_p(File.join(root, "output"))
   File.write(File.join(root, "output", "release.json"), JSON.pretty_generate({
@@ -102,16 +137,21 @@ platform :ios do
     end
     check_number.call
     prepare_app(app, source)
-    setup_ci(keychain_name: keychain, timeout: 3600)
-    match(type: "appstore", readonly: true, api_key: api_key, team_id: app.fetch("teamId"),
-      app_identifier: app.fetch("bundleIds"), git_url: ENV.fetch("MATCH_GIT_URL"),
-      git_branch: ENV.fetch("MATCH_GIT_BRANCH", "signing"), clone_branch_directly: true, keychain_name: keychain)
-    profiles = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
+    if ENV["CERTIFICATE_PRIVATE_KEY"].to_s.empty?
+      setup_ci(keychain_name: keychain, timeout: 3600)
+      match(type: "appstore", readonly: true, api_key: api_key, team_id: app.fetch("teamId"),
+        app_identifier: app.fetch("bundleIds"), git_url: ENV.fetch("MATCH_GIT_URL"),
+        git_branch: ENV.fetch("MATCH_GIT_BRANCH", "signing"), clone_branch_directly: true, keychain_name: keychain)
+      profiles = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
+      identity = "Apple Distribution"
+    else
+      profiles, identity = fetch_codemagic_signing(app)
+    end
     UI.user_error!("Missing profiles") unless (app.fetch("bundleIds") - profiles.keys).empty?
     app.fetch("targets").each do |target, bundle|
       update_code_signing_settings(use_automatic_signing: false, path: File.join(source, native_project(app)),
         targets: [target], team_id: app.fetch("teamId"), bundle_identifier: bundle,
-        code_sign_identity: "Apple Distribution", profile_name: profiles.fetch(bundle), build_configurations: ["Release"])
+        code_sign_identity: identity, profile_name: profiles.fetch(bundle), build_configurations: ["Release"])
     end
     # Projects can keep development push entitlements in source. Change only the
     # disposable CI checkout; never rewrite the developer's project repository.
@@ -131,7 +171,7 @@ platform :ios do
     end
     export = File.join(ENV.fetch("RUNNER_TEMP", Dir.tmpdir), "ExportOptions.plist")
     require "plist"
-    File.write(export, { method: "app-store-connect", signingStyle: "manual", teamID: app.fetch("teamId"), provisioningProfiles: profiles }.to_plist)
+    File.write(export, { method: "app-store-connect", signingStyle: "manual", signingCertificate: identity, teamID: app.fetch("teamId"), provisioningProfiles: profiles }.to_plist)
     if app.fetch("framework") == "flutter"
       Dir.chdir(source) do
         sh("flutter", "build", "ipa", "--release", "--no-pub", "--export-options-plist", export,

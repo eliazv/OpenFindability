@@ -1,8 +1,8 @@
-# COPY THIS FILE to the ROOT of the PRIVATE runner repo registered on Codemagic.
-# Workflows are API-only: do not configure a GitHub webhook.
-# ios_source: encrypted SOURCE_READ_TOKEN (Contents:read on approved source repos).
-# ios_signing: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_CONTENT, MATCH_PASSWORD,
-#              MATCH_GIT_BASIC_AUTHORIZATION; MATCH_GIT_URL, MATCH_GIT_BRANCH.
+# Central iOS runner. Workflows are API-only: no triggering section and no webhook.
+# App identities are NOT in this public repo: the release CLI sends them, and the SHA it
+# approves, as RUNNER_APPS_B64 with each build.
+# ios_source: encrypted SOURCE_READ_TOKEN (Contents:read on app repos).
+# ios_signing: ASC_KEY_ID, ASC_ISSUER_ID, encrypted ASC_KEY_CONTENT and CERTIFICATE_PRIVATE_KEY.
 definitions:
   common_environment: &common_environment
     xcode: latest
@@ -11,22 +11,33 @@ definitions:
     cocoapods: default
   checkout_unsigned: &checkout_unsigned
     name: Validate approval and checkout source (unsigned)
-    script: python3 codemagic_runner.py checkout --scope unsigned
+    script: |
+      cd integrations/ios-release-runner
+      python3 codemagic_runner.py policy
+      python3 codemagic_runner.py checkout --scope unsigned
   checkout_signed: &checkout_signed
     name: Validate approval and checkout source (signed)
-    script: python3 codemagic_runner.py checkout --scope signed
+    script: |
+      cd integrations/ios-release-runner
+      python3 codemagic_runner.py policy
+      python3 codemagic_runner.py checkout --scope signed
   toolchain: &toolchain
     name: Verify per-app toolchain and install pinned Fastlane gems
     script: |
+      cd integrations/ios-release-runner
       python3 codemagic_runner.py toolchain
       bundle config set --local deployment true
       bundle install
   build_unsigned: &build_unsigned
     name: Compile without Apple signing
-    script: bundle exec fastlane ios unsigned
+    script: |
+      cd integrations/ios-release-runner
+      bundle exec fastlane ios unsigned
   build_signed: &build_signed
     name: Sign IPA and optionally upload to TestFlight
-    script: bundle exec fastlane ios release
+    script: |
+      cd integrations/ios-release-runner
+      bundle exec fastlane ios release
 
 workflows:
   ios-central-unsigned:
@@ -42,8 +53,8 @@ workflows:
       - *toolchain
       - *build_unsigned
     artifacts:
-      - output/unsigned-app.zip
-      - output/release.json
+      - integrations/ios-release-runner/output/unsigned-app.zip
+      - integrations/ios-release-runner/output/release.json
 
   ios-central-signed:
     name: Central iOS signed build or TestFlight upload
@@ -59,5 +70,5 @@ workflows:
       - *toolchain
       - *build_signed
     artifacts:
-      - output/release.ipa
-      - output/release.json
+      - integrations/ios-release-runner/output/release.ipa
+      - integrations/ios-release-runner/output/release.json

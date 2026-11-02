@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CodemagicClient, codemagicBuildRequest, codemagicPinProblems, codemagicRunnerFromEnv, runnerPolicyProblems, type CodemagicRunner } from "../lib/connectors/codemagic";
+import { CodemagicClient, codemagicBuildRequest, codemagicPinProblems, codemagicRunnerFromEnv, runnerPolicy, type CodemagicRunner } from "../lib/connectors/codemagic";
 import { planIosRelease, type IosReleaseConfig } from "../lib/release-ios";
 
 const runner: CodemagicRunner = {
@@ -17,6 +17,8 @@ const config: IosReleaseConfig = {
   framework: "flutter",
   xcodeVersion: "26.6",
   flutterVersion: "3.38.0",
+  scheme: "Runner",
+  targets: { Runner: "com.example.app" },
 };
 const buildId = "b".repeat(24);
 const correlationId = "11111111-1111-4111-8111-111111111111";
@@ -84,22 +86,35 @@ test("no token/provider-response disclosure; missing build ID cannot be mistaken
   await assert.rejects(incomplete.dispatch(plan(), correlationId), /ambiguous/);
 });
 
-test("missing toolchain pins are reported and block the paid build", () => {
+test("missing pins or native targets are reported and block the paid build", () => {
   const { xcodeVersion: _xcode, flutterVersion: _flutter, ...unpinned } = config;
+  const { targets: _targets, ...noTargets } = config;
   assert.equal(codemagicPinProblems(config).length, 0);
   assert.equal(codemagicPinProblems(unpinned).length, 2);
+  assert.match(codemagicPinProblems(noTargets)[0], /ios-setup/);
   assert.match(codemagicPinProblems({ ...config, framework: "capacitor" })[0], /nodeVersion/);
   assert.throws(() => codemagicBuildRequest({ ...plan(), config: unpinned }, correlationId, runner), /xcodeVersion/);
 });
 
-test("runner policy copy flags what the runner would refuse", () => {
-  const app = { ...config, enabled: true, workingDirectory: ".", approvedShas: ["c".repeat(40)] };
-  assert.deepEqual(runnerPolicyProblems(plan(), { demo: app }), []);
-  assert.match(runnerPolicyProblems(plan(), {})[0], /no entry/);
-  assert.match(runnerPolicyProblems(plan(), { demo: { ...app, enabled: false } })[0], /disabled/);
-  assert.match(runnerPolicyProblems(plan(), { demo: { ...app, approvedShas: [] } })[0], /approvedShas/);
-  assert.match(runnerPolicyProblems(plan(), { demo: { ...app, xcodeVersion: "" } })[0], /xcodeVersion/);
-  assert.match(runnerPolicyProblems(plan(), { demo: { ...app, bundleIds: ["com.example.other"] } })[0], /bundleIds/);
+test("each build carries a policy approving only its own SHA", () => {
+  const decoded = (value: string) => JSON.parse(Buffer.from(value, "base64").toString());
+  const app = decoded(runnerPolicy(plan())).demo;
+  assert.equal(app.enabled, true);
+  assert.deepEqual(app.approvedShas, ["c".repeat(40)]);
+  assert.equal(app.workingDirectory, ".");
+  assert.deepEqual(decoded(codemagicBuildRequest(plan(), correlationId, runner).environment.variables.RUNNER_APPS_B64).demo, app);
+});
+
+test("wait polls read-only until a final status", async () => {
+  const statuses = ["queued", "building", "finished"];
+  const seen: string[] = [];
+  const client = new CodemagicClient(runner, (async (_url, init) => {
+    assert.equal(init?.method, undefined);
+    return Response.json({ build: { status: statuses.shift() } });
+  }) as typeof fetch);
+  const build = await client.waitForBuild(buildId, { intervalMs: 1, onStatus: (status) => seen.push(status) });
+  assert.equal(build.status, "finished");
+  assert.deepEqual(seen, ["queued", "building", "finished"]);
 });
 
 test("cancel reports 208 as already finished and tolerates an empty success body", async () => {

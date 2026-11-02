@@ -1,129 +1,100 @@
-# OpenFindability → Codemagic → App Store Connect (iOS)
+# Rilasci iOS da OpenFindability con Codemagic
 
-Stato: **integrazione codice + template del runner predisposti, NON attivati su Codemagic**. Nessun token reale, certificato o build macOS viene creato dal repository pubblico. Serve un bootstrap una tantum con account Codemagic, repository runner privato e credenziali Apple. Un dispatch accettato NON significa IPA caricato su TestFlight.
+Stato: **integrazione pronta, firma e upload non ancora provati su una build reale**. Tutto parte da OpenFindability: nessun repository aggiuntivo, nessun file nei repository delle app, nessun Mac e nessun deposito Match. iOS richiede macOS, quindi la compilazione gira su Codemagic. Un dispatch accettato NON significa IPA caricato su TestFlight.
 
-## Obiettivo e provider
+Provider predefinito di `release.ts ios`: Codemagic. `--provider github` resta disponibile solo se scelto esplicitamente, con la procedura di [questa guida](ios-release-setup-handoff.md).
 
-- Provider predefinito per `release.ts ios`: **Codemagic** (non usa GitHub Actions).
-- `--provider github` mantiene il runner GitHub esistente solo quando scelto esplicitamente.
-- Un solo repository runner **privato**, con `codemagic.yaml` alla radice, serve un numero configurabile di app Flutter e Capacitor; nessun workflow CI nei singoli repository.
-- Le app sorgenti vengono lette dal repository + **SHA completo approvato** nell'`apps.json` privato. Nessun checkout di PR non revisionate.
-- Modalità: solo preflight (zero minuti), build unsigned, IPA firmato, IPA firmato + **upload App Store Connect/TestFlight**. Nessuna submission per revisione App Store, distribuzione esterna o rollout di produzione automatici.
-- In tutti i casi OpenFindability usa i propri controlli App Store Connect per verificare Bundle ID, app numerica e build number; GitHub Actions non viene chiamato dal provider Codemagic.
+## Setup una tantum
 
-## 1. Preparare il repository runner privato
+1. Su Codemagic esiste **una sola applicazione**, collegata a OpenFindability, senza webhook: legge `codemagic.yaml` dalla radice del repository. Le applicazioni collegate ai repository delle singole app non vengono usate.
+2. Genera la chiave del certificato di distribuzione, conservandola nella cartella ignorata `secrets/`. Non cambiarla in seguito: Codemagic crea il certificato che le corrisponde.
 
-1. Crea un repository GitHub **privato** dedicato (ad es. `mobile-release-runner`). Copia il contenuto di `integrations/ios-release-runner/` nella sua **radice**: `codemagic.yaml`, `codemagic_runner.py`, `validate.py`, `verify_ipa.py`, `apps.json`, `Gemfile`, `fastlane/`, ecc. **Non** copiare i segreti o le identità reali nel repository pubblico.
-2. Il template GitHub `release-ios.yml` è opzionale e non va installato in `.github/workflows` se vuoi evitare minuti GitHub. Il file `codemagic.yaml` deve stare alla radice e NON sotto `.github`.
-3. Su un Mac con Ruby/Bundler, dal checkout privato genera e verifica `Gemfile.lock` (es. `bundle lock`) e committalo. Le build Codemagic rifiutano l'esecuzione se manca; non generarlo durante CI senza controllo.
-4. Configura in `apps.json` ogni progetto: `enabled: true` solo dopo verifica, `repository`, `appId` numerico Apple, `teamId`, `bundleIds`, `framework`, `workingDirectory`, versioni esatte `flutterVersion` oppure `nodeVersion`, `xcodeVersion`, `scheme`, `targets`, `approvedShas`, `requiredEntitlements`. L'app deve avere progetto iOS, lockfile, scheme e profili coerenti.
-5. Il runner riusa gli stessi builder Fastlane di GitHub: **Flutter** (`flutter pub get` con lockfile, Pods, build IPA); **Capacitor** (`npm ci`, script web, `cap sync ios --deployment`, Xcode). Alcune configurazioni speciali (flavor, SPM senza Pods, signing specifico, estensioni) richiedono un adattamento e test separati.
+   ```bash
+   ssh-keygen -t rsa -b 2048 -m PEM -f secrets/appstoreconnect/ios_distribution_private_key -q -N ""
+   ```
 
-## 2. Attivare Codemagic una volta
+3. Nell'applicazione Codemagic crea due gruppi di variabili. Segna come **Secret** tutti i valori.
 
-1. Registra il repository runner privato in Codemagic, concedendogli accesso tramite GitHub. In Codemagic usa il progetto configurato con YAML. Non impostare webhook automatici nel runner: le build devono partire soltanto dalle API di OpenFindability o da un operatore consapevole.
-2. Crea **due gruppi di variabili**, con accesso limitato **solo all'app runner**, tramite UI Codemagic:
-   - `ios_source`: `SOURCE_READ_TOKEN`, segreto. Token GitHub fine-grained con **Contents: read** soltanto sui repository delle app autorizzate. Mai usare un PAT con scrittura/account completo; valuta una GitHub App se il numero di repo cresce.
-   - `ios_signing`: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_CONTENT` (contenuto chiave `.p8`), `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`, `MATCH_GIT_URL`, `MATCH_GIT_BRANCH`. Segna come segreti i valori sensibili; `MATCH_GIT_BASIC_AUTHORIZATION` è la stringa Base64 di `username:token` per un token **read-only** sul deposito cifrato Fastlane Match.
-3. Se non hai già Match, trasferisci con cautela le identità Apple Distribution e i provisioning profile validi nel deposito Match cifrato; **non usare `match nuke`** e non revocare certificati funzionanti. Lo stesso repository privato runner può avere branch `signing` con deposito Match; un deposito distinto è preferibile per separare gli accessi. `MATCH_GIT_URL` deve puntare al repository giusto e `MATCH_GIT_BRANCH` normalmente è `signing`.
-4. La chiave App Store Connect deve avere privilegi appropriati (di norma **App Manager**), l'app deve esistere nell'account Apple, e l'abbonamento Apple Developer deve essere attivo. Usa una chiave API **dedicata** a Codemagic ove possibile.
-5. Recupera dal progetto Codemagic il suo **App ID di 24 caratteri**, e da Account settings un **API token**. Non inserirli nel codice o in `apps.json`.
+   | Gruppo | Variabile | Valore |
+   | --- | --- | --- |
+   | `ios_source` | `SOURCE_READ_TOKEN` | Token GitHub fine-grained con solo **Contents: read** sui repository delle app |
+   | `ios_signing` | `ASC_KEY_ID` | `ASC_KEY_ID` del `.env` |
+   | `ios_signing` | `ASC_ISSUER_ID` | `ASC_ISSUER_ID` del `.env` |
+   | `ios_signing` | `ASC_KEY_CONTENT` | Contenuto del file `.p8` |
+   | `ios_signing` | `CERTIFICATE_PRIVATE_KEY` | Contenuto della chiave generata al punto 2, righe BEGIN/END comprese |
 
-### Perché ci sono due workflow?
+   La chiave App Store Connect deve avere il ruolo App Manager o superiore, perché crea certificati e profili.
 
-`ios-central-unsigned` importa soltanto `ios_source`, quindi non può accedere alle credenziali Apple. `ios-central-signed` importa anche `ios_signing`. Il comando `codemagic_runner.py checkout --scope ...` confronta modalità e workflow, valida la policy privata, poi effettua il checkout della commit esatta via Git con GIT_ASKPASS (token non presente negli argomenti del processo). Prima della build verifica Xcode/Flutter/Node rispetto al pin approvato.
+4. Nel `.env` locale:
 
-## 3. Configurazione locale OpenFindability
+   ```dotenv
+   CODEMAGIC_API_TOKEN=
+   CODEMAGIC_RUNNER_APP_ID=      # ID dell'applicazione collegata a OpenFindability
+   CODEMAGIC_RUNNER_BRANCH=master
+   CODEMAGIC_INSTANCE_TYPE=mac_mini_m2
+   ```
 
-Aggiungi al tuo `.env` locale:
+Apple consente al massimo 3 certificati Distribution. Se il limite è raggiunto e nessuno corrisponde alla chiave, la build fallisce: libera un posto dal portale Apple solo dopo aver verificato che quel certificato non serve. OpenFindability non revoca nulla.
 
-```dotenv
-CODEMAGIC_API_TOKEN=                         # Account settings > API token, PRIVATO
-CODEMAGIC_RUNNER_APP_ID=                      # ID app Codemagic del runner, 24 hex
-CODEMAGIC_RUNNER_BRANCH=main                  # branch del runner con codemagic.yaml
-CODEMAGIC_INSTANCE_TYPE=mac_mini_m2          # gratuito ove previsto; mac_mini_m4 solo con billing
+## Aggiungere un'app
+
+L'app deve esistere su App Store Connect e avere un progetto OpenFindability con `appStoreTrackId` (altrimenti `project:add`, o `--slug` per scegliere il progetto).
+
+```powershell
+npx tsx scripts/release.ts ios-setup --path C:\percorso\app          # mostra i valori letti
+npx tsx scripts/release.ts ios-setup --path C:\percorso\app --apply  # li salva nel database locale
 ```
 
-Nessuna variabile `OPENFINDABILITY_RELEASE_RUNNER_*` è richiesta per Codemagic. OpenFindability **non** copia i segreti di firma sul provider tramite API: devono essere configurati nel runner Codemagic.
+Il comando legge dalla cartella, senza eseguire codice dell'app: repository, Team ID, target, bundle ID ed entitlement. Trova l'Apple ID su App Store Connect. Le versioni arrivano da `.fvmrc`, `.nvmrc` e dai workflow del repository; per Flutter, in mancanza, dall'SDK di questo PC. **Controlla le versioni**: se sono sbagliate correggile con `--xcode`, `--flutter`, `--node` (e `--web-script` per Capacitor). Rilancia il comando quando cambi capability, target o estensioni.
 
-Ogni progetto OpenFindability richiede `iosReleaseConfig`. Esempio (file privato `secrets/ios/demo.json`, mai nel repository pubblico):
+## Rilasciare
 
-```json
-{
-  "repository": "owner/demo-app",
-  "appId": 1234567890,
-  "teamId": "ABCDEFGHIJ",
-  "bundleIds": ["com.example.demo"],
-  "framework": "flutter",
-  "workingDirectory": ".",
-  "flutterVersion": "3.38.0",
-  "xcodeVersion": "26.6"
-}
+```powershell
+# Solo piano: nessun build e nessun minuto consumato.
+npx tsx scripts/release.ts ios --path C:\percorso\app
+
+# Compila senza firma.
+npx tsx scripts/release.ts ios --path C:\percorso\app --build --unsigned
+
+# IPA firmato, scaricabile da Codemagic, senza upload.
+npx tsx scripts/release.ts ios --path C:\percorso\app --build
+
+# IPA firmato e upload su TestFlight. Nessun invio in revisione.
+npx tsx scripts/release.ts ios --path C:\percorso\app --build --apply --wait
+
+# Stato Apple e Codemagic; annullamento (solo con --apply).
+npx tsx scripts/release.ts ios-status --path C:\percorso\app --build-id <id>
+npx tsx scripts/release.ts ios-cancel --path C:\percorso\app --build-id <id> [--apply]
 ```
 
-Per Capacitor sostituisci `framework` con `capacitor` e `flutterVersion` con `nodeVersion` (es. `24.20.0`). `xcodeVersion` e la versione del framework sono obbligatorie con Codemagic: senza, la CLI non avvia la build. Il file `apps.json` del runner include inoltre scheme, target, entitlement e allowlist SHA; deve essere coerente con la configurazione locale. Tieni una copia privata in `secrets/ios/runner-apps.json`: se esiste, preflight e build confrontano abilitazione, SHA, identità e versioni prima di avviare la macchina. La copia non sostituisce il controllo sul runner, che resta l'unico vincolante. Per sincronizzare il mapping locale:
+Con `--path` la CLI usa l'ultimo commit del branch corrente e si ferma se ci sono modifiche non committate o il branch non coincide con GitHub. La versione viene da `pubspec.yaml` (Flutter) o dal progetto Xcode (Capacitor) e il build number è il successivo a quelli su App Store Connect. `--sha`, `--build-name` e `--build-number` li sostituiscono. La build usa sempre il commit su GitHub, mai i file locali.
 
-```bash
-npx tsx scripts/update-project.ts --slug demo --ios-config secrets/ios/demo.json
-```
+`--wait` attende la fine della build, fino a due ore, e restituisce un errore se non termina con successo. Interrompere l'attesa non ferma la build.
 
-L'app deve avere anche `appStoreTrackId` numerico configurato e il Bundle ID su App Store Connect deve combaciare.
+## Cosa significano i risultati
 
-## 4. Comandi (dalla root di OpenFindability)
+- `dispatch_accepted` + `buildId`: Codemagic ha accettato il job, niente di più. Dopo un timeout **non ripetere** il comando senza controllare Codemagic: il job potrebbe esistere già.
+- Artefatti: `unsigned-app.zip` oppure `release.ipa`, più `release.json` con SHA, versione, build e correlation ID.
+- Un'app è su TestFlight solo quando la build esatta risulta `VALID` su App Store Connect. Prima di una release pubblica restano metadata, compliance, scelta della build e richiesta di revisione.
+- In `connectorRuns` il tentativo risulta `partial` con `state=dispatching`; solo `dispatch_accepted` conta come successo.
 
-```bash
-# Nessun dispatch, nessun consumo di minuti Codemagic.
-npx tsx scripts/release.ts ios --slug demo --sha <40-char-approved-sha> --build-name 1.2.3 --build-number auto
+## Primo collaudo
 
-# Compila su Codemagic senza firma.
-npx tsx scripts/release.ts ios --slug demo --sha <40-char-approved-sha> --build-name 1.2.3 --build-number auto --build --unsigned
+1. Build senza firma di un'app Flutter, poi di una Capacitor.
+2. IPA firmato dell'app con più estensioni, poi upload su TestFlight con un build number nuovo.
+3. Prova sul dispositivo: login, push, acquisti e funzioni native.
 
-# IPA firmato scaricabile da Codemagic, NON caricato su Apple.
-npx tsx scripts/release.ts ios --slug demo --sha <40-char-approved-sha> --build-name 1.2.3 --build-number auto --build
-
-# Carica build firmata su App Store Connect / TestFlight (NO review/production).
-npx tsx scripts/release.ts ios --slug demo --sha <40-char-approved-sha> --build-name 1.2.3 --build-number auto --build --apply
-
-# Controlla sia lo stato Apple sia il job Codemagic tramite l'ID restituito.
-npx tsx scripts/release.ts ios-status --slug demo --build-id <codemagic-build-id>
-
-# Mostra il job; con --apply ne richiede l'annullamento.
-npx tsx scripts/release.ts ios-cancel --slug demo --build-id <codemagic-build-id> [--apply]
-
-# Alternativa ESPlicita che usa minuti GitHub Actions:
-npx tsx scripts/release.ts ios --provider github --slug demo --sha <40-char-approved-sha> --build-name 1.2.3 --build
-```
-
-Se vuoi selezionare la directory sorgente, usa `--path C:/work/app`: serve a identificare l'app locale, **non** carica file non committati; la build remota usa lo SHA approvato da `apps.json`.
-
-### Stati e risultati
-
-- `dispatch_accepted` + `buildId`: Codemagic ha accettato il job; **non** significa compilazione completata, firma valida, upload Apple eseguito, build pronta in TestFlight o App Store pubblicato.
-- Lo stato Codemagic si legge tramite `GET /builds/{buildId}`. La risposta API non viene considerata prova di elaborazione Apple. Non ripetere automaticamente una richiesta dopo timeout: il job potrebbe essere già stato creato e fatturato.
-- `mode=unsigned` produce `output/unsigned-app.zip`; `mode=build` produce `output/release.ipa`; `mode=testflight` produce l'IPA e chiama Fastlane `upload_to_testflight`.
-- Il runner genera anche `output/release.json` con SHA, versione, build e correlation ID. Codemagic pubblica soltanto questi artefatti, non certificati o log di firma.
-- `--apply` **non** invia l'app alla revisione App Store; per una release pubblica completare metadata, screenshot, privacy, compliance, scelta della build e richiesta di review in App Store Connect.
-- In `connectorRuns` vengono registrati `provider`, `correlationId`, `buildId`/dispatch, piano e stato. Il preflight non registra run.
-
-## Verifiche e rollout consigliato
-
-1. Esegui offline `pnpm run test:ios-release`, `python -m unittest discover -s integrations/ios-release-runner -p 'test_*.py'`, `ruby integrations/ios-release-runner/test_builders.rb`, `pnpm run typecheck`.
-2. Valida `codemagic.yaml` con lo schema ufficiale Codemagic nel repo runner privato e verifica la compatibilità delle versioni Xcode/Flutter/Node disponibili sulle loro macchine.
-3. Fai **una sola build unsigned** di una app Flutter. Dopo, una di Capacitor, quindi una IPA firmata e infine un upload TestFlight con un build number nuovo. Verifica firma, TestFlight, entitlements, notifiche push, login, IAP e altre funzioni native sul dispositivo reale.
-4. Conferma `VALID` nella risposta Apple e disponibilità ai tester; controlla che le ore/mese Codemagic e le eventuali quote di billing siano adeguate.
-5. Se una build fallisce o il risultato è ambiguo, cercala con il build ID e correlation ID prima di ritentare; non associare due job allo stesso numero di versione. Un dispatch per app alla volta.
+Il piano gratuito include 500 minuti M2 al mese e una build alla volta, condivisi tra tutte le app. Lancia un dispatch per app alla volta.
 
 ## Limiti e rischi noti
 
-- I file sono template pubblici: la prima firma e il primo upload Apple devono essere verificati su Mac/Codemagic con credenziali e app reali. Non è possibile completarli soltanto con commit GitHub.
-- La policy `approvedShas` è una barriera di autorizzazione: il codice della commit approvata gira durante la build e può in linea di principio interagire con i segreti disponibili nel workflow signed. Revisionare commit e dipendenze e limitare i token.
-- Le build Android rimangono nella pipeline esistente e non vengono spostate su Codemagic.
-- Codemagic REST API è in evoluzione: i metodi del connettore sono isolati in `lib/connectors/codemagic.ts`. Verificare che il build ID e i campi della risposta rispettino il contratto al primo collaudo reale.
-- La documentazione API mostra come esempi di `softwareVersions` solo `xcode` e `flutter` (con prefisso `v`), mentre il connettore invia anche `node` e versioni senza prefisso. Da confermare con la prima build Flutter e la prima Capacitor: se il valore viene ignorato, il controllo toolchain ferma la build prima della firma.
-- Il lockfile Bundler, il repository runner, le credenziali e il primo ciclo macOS non sono stati generati o eseguiti automaticamente.
+- **Approvazione:** il comando di rilascio è l'approvazione. Chi possiede `CODEMAGIC_API_TOKEN` può avviare una build firmata di qualunque commit raggiungibile da `SOURCE_READ_TOKEN`: tieni il token solo nel `.env`.
+- **Segreti in build:** il codice dell'app e le sue dipendenze girano con le credenziali Apple nell'ambiente. Rilascia solo commit che hai revisionato.
+- **Branch del runner:** chi può pushare sul branch indicato da `CODEMAGIC_RUNNER_BRANCH` controlla `codemagic.yaml` e quindi i segreti: proteggilo.
+- **Da confermare con la prima build:** `fetch-signing-files` con più estensioni, Ruby 4 con il `Gemfile.lock` generato su Windows, `node` in `softwareVersions` (non documentato dall'API) e le versioni Flutter senza prefisso `v`. Se una versione viene ignorata, il controllo toolchain ferma la build prima della firma.
+- **Non supportati senza adattamenti:** flavor Flutter e Capacitor con solo SPM. Android resta nella pipeline esistente.
 
 Documentazione ufficiale:
 - https://docs.codemagic.io/rest-api/builds/
-- https://docs.codemagic.io/yaml-basic-configuration/yaml-getting-started/
-- https://docs.codemagic.io/integrations/fastlane-integration/
-- https://docs.codemagic.io/yaml-publishing/app-store-connect/
+- https://docs.codemagic.io/yaml-code-signing/alternative-code-signing-methods/
+- https://docs.codemagic.io/yaml-code-signing/signing-ios/

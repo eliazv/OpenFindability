@@ -2,8 +2,8 @@ import type { IosPlan, IosReleaseConfig } from "@/lib/release-ios";
 
 /**
  * Codemagic is a separate macOS executor. No GitHub Actions workflow is
- * dispatched by this connector. Keep signing credentials in the PRIVATE
- * Codemagic runner app, never in the public OpenFindability repository.
+ * dispatched by this connector. Signing credentials live in Codemagic
+ * variable groups, never in this public repository.
  */
 const API = "https://api.codemagic.io";
 const BUILD_ID = /^[a-f0-9]{24}$/i;
@@ -27,24 +27,10 @@ export type CodemagicBuild = {
   url: string;
 };
 
-export type RunnerPolicyApp = {
-  enabled?: boolean;
-  repository?: string;
-  appId?: number;
-  teamId?: string;
-  framework?: string;
-  bundleIds?: string[];
-  workingDirectory?: string;
-  flutterVersion?: string;
-  nodeVersion?: string;
-  xcodeVersion?: string;
-  approvedShas?: string[];
-};
-
 export function codemagicRunnerFromEnv(env: NodeJS.ProcessEnv = process.env): CodemagicRunner {
   const token = env.CODEMAGIC_API_TOKEN?.trim();
   const appId = env.CODEMAGIC_RUNNER_APP_ID?.trim() ?? "";
-  const branch = env.CODEMAGIC_RUNNER_BRANCH?.trim() || "main";
+  const branch = env.CODEMAGIC_RUNNER_BRANCH?.trim() || "master";
   const instanceType = env.CODEMAGIC_INSTANCE_TYPE?.trim() || "mac_mini_m2";
   if (!token) throw new Error("CODEMAGIC_API_TOKEN is required (Codemagic Account settings).");
   if (!APP_ID.test(appId)) throw new Error("CODEMAGIC_RUNNER_APP_ID must be a 24-character Codemagic app ID.");
@@ -61,33 +47,17 @@ export function codemagicPinProblems(config: IosReleaseConfig): string[] {
   if (!config.xcodeVersion) problems.push("iosReleaseConfig.xcodeVersion is required for Codemagic.");
   if (config.framework === "flutter" && !config.flutterVersion) problems.push("iosReleaseConfig.flutterVersion is required for Codemagic.");
   if (config.framework === "capacitor" && !config.nodeVersion) problems.push("iosReleaseConfig.nodeVersion is required for Codemagic.");
+  if (!config.scheme || !config.targets) problems.push("iosReleaseConfig has no native targets: run ios-setup for this app.");
   return problems;
 }
 
-/** Local copy of the private runner apps.json: catches a refused build before it starts a macOS machine. */
-export function runnerPolicyProblems(plan: IosPlan, policy: Record<string, RunnerPolicyApp>): string[] {
-  const app = policy[plan.slug];
-  if (!app) return ["Runner policy has no entry for " + plan.slug + "."];
-  const { config } = plan;
-  const problems: string[] = [];
-  if (app.enabled !== true) problems.push("Runner policy: app is disabled.");
-  if (!app.approvedShas?.includes(plan.sha)) problems.push("Runner policy: SHA is not in approvedShas.");
-  const same: [string, unknown, unknown][] = [
-    ["repository", app.repository, config.repository],
-    ["appId", app.appId, config.appId],
-    ["teamId", app.teamId, config.teamId],
-    ["framework", app.framework, config.framework],
-    ["workingDirectory", app.workingDirectory ?? ".", config.workingDirectory ?? "."],
-    ["bundleIds", JSON.stringify(app.bundleIds), JSON.stringify(config.bundleIds)],
-    ["xcodeVersion", app.xcodeVersion, config.xcodeVersion],
-    config.framework === "flutter"
-      ? ["flutterVersion", app.flutterVersion, config.flutterVersion]
-      : ["nodeVersion", app.nodeVersion, config.nodeVersion],
-  ];
-  for (const [name, runner, local] of same) {
-    if (runner !== local) problems.push("Runner policy: " + name + " differs from iosReleaseConfig.");
-  }
-  return problems;
+/**
+ * The runner's validate.py checks this before running app code. The release command is the
+ * approval: the SHA was shown by the dry run and accepted with --build or --apply.
+ */
+export function runnerPolicy(plan: IosPlan): string {
+  const app = { ...plan.config, workingDirectory: plan.config.workingDirectory ?? ".", enabled: true, approvedShas: [plan.sha] };
+  return Buffer.from(JSON.stringify({ [plan.slug]: app })).toString("base64");
 }
 
 export function codemagicBuildRequest(plan: IosPlan, correlationId: string, runner: CodemagicRunner) {
@@ -114,11 +84,14 @@ export function codemagicBuildRequest(plan: IosPlan, correlationId: string, runn
         BUILD_NAME: plan.buildName,
         BUILD_NUMBER: plan.buildNumber,
         CORRELATION_ID: correlationId,
+        RUNNER_APPS_B64: runnerPolicy(plan),
       },
       ...(Object.keys(softwareVersions).length ? { softwareVersions } : {}),
     },
   };
 }
+
+const FINAL_STATUSES = ["finished", "failed", "canceled", "timeout", "skipped"];
 
 export class CodemagicClient {
   constructor(private readonly runner: CodemagicRunner, private readonly request: typeof fetch = fetch) {
@@ -175,6 +148,20 @@ export class CodemagicClient {
       publishingStatus: publishing?.status,
       url: "https://codemagic.io/app/" + this.runner.appId + "/build/" + buildId,
     };
+  }
+
+  /** Read-only polling; stops at a final status or when the limit passes, leaving the build running. */
+  async waitForBuild(buildId: string, options: { intervalMs?: number; limitMs?: number; onStatus?: (status: string) => void } = {}): Promise<CodemagicBuild> {
+    const { intervalMs = 60_000, limitMs = 2 * 60 * 60_000, onStatus } = options;
+    const deadline = Date.now() + limitMs;
+    let last = "";
+    for (;;) {
+      const build = await this.getBuild(buildId);
+      if (build.status !== last) onStatus?.(build.status);
+      last = build.status;
+      if (FINAL_STATUSES.includes(build.status) || Date.now() >= deadline) return build;
+      await new Promise((done) => setTimeout(done, intervalMs));
+    }
   }
 
   async cancelBuild(buildId: string): Promise<"cancel_requested" | "already_finished"> {

@@ -1,24 +1,43 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { getAscApp, listAscBuilds } from "@/lib/connectors/appstoreconnect";
-import { CodemagicClient, codemagicPinProblems, codemagicRunnerFromEnv, runnerPolicyProblems, type RunnerPolicyApp } from "@/lib/connectors/codemagic";
+import { getAscApp, listAscApps, listAscBuilds } from "@/lib/connectors/appstoreconnect";
+import { CodemagicClient, codemagicPinProblems, codemagicRunnerFromEnv } from "@/lib/connectors/codemagic";
 import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
-import { appendConnectorRun, readProjects } from "@/lib/store";
+import { buildIosConfig, localMarketingVersion, resolvePushedSha } from "@/lib/release-ios-setup";
+import { appendConnectorRun, readProjects, updateProject } from "@/lib/store";
 import { createId } from "@/lib/id";
-import { resolveIosProject } from "@/lib/release-ios-project";
+import { discoverLocalIosProjects, resolveIosProject } from "@/lib/release-ios-project";
 
-type Provider = "codemagic" | "github";
+async function localProject(path: string | undefined, bundleId: string) {
+  if (!path) return undefined;
+  return (await discoverLocalIosProjects(path)).find((local) => local.bundleIds.includes(bundleId));
+}
 
-const RUNNER_POLICY_PATH = "secrets/ios/runner-apps.json";
-
-async function readRunnerPolicy(): Promise<Record<string, RunnerPolicyApp> | undefined> {
-  try {
-    return JSON.parse(await readFile(RUNNER_POLICY_PATH, "utf8"));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
+/** Writes only the local project row, and only with --apply. Apple and Codemagic are not changed. */
+async function runIosSetup(args: Record<string, string>, apply: boolean): Promise<void> {
+  if (!args["--path"]) throw new Error("ios-setup requires --path <app folder>.");
+  const found = await discoverLocalIosProjects(args["--path"]);
+  if (found.length !== 1) throw new Error(found.length ? "Several iOS apps here: point --path to the app subfolder." : "No Flutter/Capacitor iOS project at --path.");
+  const [local] = found;
+  const ascApp = (await listAscApps()).find((app) => app.bundleId && local.bundleIds.includes(app.bundleId));
+  if (!ascApp) throw new Error("No App Store Connect app matches this folder's bundle IDs. Create it on App Store Connect first.");
+  const projects = await readProjects();
+  const project = args["--slug"]
+    ? projects.find((candidate) => candidate.slug === args["--slug"])
+    : projects.find((candidate) => candidate.appStoreTrackId === Number(ascApp.id));
+  if (!project) throw new Error("No project for App Store app " + ascApp.id + ": add it with project:add, or pass --slug.");
+  if (project.appStoreTrackId !== undefined && project.appStoreTrackId !== Number(ascApp.id))
+    throw new Error("Project " + project.slug + " points to a different App Store app.");
+  const config = await buildIosConfig(local, Number(ascApp.id), {
+    xcode: args["--xcode"], flutter: args["--flutter"], node: args["--node"], webBuildScript: args["--web-script"],
+  });
+  console.log(JSON.stringify({ slug: project.slug, iosReleaseConfig: config }, null, 2));
+  if (!apply) {
+    console.log("Dry run: nothing saved. Check the values, then add --apply.");
+    return;
   }
+  await updateProject(project.slug, { iosReleaseConfig: config, appStoreTrackId: Number(ascApp.id) });
+  console.log("Saved. Release it with: npx tsx scripts/release.ts ios --path <app folder>");
 }
 
 /** Dry-run unless --apply, like every other write to an external platform. */
@@ -42,16 +61,17 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   const flags = new Set<string>();
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
-    if (["--build", "--apply", "--unsigned"].includes(key)) { flags.add(key); continue; }
-    if (!["--slug", "--path", "--sha", "--build-name", "--build-number", "--provider", "--build-id"].includes(key) ||
+    if (["--build", "--apply", "--unsigned", "--wait"].includes(key)) { flags.add(key); continue; }
+    if (!["--slug", "--path", "--sha", "--build-name", "--build-number", "--provider", "--build-id", "--xcode", "--flutter", "--node", "--web-script"].includes(key) ||
         !argv[i + 1] || argv[i + 1].startsWith("--"))
       throw new Error("Invalid/missing iOS argument: " + key);
     args[key] = argv[++i];
   }
   if (flags.has("--unsigned") && (!flags.has("--build") || flags.has("--apply")))
     throw new Error("--unsigned requires --build and cannot be used with --apply.");
-  if (flags.has("--apply") && !flags.has("--build") && command !== "ios-cancel")
+  if (flags.has("--apply") && !flags.has("--build") && command === "ios")
     throw new Error("--apply requires --build; upload must be explicitly approved.");
+  if (command === "ios-setup") return runIosSetup(args, flags.has("--apply"));
   const provider = args["--provider"] ?? "codemagic";
   if (provider !== "codemagic" && provider !== "github")
     throw new Error("--provider must be codemagic or github.");
@@ -102,16 +122,17 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
     return;
   }
 
+  const local = await localProject(args["--path"], config.bundleIds[0]);
+  const sha = args["--sha"] ?? (local ? await resolvePushedSha(local.path, config.repository) : "");
+  const buildName = args["--build-name"] ?? (local ? await localMarketingVersion(local) : undefined) ?? "";
   const plan = planIosRelease({
-    slug: project.slug, config, sha: args["--sha"] ?? "", buildName: args["--build-name"] ?? "",
+    slug: project.slug, config, sha, buildName,
     buildNumber: args["--build-number"], builds,
     mode: flags.has("--apply") ? "testflight" : flags.has("--unsigned") ? "unsigned" : flags.has("--build") ? "build" : "check",
   });
   console.log(JSON.stringify({ provider, plan }, null, 2));
   if (provider === "codemagic") {
-    const policy = await readRunnerPolicy();
-    const problems = [...codemagicPinProblems(config), ...(policy ? runnerPolicyProblems(plan, policy) : [])];
-    if (!policy) console.log("No " + RUNNER_POLICY_PATH + ": the approved SHA is only checked on the runner.");
+    const problems = codemagicPinProblems(config);
     if (problems.length) {
       console.log(JSON.stringify({ ready: false, problems }, null, 2));
       if (plan.mode !== "check") throw new Error("Codemagic setup is incomplete: no build dispatched.");
@@ -119,7 +140,7 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
     }
   }
   if (plan.mode === "check") {
-    console.log("Preflight only: no remote build and no CI minutes consumed.");
+    console.log("Preflight only: no remote build and no CI minutes consumed. Add --build --unsigned, --build or --build --apply.");
     return;
   }
 
@@ -141,6 +162,12 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
       finishedAt: new Date().toISOString(), stats: { state: "dispatch_accepted", provider, correlationId, plan, dispatch } });
     console.log(JSON.stringify({ provider, correlationId, dispatch }, null, 2));
     console.log("Build queued, not necessarily compiled or uploaded. Check ios-status and App Store Connect.");
+    if (codemagic && flags.has("--wait")) {
+      const { buildId } = dispatch as { buildId: string };
+      const build = await codemagic.waitForBuild(buildId, { onStatus: (status) => console.log(new Date().toISOString() + " " + status) });
+      console.log(JSON.stringify(build, null, 2));
+      if (build.status !== "finished") process.exitCode = 1;
+    }
   } catch (error) {
     await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "failed", startedAt,
       finishedAt: new Date().toISOString(), errorMessage: (error as Error).message,

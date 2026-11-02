@@ -79,7 +79,8 @@ pnpm run play:pull-copy | play:push-copy -- --slug <slug> --language it-IT
 pnpm run asc:experiments -- --slug <slug>
 pnpm run release:status -- --slug <slug>
 pnpm run release:android -- --slug <slug> [--path <flutter dir>] [--build] [--apply]
-pnpm run release:ios -- --slug <slug> [--path <app dir>] --sha <commit> --build-name <version> [--build] [--apply]
+pnpm run release:ios-setup -- --path <app dir> [--apply]    # reads the app folder, saves its iOS config
+pnpm run release:ios -- --path <app dir> [--build [--unsigned]] [--apply] [--wait]
 pnpm run release:ios-status -- --slug <slug>
 pnpm run release:ios-cancel -- --slug <slug> --build-id <id> [--apply]
 
@@ -118,4 +119,4 @@ pnpm run audit:secrets
 - `docs/reference/implementation-notes.md`: add implementation detail for a new feature under the matching topic heading, in the same change that ships it. Describe how it works now; leave dates and history to git.
 - `docs/guide/`: user-facing how-to for a connector or workflow. Start from `operating-playbook.md` for a full research-to-publish session.
 
-Guides by area: GSC index audit `gsc-index-audit.md` · GA4 `ga4-setup.md` · Google Sheets and Apps Script `google-sheets-live-setup.md` · ASO `aso-workflow.md` · monetization `monetization-workflow.md`, `admob-setup.md`, `adsense-setup.md` · App Store Connect `appstoreconnect-workflow.md` · Android releases `release-workflow.md` · MCP server `mcp-server.md` · credentials `docs/operations/sensitive-files.md`.
+Guides by area: GSC index audit `gsc-index-audit.md` · GA4 `ga4-setup.md` · Google Sheets and Apps Script `google-sheets-live-setup.md` · ASO `aso-workflow.md` · monetization `monetization-workflow.md`, `admob-setup.md`, `adsense-setup.md` · App Store Connect `appstoreconnect-workflow.md` · Android releases `release-workflow.md` · iOS releases `codemagic-ios-release.md` · MCP server `mcp-server.md` · credentials `docs/operations/sensitive-files.md`.
