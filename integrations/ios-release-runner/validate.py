@@ -41,6 +41,8 @@ def validate(apps, inputs):
             raise ValueError("Pin Node version")
         if not re.fullmatch(r"[A-Za-z0-9:_-]+", app.get("webBuildScript", "build")):
             raise ValueError("Invalid npm web build script")
+    if "firebaseSdkVersion" in app and not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", str(app["firebaseSdkVersion"])):
+        raise ValueError("Invalid Firebase SDK version")
     for key, suffix in (("xcodeProject", ".xcodeproj"), ("workspace", ".xcworkspace")):
         if key in app:
             value = app[key]

@@ -29,7 +29,7 @@ async function runIosSetup(args: Record<string, string>, apply: boolean): Promis
   if (project.appStoreTrackId !== undefined && project.appStoreTrackId !== Number(ascApp.id))
     throw new Error("Project " + project.slug + " points to a different App Store app.");
   const config = await buildIosConfig(local, Number(ascApp.id), {
-    xcode: args["--xcode"], flutter: args["--flutter"], node: args["--node"], webBuildScript: args["--web-script"],
+    xcode: args["--xcode"], flutter: args["--flutter"], node: args["--node"], webBuildScript: args["--web-script"], firebaseSdk: args["--firebase-sdk"],
   });
   console.log(JSON.stringify({ slug: project.slug, iosReleaseConfig: config }, null, 2));
   if (!apply) {
@@ -64,7 +64,7 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
     if (["--build", "--apply", "--unsigned", "--wait", "--refresh-pods"].includes(key)) { flags.add(key); continue; }
-    if (!["--slug", "--path", "--sha", "--build-name", "--build-number", "--provider", "--build-id", "--xcode", "--flutter", "--node", "--web-script"].includes(key) ||
+    if (!["--slug", "--path", "--sha", "--build-name", "--build-number", "--provider", "--build-id", "--xcode", "--flutter", "--node", "--web-script", "--firebase-sdk"].includes(key) ||
         !argv[i + 1] || argv[i + 1].startsWith("--"))
       throw new Error("Invalid/missing iOS argument: " + key);
     args[key] = argv[++i];

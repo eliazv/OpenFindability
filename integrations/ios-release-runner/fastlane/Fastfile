@@ -70,7 +70,17 @@ def prepare_flutter(source)
   end
 end
 
+# FlutterFire reads this global from the Podfile. Only the disposable checkout changes.
+def apply_firebase_sdk_version(app, source)
+  version = app["firebaseSdkVersion"]
+  return unless version
+  podfile = File.join(source, File.dirname(native_project(app)), "Podfile")
+  File.write(podfile, "$FirebaseSDKVersion = '#{version}'
+" + File.read(podfile))
+end
+
 def prepare_app(app, source)
+  apply_firebase_sdk_version(app, source)
   if refresh_pods?
     FileUtils.rm_f(pod_lock(app, source))
     # The machine's spec index can predate what the plugins now require.

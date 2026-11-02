@@ -78,6 +78,22 @@ class BuilderPreparationTest < Minitest::Test
     ENV.delete("REFRESH_PODS")
   end
 
+  def test_firebase_version_is_written_first_in_the_podfile
+    Dir.mktmpdir do |app|
+      FileUtils.mkdir_p(File.join(app, "ios"))
+      podfile = File.join(app, "ios", "Podfile")
+      File.write(podfile, "platform :ios
+")
+      apply_firebase_sdk_version({ "framework" => "flutter" }, app)
+      assert_equal "platform :ios
+", File.read(podfile)
+      apply_firebase_sdk_version({ "framework" => "flutter", "firebaseSdkVersion" => "12.19.0" }, app)
+      assert_equal "$FirebaseSDKVersion = '12.19.0'
+platform :ios
+", File.read(podfile)
+    end
+  end
+
   def test_pod_deployment_targets_are_only_raised
     settings = [{ "IPHONEOS_DEPLOYMENT_TARGET" => "11.0" }, { "IPHONEOS_DEPLOYMENT_TARGET" => "16.0" }, {}]
     raise_deployment_targets(settings.map { |value| Configuration.new(value) })
