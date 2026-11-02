@@ -50,7 +50,11 @@ def prepare_flutter(source)
 end
 
 def prepare_app(app, source)
-  FileUtils.rm_f(pod_lock(app, source)) if refresh_pods?
+  if refresh_pods?
+    FileUtils.rm_f(pod_lock(app, source))
+    # The machine's spec index can predate what the plugins now require.
+    sh("pod", "repo", "update")
+  end
   return prepare_flutter(source) if app.fetch("framework") == "flutter"
   UI.user_error!("Capacitor requires committed package-lock.json") unless File.file?(File.join(source, "package-lock.json"))
   Dir.chdir(source) do

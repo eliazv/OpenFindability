@@ -71,6 +71,7 @@ class BuilderPreparationTest < Minitest::Test
       File.write(lock, "stale")
       prepare_app({ "framework" => "flutter" }, app)
       refute File.exist?(lock)
+      assert_equal ["pod", "repo", "update"], $commands.first.last
       assert_equal ["pod", "install"], $commands.last.last
     end
   ensure
