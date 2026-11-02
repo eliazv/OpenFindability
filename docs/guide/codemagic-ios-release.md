@@ -1,6 +1,6 @@
 # Rilasci iOS da OpenFindability con Codemagic
 
-Stato: **integrazione pronta, firma e upload non ancora provati su una build reale**. Tutto parte da OpenFindability: nessun repository aggiuntivo, nessun file nei repository delle app, nessun Mac e nessun deposito Match. iOS richiede macOS, quindi la compilazione gira su Codemagic. Un dispatch accettato NON significa IPA caricato su TestFlight.
+Stato: **compilazione, firma e upload provati su un'app Flutter con estensioni; Capacitor e `ios-upload` non ancora provati su una build reale**. Tutto parte da OpenFindability: nessun repository aggiuntivo, nessun file nei repository delle app, nessun Mac e nessun deposito Match. iOS richiede macOS, quindi la compilazione gira su Codemagic. Un dispatch accettato NON significa IPA caricato su TestFlight.
 
 Provider predefinito di `release.ts ios`: Codemagic. `--provider github` resta disponibile solo se scelto esplicitamente, con la procedura di [questa guida](ios-release-setup-handoff.md).
 
@@ -88,7 +88,7 @@ Il piano gratuito include 500 minuti M2 al mese e una build alla volta, condivis
 - **Approvazione:** il comando di rilascio è l'approvazione. Chi possiede `CODEMAGIC_API_TOKEN` può avviare una build firmata di qualunque commit delle app configurate: tieni il token solo nel `.env`.
 - **Segreti in build:** il codice dell'app e le sue dipendenze girano con le credenziali Apple e le deploy key in sola lettura di tutte le app nell'ambiente. Rilascia solo commit che hai revisionato.
 - **Branch del runner:** chi può pushare sul branch indicato da `CODEMAGIC_RUNNER_BRANCH` controlla `codemagic.yaml` e quindi i segreti: proteggilo.
-- **Da confermare con la prima build:** `fetch-signing-files` con più estensioni, Ruby 4 con il `Gemfile.lock` generato su Windows, `node` in `softwareVersions` (non documentato dall'API) e le versioni Flutter senza prefisso `v`. Se una versione viene ignorata, il controllo toolchain ferma la build prima della firma.
+- **Da confermare con la prima build Capacitor:** `node` in `softwareVersions`, non documentato dall'API. Se viene ignorato, il controllo toolchain ferma la build prima della firma.
 - **Non supportati senza adattamenti:** flavor Flutter e Capacitor con solo SPM. Android resta nella pipeline esistente.
 
 Documentazione ufficiale:
