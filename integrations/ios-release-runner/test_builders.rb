@@ -111,6 +111,16 @@ platform :ios
     assert_raises(RuntimeError) { profile_mapping([main.merge("TeamIdentifier" => ["OTHER"]), widget], app) }
   end
 
+  def test_capacitor_with_pnpm_uses_the_frozen_pnpm_lockfile
+    Dir.mktmpdir do |app|
+      File.write(File.join(app, "pnpm-lock.yaml"), "")
+      Xcodeproj::Project.fixture = NativeProject.new([], false)
+      prepare_app({ "framework" => "capacitor", "targets" => {}, "webBuildScript" => "app:build" }, app)
+      assert_equal [["corepack", "enable"], ["pnpm", "install", "--frozen-lockfile"], ["pnpm", "run", "app:build"],
+        ["npx", "--no-install", "cap", "sync", "ios", "--deployment"]], $commands.map(&:last)
+    end
+  end
+
   def test_capacitor_missing_lock_fails_before_install_or_build
     Dir.mktmpdir do |app|
       assert_raises(RuntimeError) { prepare_app({ "framework" => "capacitor" }, app) }

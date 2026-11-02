@@ -111,7 +111,8 @@ async function flutterVersion(appPath: string, gitRoot: string, workflows: strin
 }
 
 async function nodeVersion(appPath: string, gitRoot: string, workflows: string): Promise<string | undefined> {
-  const nvm = (await optional(join(appPath, ".nvmrc"))) ?? (await optional(join(gitRoot, ".nvmrc")));
+  const nvm = (await optional(join(appPath, ".nvmrc"))) ?? (await optional(join(gitRoot, ".nvmrc")))
+    ?? (await optional(join(appPath, ".node-version"))) ?? (await optional(join(gitRoot, ".node-version")));
   return exactVersion(nvm) ?? exactVersion(/node-version:\s*['"]?([0-9.]+)/.exec(workflows)?.[1]);
 }
 
@@ -309,10 +310,11 @@ export async function firebasePodProblem(local: LocalIosProject, override: strin
 
 /** Developing on Windows leaves Podfile.lock behind the Dart or npm lockfile, and a strict install then fails. */
 export async function podLockIsStale(local: LocalIosProject): Promise<boolean> {
-  const flutter = local.framework === "flutter";
   const committedAt = async (file: string) => Number(await git(local.path, "log", "-1", "--format=%ct", "--", file));
-  const pods = await committedAt(flutter ? "ios/Podfile.lock" : "ios/App/Podfile.lock");
-  return pods < await committedAt(flutter ? "pubspec.lock" : "package-lock.json");
+  if (local.framework === "flutter") return await committedAt("ios/Podfile.lock") < await committedAt("pubspec.lock");
+  const pods = await committedAt("ios/App/Podfile.lock");
+  // A project generated without a Mac has no lock yet, so the first build must create it.
+  return pods === 0 || pods < Math.max(await committedAt("package-lock.json"), await committedAt("pnpm-lock.yaml"));
 }
 
 /** Marketing version in the app folder, used when --build-name is omitted. */

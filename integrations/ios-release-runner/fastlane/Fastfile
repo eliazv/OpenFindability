@@ -87,10 +87,19 @@ def prepare_app(app, source)
     sh("pod", "repo", "update")
   end
   return prepare_flutter(source) if app.fetch("framework") == "flutter"
-  UI.user_error!("Capacitor requires committed package-lock.json") unless File.file?(File.join(source, "package-lock.json"))
+  pnpm = File.file?(File.join(source, "pnpm-lock.yaml"))
+  UI.user_error!("Capacitor requires a committed package-lock.json or pnpm-lock.yaml") unless pnpm || File.file?(File.join(source, "package-lock.json"))
   Dir.chdir(source) do
-    sh("npm", "ci")
-    sh("npm", "run", app.fetch("webBuildScript", "build"))
+    if pnpm
+      # Corepack installs the exact pnpm named by the app's packageManager field.
+      ENV["COREPACK_ENABLE_DOWNLOAD_PROMPT"] = "0"
+      sh("corepack", "enable")
+      sh("pnpm", "install", "--frozen-lockfile")
+      sh("pnpm", "run", app.fetch("webBuildScript", "build"))
+    else
+      sh("npm", "ci")
+      sh("npm", "run", app.fetch("webBuildScript", "build"))
+    end
     refresh_pods? ? sh("npx", "--no-install", "cap", "sync", "ios") : sh("npx", "--no-install", "cap", "sync", "ios", "--deployment")
   end
   require "xcodeproj"

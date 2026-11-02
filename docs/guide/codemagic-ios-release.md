@@ -24,6 +24,8 @@ Apple consente al massimo 3 certificati Distribution. Se il limite è raggiunto 
 
 ## Aggiungere un'app
 
+Per un'app Capacitor senza cartella `ios/`, generala anche da Windows con `pnpm exec cap add ios --packagemanager CocoaPods` (o `npx`) e imposta `DEVELOPMENT_TEAM` nelle configurazioni del target `App` di `project.pbxproj`. Sono supportati `package-lock.json` e `pnpm-lock.yaml`. Il `Podfile.lock` viene creato dalla prima build e pubblicato come artefatto.
+
 L'app deve esistere su App Store Connect e avere un progetto OpenFindability con `appStoreTrackId` (altrimenti `project:add`, o `--slug` per scegliere il progetto).
 
 ```powershell
