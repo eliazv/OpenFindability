@@ -1,8 +1,9 @@
 # Central iOS runner. Workflows are API-only: no triggering section and no webhook.
 # App identities are NOT in this public repo: the release CLI sends them, and the SHA it
 # approves, as RUNNER_APPS_B64 with each build.
-# ios_source: encrypted SOURCE_READ_TOKEN (Contents:read on app repos).
-# ios_signing: ASC_KEY_ID, ASC_ISSUER_ID, encrypted ASC_KEY_CONTENT and CERTIFICATE_PRIVATE_KEY.
+# ios-setup --apply fills both groups through the Codemagic API:
+# ios_source: SOURCE_KEY_<SLUG>, a read-only GitHub deploy key per app.
+# ios_signing: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_CONTENT, CERTIFICATE_PRIVATE_KEY.
 definitions:
   common_environment: &common_environment
     xcode: latest

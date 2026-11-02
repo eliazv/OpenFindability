@@ -59,23 +59,23 @@ class CodemagicRunnerTests(unittest.TestCase):
                     codemagic_runner.write_policy()
 
     def test_rejects_incorrect_scope_before_git_clone(self):
-        with patch.dict(os.environ, {**ENV, "MODE": "testflight", "SOURCE_READ_TOKEN": "token"}):
+        with patch.dict(os.environ, {**ENV, "MODE": "testflight", "SOURCE_KEY_TEST": "key"}):
             with self.assertRaisesRegex(ValueError, "Unsigned workflow"):
                 codemagic_runner.checkout("unsigned")
 
     def test_rejects_unapproved_commit_before_git_clone(self):
-        with patch.dict(os.environ, {**ENV, "SHA": "b" * 40, "SOURCE_READ_TOKEN": "token"}):
+        with patch.dict(os.environ, {**ENV, "SHA": "b" * 40, "SOURCE_KEY_TEST": "key"}):
             with self.assertRaisesRegex(ValueError, "approved"):
                 codemagic_runner.checkout("unsigned")
 
-    def test_rejects_missing_source_token(self):
+    def test_rejects_missing_deploy_key(self):
         with patch.dict(os.environ, ENV, clear=True):
-            with self.assertRaisesRegex(ValueError, "SOURCE_READ_TOKEN"):
+            with self.assertRaisesRegex(ValueError, "SOURCE_KEY_TEST"):
                 codemagic_runner.checkout("unsigned")
 
     def test_rejects_clone_over_existing_source(self):
         (self.root / "source").mkdir()
-        with patch.dict(os.environ, {**ENV, "SOURCE_READ_TOKEN": "token"}):
+        with patch.dict(os.environ, {**ENV, "SOURCE_KEY_TEST": "key"}):
             with self.assertRaisesRegex(ValueError, "already exists"):
                 codemagic_runner.checkout("unsigned")
 

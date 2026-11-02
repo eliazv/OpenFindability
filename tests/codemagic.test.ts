@@ -117,6 +117,23 @@ test("wait polls read-only until a final status", async () => {
   assert.deepEqual(seen, ["queued", "building", "finished"]);
 });
 
+test("secrets are sent as secure, once, and the API error never carries values", async () => {
+  const calls: { url: string; body?: string }[] = [];
+  const client = new CodemagicClient(runner, (async (url, init) => {
+    calls.push({ url: String(url), body: init?.body as string | undefined });
+    if (init?.method === "POST" && String(url).endsWith("/variables")) return new Response(null, { status: 403 });
+    if (init?.method === "POST") return Response.json({ data: { id: "new-group" } }, { status: 201 });
+    return Response.json({ data: [], page_size: 30, current_page: 1, total_pages: 0 });
+  }) as typeof fetch);
+  assert.equal(await client.ensureVariableGroup("ios_source"), "new-group");
+  assert.equal(calls[0].url, "https://codemagic.io/api/v3/apps/" + runner.appId + "/variable-groups?page=1");
+  await client.addSecrets("group", []);
+  assert.equal(calls.length, 2);
+  await assert.rejects(client.addSecrets("group", [{ name: "KEY", value: "secret-value" }]),
+    (error: Error) => error.message.includes("403") && !error.message.includes("secret-value"));
+  assert.deepEqual(JSON.parse(calls[2].body!), { secure: true, variables: [{ name: "KEY", value: "secret-value" }] });
+});
+
 test("cancel reports 208 as already finished and tolerates an empty success body", async () => {
   const respond = (status: number) => new CodemagicClient(runner, (async (url, init) => {
     assert.equal(url, "https://api.codemagic.io/builds/" + buildId + "/cancel");

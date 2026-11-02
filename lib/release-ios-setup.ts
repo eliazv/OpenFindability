@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
-import { readFile, readdir } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
+import type { CodemagicClient } from "@/lib/connectors/codemagic";
 import type { LocalIosProject } from "@/lib/release-ios-project";
 import { validateIosConfig, type IosReleaseConfig } from "@/lib/release-ios";
 
@@ -155,6 +157,71 @@ export async function buildIosConfig(local: LocalIosProject, appId: number, over
     config.workspace = "ios/App/App.xcworkspace";
   }
   return validateIosConfig(config);
+}
+
+const DEPLOY_KEY_TITLE = "openfindability-codemagic";
+const CERTIFICATE_KEY_PATH = "secrets/appstoreconnect/ios_distribution_private_key";
+
+export function deployKeyVariable(slug: string): string {
+  return "SOURCE_KEY_" + slug.toUpperCase().replace(/-/g, "_");
+}
+
+async function generateKey(type: "ed25519" | "rsa", file: string): Promise<void> {
+  await run("ssh-keygen", ["-t", type, ...(type === "rsa" ? ["-b", "2048", "-m", "PEM"] : []), "-N", "", "-q", "-C", DEPLOY_KEY_TITLE, "-f", file], { timeout: 60_000 });
+}
+
+/** A new key pair replaces our previous key, so a failed run can simply be repeated. */
+async function createDeployKey(repository: string): Promise<string> {
+  const keys = JSON.parse((await run("gh", ["api", "repos/" + repository + "/keys"], { timeout: 60_000 })).stdout) as { id: number; title: string }[];
+  const directory = await mkdtemp(join(tmpdir(), "ios-deploy-key-"));
+  try {
+    const file = join(directory, "key");
+    await generateKey("ed25519", file);
+    const publicKey = (await readFile(file + ".pub", "utf8")).trim();
+    await run("gh", ["api", "-X", "POST", "repos/" + repository + "/keys", "-f", "title=" + DEPLOY_KEY_TITLE, "-f", "key=" + publicKey, "-F", "read_only=true", "--silent"], { timeout: 60_000 });
+    for (const key of keys.filter((candidate) => candidate.title === DEPLOY_KEY_TITLE))
+      await run("gh", ["api", "-X", "DELETE", "repos/" + repository + "/keys/" + key.id, "--silent"], { timeout: 60_000 });
+    return await readFile(file, "utf8");
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+async function certificateKey(): Promise<string> {
+  // Keep an existing key: the distribution certificate on Apple is tied to it.
+  const existing = await optional(CERTIFICATE_KEY_PATH);
+  if (existing) return existing;
+  await generateKey("rsa", CERTIFICATE_KEY_PATH);
+  await rm(CERTIFICATE_KEY_PATH + ".pub", { force: true });
+  return await readFile(CERTIFICATE_KEY_PATH, "utf8");
+}
+
+/** Adds only what is missing on Codemagic and GitHub, and reports names, never values. */
+export async function ensureCodemagicAccess(client: CodemagicClient, slug: string, repository: string, env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+  const added: string[] = [];
+  const signingGroup = await client.ensureVariableGroup("ios_signing");
+  const signing = await client.listVariableNames(signingGroup);
+  const sources: [string, () => Promise<string | undefined>][] = [
+    ["ASC_KEY_ID", async () => env.ASC_KEY_ID?.trim()],
+    ["ASC_ISSUER_ID", async () => env.ASC_ISSUER_ID?.trim()],
+    ["ASC_KEY_CONTENT", async () => env.ASC_PRIVATE_KEY_PATH ? readFile(env.ASC_PRIVATE_KEY_PATH.trim(), "utf8") : undefined],
+    ["CERTIFICATE_PRIVATE_KEY", certificateKey],
+  ];
+  const missing: { name: string; value: string }[] = [];
+  for (const [name, read] of sources) {
+    if (signing.includes(name)) continue;
+    const value = await read();
+    if (!value) throw new Error(name + " is not available locally: check the App Store Connect values in .env.");
+    missing.push({ name, value });
+  }
+  await client.addSecrets(signingGroup, missing);
+  added.push(...missing.map((variable) => variable.name));
+
+  const sourceGroup = await client.ensureVariableGroup("ios_source");
+  const variable = deployKeyVariable(slug);
+  if (!(await client.listVariableNames(sourceGroup)).includes(variable)) {
+    await client.addSecrets(sourceGroup, [{ name: variable, value: await createDeployKey(repository) }]);
+    added.push(variable);
+  }
+  return added;
 }
 
 /** Only code already on GitHub can be built, so a clean pushed HEAD is the commit to release. */

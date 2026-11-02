@@ -8,6 +8,7 @@ import base64
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,8 @@ from pathlib import Path
 from validate import validate
 
 ROOT = Path(__file__).resolve().parent
+# Published at api.github.com/meta. Pinned so the deploy key only ever talks to GitHub.
+GITHUB_HOST_KEY = "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
 
 
 def write_policy():
@@ -41,7 +44,7 @@ def approved():
 
 
 def git(args, env=None):
-    # Token is provided by GIT_ASKPASS and must NEVER be placed in argv.
+    # The key is read from a temporary file and must NEVER be placed in argv.
     process = subprocess.run(["git", *args], cwd=ROOT, env=env, capture_output=True, text=True)
     if process.returncode:
         raise RuntimeError("Git checkout failed; inspect repository access, approved SHA and network.")
@@ -58,27 +61,28 @@ def checkout(scope):
     if scope not in ("unsigned", "signed"):
         raise ValueError("Invalid workflow scope.")
 
-    token = os.environ.get("SOURCE_READ_TOKEN", "")
-    if not token or "\n" in token or "\r" in token:
-        raise ValueError("SOURCE_READ_TOKEN must be configured as an encrypted read-only Codemagic secret.")
+    variable = "SOURCE_KEY_" + os.environ["SLUG"].upper().replace("-", "_")
+    key = os.environ.get(variable, "").strip()
+    if not key:
+        raise ValueError(variable + " is missing: run ios-setup --apply for this app.")
     source = ROOT / "source"
     if source.exists():
         raise ValueError("Source checkout already exists: refusing ambiguous state.")
 
     with tempfile.TemporaryDirectory(prefix="codemagic-git-") as temp:
-        askpass = Path(temp) / "askpass.sh"
-        askpass.write_text("#!/bin/sh\n"
-                           "case \"$1\" in\n"
-                           "  *Username*) printf 'x-access-token\\n' ;;\n"
-                           "  *) printf '%s\\n' \"$SOURCE_READ_TOKEN\" ;;\n"
-                           "esac\n", encoding="utf-8")
-        askpass.chmod(0o700)
+        key_file = Path(temp) / "deploy_key"
+        key_file.touch(mode=0o600)
+        key_file.write_text(key + "\n", encoding="utf-8")
+        hosts = Path(temp) / "known_hosts"
+        hosts.write_text(GITHUB_HOST_KEY + "\n", encoding="utf-8")
         env = os.environ.copy()
-        env.update({"GIT_ASKPASS": str(askpass), "GIT_TERMINAL_PROMPT": "0"})
+        env.update({"GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": " ".join([
+            "ssh", "-i", shlex.quote(str(key_file)), "-o", "IdentitiesOnly=yes",
+            "-o", "UserKnownHostsFile=" + shlex.quote(str(hosts)), "-o", "StrictHostKeyChecking=yes"])})
         git(["init", "--quiet", "source"], env)
         # No arbitrary URL from build parameters: only the validated allowlist.
         git(["-C", "source", "remote", "add", "origin",
-             "https://github.com/" + app["repository"] + ".git"], env)
+             "git@github.com:" + app["repository"] + ".git"], env)
         git(["-C", "source", "fetch", "--quiet", "--depth", "1", "origin", os.environ["SHA"]], env)
         git(["-C", "source", "checkout", "--quiet", "--detach", "FETCH_HEAD"], env)
         actual = git(["-C", "source", "rev-parse", "HEAD"], env)

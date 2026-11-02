@@ -7,25 +7,7 @@ Provider predefinito di `release.ts ios`: Codemagic. `--provider github` resta d
 ## Setup una tantum
 
 1. Su Codemagic esiste **una sola applicazione**, collegata a OpenFindability, senza webhook: legge `codemagic.yaml` dalla radice del repository. Le applicazioni collegate ai repository delle singole app non vengono usate.
-2. Genera la chiave del certificato di distribuzione, conservandola nella cartella ignorata `secrets/`. Non cambiarla in seguito: Codemagic crea il certificato che le corrisponde.
-
-   ```bash
-   ssh-keygen -t rsa -b 2048 -m PEM -f secrets/appstoreconnect/ios_distribution_private_key -q -N ""
-   ```
-
-3. Nell'applicazione Codemagic crea due gruppi di variabili. Segna come **Secret** tutti i valori.
-
-   | Gruppo | Variabile | Valore |
-   | --- | --- | --- |
-   | `ios_source` | `SOURCE_READ_TOKEN` | Token GitHub fine-grained con solo **Contents: read** sui repository delle app |
-   | `ios_signing` | `ASC_KEY_ID` | `ASC_KEY_ID` del `.env` |
-   | `ios_signing` | `ASC_ISSUER_ID` | `ASC_ISSUER_ID` del `.env` |
-   | `ios_signing` | `ASC_KEY_CONTENT` | Contenuto del file `.p8` |
-   | `ios_signing` | `CERTIFICATE_PRIVATE_KEY` | Contenuto della chiave generata al punto 2, righe BEGIN/END comprese |
-
-   La chiave App Store Connect deve avere il ruolo App Manager o superiore, perché crea certificati e profili.
-
-4. Nel `.env` locale:
+2. Nel `.env` locale, oltre ai valori App Store Connect già presenti:
 
    ```dotenv
    CODEMAGIC_API_TOKEN=
@@ -33,6 +15,10 @@ Provider predefinito di `release.ts ios`: Codemagic. `--provider github` resta d
    CODEMAGIC_RUNNER_BRANCH=master
    CODEMAGIC_INSTANCE_TYPE=mac_mini_m2
    ```
+
+3. `gh` deve essere autenticato con accesso admin ai repository delle app.
+
+Tutto il resto lo fa `ios-setup --apply`. La chiave App Store Connect deve avere il ruolo App Manager o superiore, perché crea certificati e profili.
 
 Apple consente al massimo 3 certificati Distribution. Se il limite è raggiunto e nessuno corrisponde alla chiave, la build fallisce: libera un posto dal portale Apple solo dopo aver verificato che quel certificato non serve. OpenFindability non revoca nulla.
 
@@ -44,6 +30,8 @@ L'app deve esistere su App Store Connect e avere un progetto OpenFindability con
 npx tsx scripts/release.ts ios-setup --path C:\percorso\app          # mostra i valori letti
 npx tsx scripts/release.ts ios-setup --path C:\percorso\app --apply  # li salva nel database locale
 ```
+
+Con `--apply` il comando salva la configurazione e aggiunge solo ciò che manca: sul repository dell'app una deploy key **in sola lettura**, e su Codemagic la relativa variabile `SOURCE_KEY_<SLUG>` nel gruppo `ios_source` e, la prima volta, le credenziali Apple nel gruppo `ios_signing`. La chiave del certificato viene generata in `secrets/appstoreconnect/ios_distribution_private_key`: non cambiarla, perché il certificato su Apple corrisponde a quella. I valori sono caricati come Secret e mai stampati. Per sostituire un valore, elimina la variabile su Codemagic e rilancia il comando.
 
 Il comando legge dalla cartella, senza eseguire codice dell'app: repository, Team ID, target, bundle ID ed entitlement. Trova l'Apple ID su App Store Connect. Le versioni arrivano da `.fvmrc`, `.nvmrc` e dai workflow del repository; per Flutter, in mancanza, dall'SDK di questo PC. **Controlla le versioni**: se sono sbagliate correggile con `--xcode`, `--flutter`, `--node` (e `--web-script` per Capacitor). Rilancia il comando quando cambi capability, target o estensioni.
 
@@ -88,8 +76,8 @@ Il piano gratuito include 500 minuti M2 al mese e una build alla volta, condivis
 
 ## Limiti e rischi noti
 
-- **Approvazione:** il comando di rilascio è l'approvazione. Chi possiede `CODEMAGIC_API_TOKEN` può avviare una build firmata di qualunque commit raggiungibile da `SOURCE_READ_TOKEN`: tieni il token solo nel `.env`.
-- **Segreti in build:** il codice dell'app e le sue dipendenze girano con le credenziali Apple nell'ambiente. Rilascia solo commit che hai revisionato.
+- **Approvazione:** il comando di rilascio è l'approvazione. Chi possiede `CODEMAGIC_API_TOKEN` può avviare una build firmata di qualunque commit delle app configurate: tieni il token solo nel `.env`.
+- **Segreti in build:** il codice dell'app e le sue dipendenze girano con le credenziali Apple e le deploy key in sola lettura di tutte le app nell'ambiente. Rilascia solo commit che hai revisionato.
 - **Branch del runner:** chi può pushare sul branch indicato da `CODEMAGIC_RUNNER_BRANCH` controlla `codemagic.yaml` e quindi i segreti: proteggilo.
 - **Da confermare con la prima build:** `fetch-signing-files` con più estensioni, Ruby 4 con il `Gemfile.lock` generato su Windows, `node` in `softwareVersions` (non documentato dall'API) e le versioni Flutter senza prefisso `v`. Se una versione viene ignorata, il controllo toolchain ferma la build prima della firma.
 - **Non supportati senza adattamenti:** flavor Flutter e Capacitor con solo SPM. Android resta nella pipeline esistente.

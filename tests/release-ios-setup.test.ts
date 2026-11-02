@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseEntitlements, parseNativeTargets } from "../lib/release-ios-setup";
+import { deployKeyVariable, parseEntitlements, parseNativeTargets } from "../lib/release-ios-setup";
 
 const id = (n: number) => String(n).padStart(24, "A");
 function target(n: number, name: string, type: string, list: number) {
@@ -43,4 +43,8 @@ test("entitlements require production push and keep array values", () => {
     "com.apple.security.application-groups": [],
     flag: true,
   });
+});
+
+test("deploy key variable name matches what the runner reads", () => {
+  assert.equal(deployKeyVariable("sette-e-mezzo-carte-italiane"), "SOURCE_KEY_SETTE_E_MEZZO_CARTE_ITALIANE");
 });

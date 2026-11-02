@@ -6,6 +6,7 @@ import type { IosPlan, IosReleaseConfig } from "@/lib/release-ios";
  * variable groups, never in this public repository.
  */
 const API = "https://api.codemagic.io";
+const API_V3 = "https://codemagic.io/api/v3";
 const BUILD_ID = /^[a-f0-9]{24}$/i;
 const APP_ID = /^[a-f0-9]{24}$/i;
 const BRANCH = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
@@ -98,8 +99,8 @@ export class CodemagicClient {
     if (!APP_ID.test(runner.appId)) throw new Error("Invalid Codemagic application ID.");
   }
 
-  private async send(path: string, init: RequestInit = {}): Promise<Response> {
-    const response = await this.request(API + path, {
+  private async send(path: string, init: RequestInit = {}, base = API): Promise<Response> {
+    const response = await this.request(base + path, {
       ...init,
       signal: AbortSignal.timeout(30_000),
       headers: {
@@ -148,6 +149,35 @@ export class CodemagicClient {
       publishingStatus: publishing?.status,
       url: "https://codemagic.io/app/" + this.runner.appId + "/build/" + buildId,
     };
+  }
+
+  private async listAll<T>(path: string): Promise<T[]> {
+    const items: T[] = [];
+    for (let page = 1; ; page++) {
+      const response = await this.send(path + "?page=" + page, {}, API_V3);
+      const body = await response.json() as { data: T[]; total_pages: number };
+      items.push(...body.data);
+      if (page >= body.total_pages) return items;
+    }
+  }
+
+  async ensureVariableGroup(name: string): Promise<string> {
+    const path = "/apps/" + this.runner.appId + "/variable-groups";
+    const existing = (await this.listAll<{ id: string; name: string }>(path)).find((group) => group.name === name);
+    if (existing) return existing.id;
+    const response = await this.send(path, { method: "POST", body: JSON.stringify({ name }) }, API_V3);
+    return (await response.json() as { data: { id: string } }).data.id;
+  }
+
+  async listVariableNames(groupId: string): Promise<string[]> {
+    return (await this.listAll<{ name: string }>("/variable-groups/" + groupId + "/variables")).map((variable) => variable.name);
+  }
+
+  /** Values are write-only: they are never read back, printed or logged. */
+  async addSecrets(groupId: string, variables: { name: string; value: string }[]): Promise<void> {
+    if (!variables.length) return;
+    await this.send("/variable-groups/" + groupId + "/variables",
+      { method: "POST", body: JSON.stringify({ secure: true, variables }) }, API_V3);
   }
 
   /** Read-only polling; stops at a final status or when the limit passes, leaving the build running. */

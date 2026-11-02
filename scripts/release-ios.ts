@@ -3,7 +3,7 @@ import { getAscApp, listAscApps, listAscBuilds } from "@/lib/connectors/appstore
 import { CodemagicClient, codemagicPinProblems, codemagicRunnerFromEnv } from "@/lib/connectors/codemagic";
 import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
-import { buildIosConfig, localMarketingVersion, resolvePushedSha } from "@/lib/release-ios-setup";
+import { buildIosConfig, ensureCodemagicAccess, localMarketingVersion, resolvePushedSha } from "@/lib/release-ios-setup";
 import { appendConnectorRun, readProjects, updateProject } from "@/lib/store";
 import { createId } from "@/lib/id";
 import { discoverLocalIosProjects, resolveIosProject } from "@/lib/release-ios-project";
@@ -13,7 +13,7 @@ async function localProject(path: string | undefined, bundleId: string) {
   return (await discoverLocalIosProjects(path)).find((local) => local.bundleIds.includes(bundleId));
 }
 
-/** Writes only the local project row, and only with --apply. Apple and Codemagic are not changed. */
+/** With --apply: saves the project row, then adds the missing Codemagic secrets and a read-only GitHub deploy key. */
 async function runIosSetup(args: Record<string, string>, apply: boolean): Promise<void> {
   if (!args["--path"]) throw new Error("ios-setup requires --path <app folder>.");
   const found = await discoverLocalIosProjects(args["--path"]);
@@ -37,6 +37,8 @@ async function runIosSetup(args: Record<string, string>, apply: boolean): Promis
     return;
   }
   await updateProject(project.slug, { iosReleaseConfig: config, appStoreTrackId: Number(ascApp.id) });
+  const added = await ensureCodemagicAccess(new CodemagicClient(codemagicRunnerFromEnv()), project.slug, config.repository);
+  console.log("Added on Codemagic: " + (added.join(", ") || "nothing, already configured"));
   console.log("Saved. Release it with: npx tsx scripts/release.ts ios --path <app folder>");
 }
 
