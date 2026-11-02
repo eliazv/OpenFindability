@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { exec, execFile } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -8,6 +8,8 @@ import type { LocalIosProject } from "@/lib/release-ios-project";
 import { validateIosConfig, type IosReleaseConfig } from "@/lib/release-ios";
 
 const run = promisify(execFile);
+// Flutter is a .bat on Windows, so it needs a shell; these commands are constant strings.
+const runShell = promisify(exec);
 
 /** Used when the app declares no Xcode version. Must exist on the Codemagic machines. */
 export const DEFAULT_XCODE_VERSION = "27.0";
@@ -95,14 +97,14 @@ async function flutterVersion(appPath: string, gitRoot: string, workflows: strin
   const fromWorkflow = exactVersion(/flutter-version:\s*['"]?([0-9.]+)/.exec(workflows)?.[1]);
   let local: string | undefined;
   try {
-    const { stdout } = await run("flutter", ["--version", "--machine"], { shell: true, timeout: 60_000 });
+    const { stdout } = await runShell("flutter --version --machine", { timeout: 60_000 });
     local = exactVersion(JSON.parse(stdout).frameworkVersion);
   } catch { return fromWorkflow; }
   if (!fromWorkflow) return local;
   // The build enforces pubspec.lock, and SDK-pinned packages tie it to a Flutter version:
   // a workflow can name a version the committed lockfile does not satisfy.
   try {
-    await run("flutter", ["pub", "get", "--enforce-lockfile", "--dry-run"], { cwd: appPath, shell: true, timeout: 180_000 });
+    await runShell("flutter pub get --enforce-lockfile --dry-run", { cwd: appPath, timeout: 180_000 });
     return local;
   } catch { return fromWorkflow; }
 }
@@ -247,11 +249,11 @@ export async function resolvePushedSha(path: string, repository: string): Promis
 export async function flutterLockProblem(local: LocalIosProject, pinned: string | undefined): Promise<string | undefined> {
   if (local.framework !== "flutter" || !pinned) return undefined;
   try {
-    const { stdout } = await run("flutter", ["--version", "--machine"], { shell: true, timeout: 60_000 });
+    const { stdout } = await runShell("flutter --version --machine", { timeout: 60_000 });
     if (exactVersion(JSON.parse(stdout).frameworkVersion) !== pinned) return undefined;
   } catch { return undefined; }
   try {
-    await run("flutter", ["pub", "get", "--enforce-lockfile", "--dry-run"], { cwd: local.path, shell: true, timeout: 180_000 });
+    await runShell("flutter pub get --enforce-lockfile --dry-run", { cwd: local.path, timeout: 180_000 });
     return undefined;
   } catch { return "pubspec.lock does not satisfy pubspec.yaml with Flutter " + pinned + ": run flutter pub get and commit the lockfile."; }
 }

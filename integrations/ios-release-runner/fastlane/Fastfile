@@ -39,6 +39,27 @@ def export_pod_lock(root, app, source)
   FileUtils.cp(pod_lock(app, source), File.join(root, "output", "Podfile.lock"))
 end
 
+# Current Xcode rejects pods that still declare a target below its minimum.
+MINIMUM_POD_DEPLOYMENT_TARGET = "15.0"
+
+def raise_deployment_targets(configurations)
+  configurations.each do |configuration|
+    current = configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"]
+    next unless current && Gem::Version.new(current) < Gem::Version.new(MINIMUM_POD_DEPLOYMENT_TARGET)
+    configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = MINIMUM_POD_DEPLOYMENT_TARGET
+  end
+end
+
+# Changes only the generated Pods project of the disposable checkout, never the app repository.
+def raise_pod_deployment_targets(app, source)
+  path = File.join(source, File.dirname(native_project(app)), "Pods", "Pods.xcodeproj")
+  return unless File.directory?(path)
+  require "xcodeproj"
+  project = Xcodeproj::Project.open(path)
+  raise_deployment_targets(project.build_configurations + project.targets.flat_map(&:build_configurations))
+  project.save
+end
+
 def prepare_flutter(source)
   Dir.chdir(source) do
     sh("flutter", "pub", "get", "--enforce-lockfile")
@@ -124,6 +145,7 @@ platform :ios do
     root, app, source = release_context
     prepare_app(app, source)
     export_pod_lock(root, app, source)
+    raise_pod_deployment_targets(app, source)
     if app.fetch("framework") == "flutter"
       Dir.chdir(source) do
         sh("flutter", "build", "ios", "--release", "--no-codesign", "--no-pub",
@@ -158,6 +180,7 @@ platform :ios do
     check_number.call
     prepare_app(app, source)
     export_pod_lock(root, app, source)
+    raise_pod_deployment_targets(app, source)
     if ENV["CERTIFICATE_PRIVATE_KEY"].to_s.empty?
       setup_ci(keychain_name: keychain, timeout: 3600)
       match(type: "appstore", readonly: true, api_key: api_key, team_id: app.fetch("teamId"),

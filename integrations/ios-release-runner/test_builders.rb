@@ -78,6 +78,12 @@ class BuilderPreparationTest < Minitest::Test
     ENV.delete("REFRESH_PODS")
   end
 
+  def test_pod_deployment_targets_are_only_raised
+    settings = [{ "IPHONEOS_DEPLOYMENT_TARGET" => "11.0" }, { "IPHONEOS_DEPLOYMENT_TARGET" => "16.0" }, {}]
+    raise_deployment_targets(settings.map { |value| Configuration.new(value) })
+    assert_equal [{ "IPHONEOS_DEPLOYMENT_TARGET" => "15.0" }, { "IPHONEOS_DEPLOYMENT_TARGET" => "16.0" }, {}], settings
+  end
+
   def test_profile_mapping_needs_an_app_store_profile_for_every_bundle
     app = { "teamId" => "ABCDEFGHIJ", "bundleIds" => ["com.example.demo", "com.example.demo.Widget"] }
     store = ->(name, bundle) { { "Name" => name, "TeamIdentifier" => ["ABCDEFGHIJ"], "Entitlements" => { "application-identifier" => "ABCDEFGHIJ.#{bundle}" } } }
