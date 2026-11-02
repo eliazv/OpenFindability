@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { getAscApp, listAscBuilds } from "@/lib/connectors/appstoreconnect";
-import { CodemagicClient, codemagicRunnerFromEnv } from "@/lib/connectors/codemagic";
+import { CodemagicClient, codemagicPinProblems, codemagicRunnerFromEnv, runnerPolicyProblems, type RunnerPolicyApp } from "@/lib/connectors/codemagic";
 import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
 import { appendConnectorRun, readProjects } from "@/lib/store";
@@ -8,6 +9,32 @@ import { createId } from "@/lib/id";
 import { resolveIosProject } from "@/lib/release-ios-project";
 
 type Provider = "codemagic" | "github";
+
+const RUNNER_POLICY_PATH = "secrets/ios/runner-apps.json";
+
+async function readRunnerPolicy(): Promise<Record<string, RunnerPolicyApp> | undefined> {
+  try {
+    return JSON.parse(await readFile(RUNNER_POLICY_PATH, "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+/** Dry-run unless --apply, like every other write to an external platform. */
+async function runIosCancel(projectId: string, buildId: string, apply: boolean): Promise<void> {
+  const client = new CodemagicClient(codemagicRunnerFromEnv());
+  if (!apply) {
+    console.log(JSON.stringify({ build: await client.getBuild(buildId) }, null, 2));
+    console.log("Dry run: build not cancelled. Add --apply to cancel it.");
+    return;
+  }
+  const startedAt = new Date().toISOString();
+  const result = await client.cancelBuild(buildId);
+  await appendConnectorRun({ id: createId("run"), projectId, source: "ios_release", status: "success", startedAt,
+    finishedAt: new Date().toISOString(), stats: { state: result, provider: "codemagic", buildId } });
+  console.log(JSON.stringify({ provider: "codemagic", buildId, result }, null, 2));
+}
 
 /** Codemagic is the explicit default to avoid unintended GitHub Actions minutes. */
 export async function runIosReleaseCli(command: string, argv: string[]): Promise<void> {
@@ -23,16 +50,22 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   }
   if (flags.has("--unsigned") && (!flags.has("--build") || flags.has("--apply")))
     throw new Error("--unsigned requires --build and cannot be used with --apply.");
-  if (flags.has("--apply") && !flags.has("--build"))
+  if (flags.has("--apply") && !flags.has("--build") && command !== "ios-cancel")
     throw new Error("--apply requires --build; upload must be explicitly approved.");
   const provider = args["--provider"] ?? "codemagic";
   if (provider !== "codemagic" && provider !== "github")
     throw new Error("--provider must be codemagic or github.");
-  if (args["--build-id"] && command !== "ios-status")
-    throw new Error("--build-id is only supported by ios-status.");
+  if (args["--build-id"] && command === "ios")
+    throw new Error("--build-id is only supported by ios-status and ios-cancel.");
+  if (command === "ios-cancel" && (provider !== "codemagic" || !args["--build-id"]))
+    throw new Error("ios-cancel requires --build-id and the codemagic provider.");
 
   const project = await resolveIosProject(await readProjects(), { slug: args["--slug"], path: args["--path"] });
   if (!project?.iosReleaseConfig) throw new Error("Project has no iosReleaseConfig. See docs/guide/ios-release-setup-handoff.md.");
+  if (command === "ios-cancel") {
+    await runIosCancel(project.id, args["--build-id"], flags.has("--apply"));
+    return;
+  }
   const config = project.iosReleaseConfig;
   if (project.appStoreTrackId !== config.appId)
     throw new Error("iosReleaseConfig.appId must match project.appStoreTrackId.");
@@ -75,26 +108,35 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
     mode: flags.has("--apply") ? "testflight" : flags.has("--unsigned") ? "unsigned" : flags.has("--build") ? "build" : "check",
   });
   console.log(JSON.stringify({ provider, plan }, null, 2));
+  if (provider === "codemagic") {
+    const policy = await readRunnerPolicy();
+    const problems = [...codemagicPinProblems(config), ...(policy ? runnerPolicyProblems(plan, policy) : [])];
+    if (!policy) console.log("No " + RUNNER_POLICY_PATH + ": the approved SHA is only checked on the runner.");
+    if (problems.length) {
+      console.log(JSON.stringify({ ready: false, problems }, null, 2));
+      if (plan.mode !== "check") throw new Error("Codemagic setup is incomplete: no build dispatched.");
+      process.exitCode = 1;
+    }
+  }
   if (plan.mode === "check") {
     console.log("Preflight only: no remote build and no CI minutes consumed.");
     return;
   }
 
+  // Configuration errors surface here, before any intent is logged: nothing was dispatched.
+  const codemagic = provider === "codemagic" ? new CodemagicClient(codemagicRunnerFromEnv()) : undefined;
+  const github = provider === "github" ? new GitHubActionsClient(releaseRunnerFromEnv()) : undefined;
+  await github?.assertPrivate();
+
   const correlationId = randomUUID();
   const startedAt = new Date().toISOString();
   // Persist intent BEFORE dispatch. On timeout never retry automatically.
-  await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "success", startedAt,
+  await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "partial", startedAt,
     finishedAt: startedAt, stats: { state: "dispatching", provider, correlationId, plan } });
   try {
-    let dispatch: unknown;
-    if (provider === "codemagic") {
-      const client = new CodemagicClient(codemagicRunnerFromEnv());
-      dispatch = await client.dispatch(plan, correlationId);
-    } else {
-      const github = new GitHubActionsClient(releaseRunnerFromEnv());
-      await github.assertPrivate();
-      dispatch = await github.dispatch(iosWorkflowInputs(plan, correlationId));
-    }
+    const dispatch: unknown = codemagic
+      ? await codemagic.dispatch(plan, correlationId)
+      : await github!.dispatch(iosWorkflowInputs(plan, correlationId));
     await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "success", startedAt,
       finishedAt: new Date().toISOString(), stats: { state: "dispatch_accepted", provider, correlationId, plan, dispatch } });
     console.log(JSON.stringify({ provider, correlationId, dispatch }, null, 2));

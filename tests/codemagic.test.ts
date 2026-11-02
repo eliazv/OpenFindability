@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CodemagicClient, codemagicBuildRequest, codemagicRunnerFromEnv, type CodemagicRunner } from "../lib/connectors/codemagic";
+import { CodemagicClient, codemagicBuildRequest, codemagicPinProblems, codemagicRunnerFromEnv, runnerPolicyProblems, type CodemagicRunner } from "../lib/connectors/codemagic";
 import { planIosRelease, type IosReleaseConfig } from "../lib/release-ios";
 
 const runner: CodemagicRunner = {
@@ -82,6 +82,35 @@ test("no token/provider-response disclosure; missing build ID cannot be mistaken
     (error: Error) => error.message.includes("403") && !error.message.includes(runner.token));
   const incomplete = new CodemagicClient(runner, (async () => Response.json({ message: "queued" })) as typeof fetch);
   await assert.rejects(incomplete.dispatch(plan(), correlationId), /ambiguous/);
+});
+
+test("missing toolchain pins are reported and block the paid build", () => {
+  const { xcodeVersion: _xcode, flutterVersion: _flutter, ...unpinned } = config;
+  assert.equal(codemagicPinProblems(config).length, 0);
+  assert.equal(codemagicPinProblems(unpinned).length, 2);
+  assert.match(codemagicPinProblems({ ...config, framework: "capacitor" })[0], /nodeVersion/);
+  assert.throws(() => codemagicBuildRequest({ ...plan(), config: unpinned }, correlationId, runner), /xcodeVersion/);
+});
+
+test("runner policy copy flags what the runner would refuse", () => {
+  const app = { ...config, enabled: true, workingDirectory: ".", approvedShas: ["c".repeat(40)] };
+  assert.deepEqual(runnerPolicyProblems(plan(), { demo: app }), []);
+  assert.match(runnerPolicyProblems(plan(), {})[0], /no entry/);
+  assert.match(runnerPolicyProblems(plan(), { demo: { ...app, enabled: false } })[0], /disabled/);
+  assert.match(runnerPolicyProblems(plan(), { demo: { ...app, approvedShas: [] } })[0], /approvedShas/);
+  assert.match(runnerPolicyProblems(plan(), { demo: { ...app, xcodeVersion: "" } })[0], /xcodeVersion/);
+  assert.match(runnerPolicyProblems(plan(), { demo: { ...app, bundleIds: ["com.example.other"] } })[0], /bundleIds/);
+});
+
+test("cancel reports 208 as already finished and tolerates an empty success body", async () => {
+  const respond = (status: number) => new CodemagicClient(runner, (async (url, init) => {
+    assert.equal(url, "https://api.codemagic.io/builds/" + buildId + "/cancel");
+    assert.equal(init?.method, "POST");
+    return new Response(null, { status });
+  }) as typeof fetch);
+  assert.equal(await respond(200).cancelBuild(buildId), "cancel_requested");
+  assert.equal(await respond(208).cancelBuild(buildId), "already_finished");
+  await assert.rejects(respond(404).cancelBuild(buildId), /404/);
 });
 
 test("status reads Codemagic build but never infers TestFlight readiness", async () => {

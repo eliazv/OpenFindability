@@ -61,7 +61,7 @@ Ogni progetto OpenFindability richiede `iosReleaseConfig`. Esempio (file privato
 }
 ```
 
-Per Capacitor sostituisci `framework` con `capacitor` e `flutterVersion` con `nodeVersion` (es. `24.20.0`). Il file `apps.json` del runner include inoltre scheme, target, entitlement e allowlist SHA; deve essere coerente con la configurazione locale. Per sincronizzare il mapping locale:
+Per Capacitor sostituisci `framework` con `capacitor` e `flutterVersion` con `nodeVersion` (es. `24.20.0`). `xcodeVersion` e la versione del framework sono obbligatorie con Codemagic: senza, la CLI non avvia la build. Il file `apps.json` del runner include inoltre scheme, target, entitlement e allowlist SHA; deve essere coerente con la configurazione locale. Tieni una copia privata in `secrets/ios/runner-apps.json`: se esiste, preflight e build confrontano abilitazione, SHA, identità e versioni prima di avviare la macchina. La copia non sostituisce il controllo sul runner, che resta l'unico vincolante. Per sincronizzare il mapping locale:
 
 ```bash
 npx tsx scripts/update-project.ts --slug demo --ios-config secrets/ios/demo.json
@@ -86,6 +86,9 @@ npx tsx scripts/release.ts ios --slug demo --sha <40-char-approved-sha> --build-
 
 # Controlla sia lo stato Apple sia il job Codemagic tramite l'ID restituito.
 npx tsx scripts/release.ts ios-status --slug demo --build-id <codemagic-build-id>
+
+# Mostra il job; con --apply ne richiede l'annullamento.
+npx tsx scripts/release.ts ios-cancel --slug demo --build-id <codemagic-build-id> [--apply]
 
 # Alternativa ESPlicita che usa minuti GitHub Actions:
 npx tsx scripts/release.ts ios --provider github --slug demo --sha <40-char-approved-sha> --build-name 1.2.3 --build
@@ -116,6 +119,7 @@ Se vuoi selezionare la directory sorgente, usa `--path C:/work/app`: serve a ide
 - La policy `approvedShas` è una barriera di autorizzazione: il codice della commit approvata gira durante la build e può in linea di principio interagire con i segreti disponibili nel workflow signed. Revisionare commit e dipendenze e limitare i token.
 - Le build Android rimangono nella pipeline esistente e non vengono spostate su Codemagic.
 - Codemagic REST API è in evoluzione: i metodi del connettore sono isolati in `lib/connectors/codemagic.ts`. Verificare che il build ID e i campi della risposta rispettino il contratto al primo collaudo reale.
+- La documentazione API mostra come esempi di `softwareVersions` solo `xcode` e `flutter` (con prefisso `v`), mentre il connettore invia anche `node` e versioni senza prefisso. Da confermare con la prima build Flutter e la prima Capacitor: se il valore viene ignorato, il controllo toolchain ferma la build prima della firma.
 - Il lockfile Bundler, il repository runner, le credenziali e il primo ciclo macOS non sono stati generati o eseguiti automaticamente.
 
 Documentazione ufficiale:

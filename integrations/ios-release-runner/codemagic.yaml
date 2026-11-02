@@ -19,7 +19,8 @@ definitions:
     name: Verify per-app toolchain and install pinned Fastlane gems
     script: |
       python3 codemagic_runner.py toolchain
-      bundle install --deployment
+      bundle config set --local deployment true
+      bundle install
   build_unsigned: &build_unsigned
     name: Compile without Apple signing
     script: bundle exec fastlane ios unsigned

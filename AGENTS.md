@@ -81,6 +81,7 @@ pnpm run release:status -- --slug <slug>
 pnpm run release:android -- --slug <slug> [--path <flutter dir>] [--build] [--apply]
 pnpm run release:ios -- --slug <slug> [--path <app dir>] --sha <commit> --build-name <version> [--build] [--apply]
 pnpm run release:ios-status -- --slug <slug>
+pnpm run release:ios-cancel -- --slug <slug> --build-id <id> [--apply]
 
 # Database
 pnpm run db:backup                  # verified snapshot in data/backups/
