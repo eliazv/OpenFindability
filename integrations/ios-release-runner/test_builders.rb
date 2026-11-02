@@ -94,6 +94,17 @@ platform :ios
     end
   end
 
+  def test_runner_release_config_keeps_includes_and_relaxes_module_checks
+    Dir.mktmpdir do |app|
+      relax_runner_module_checks(app)
+      FileUtils.mkdir_p(File.join(app, "ios", "Flutter"))
+      xcconfig = File.join(app, "ios", "Flutter", "Release.xcconfig")
+      File.write(xcconfig, "#include \"Generated.xcconfig\"\n")
+      relax_runner_module_checks(app)
+      assert_equal "#include \"Generated.xcconfig\"\nCLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES\nCLANG_ENABLE_EXPLICIT_MODULES = NO\n", File.read(xcconfig)
+    end
+  end
+
   def test_app_env_is_written_only_when_declared_and_missing
     ENV["SLUG"] = "demo-app"
     Dir.mktmpdir do |app|
@@ -115,11 +126,12 @@ platform :ios
     lines = with_pod_deployment_hook(podfile).lines
     hook = lines.index { |line| line.include?("pods_project.targets") }
     assert_operator lines.index("  flutter_settings(installer)\n"), :<, hook
-    assert_equal "end\n", lines[hook + 5]
+    assert_equal "end\n", lines[hook + 6]
     assert_includes lines[hook + 1], "CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES"
-    assert_includes lines[hook + 3], 'Gem::Version.new("15.0")'
+    assert_includes lines[hook + 2], "CLANG_ENABLE_EXPLICIT_MODULES"
+    assert_includes lines[hook + 4], 'Gem::Version.new("15.0")'
     assert_equal 1, lines.count { |line| line.start_with?("post_install") }
-    assert_equal "abstract_target 'x' do\n", lines[hook + 7]
+    assert_equal "abstract_target 'x' do\n", lines[hook + 8]
   end
 
   def test_pod_deployment_hook_is_added_when_the_podfile_has_none

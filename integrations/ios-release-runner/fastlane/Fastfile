@@ -46,6 +46,7 @@ MINIMUM_POD_DEPLOYMENT_TARGET = "15.0"
 POD_DEPLOYMENT_HOOK = <<~RUBY.lines.map { |line| "  #{line}" }.join
   (installer.pods_project.targets.flat_map(&:build_configurations) + installer.pods_project.build_configurations).each do |configuration|
     configuration.build_settings["CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES"] = "YES"
+    configuration.build_settings["CLANG_ENABLE_EXPLICIT_MODULES"] = "NO"
     current = configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"]
     configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "#{MINIMUM_POD_DEPLOYMENT_TARGET}" if current && Gem::Version.new(current) < Gem::Version.new("#{MINIMUM_POD_DEPLOYMENT_TARGET}")
   end
@@ -79,8 +80,16 @@ def write_app_env(source)
   File.write(env_file, ENV.fetch(variable))
 end
 
+# The Runner target imports the plugin modules too, so it needs the settings given to the pods.
+def relax_runner_module_checks(source)
+  xcconfig = File.join(source, "ios", "Flutter", "Release.xcconfig")
+  return unless File.file?(xcconfig)
+  File.write(xcconfig, "#{File.read(xcconfig).chomp}\nCLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES\nCLANG_ENABLE_EXPLICIT_MODULES = NO\n")
+end
+
 def prepare_flutter(source)
   write_app_env(source)
+  relax_runner_module_checks(source)
   Dir.chdir(source) do
     sh("flutter", "pub", "get", "--enforce-lockfile")
     # Generate Flutter's xcconfig before resolving Pods; preserve native project/workarounds.
