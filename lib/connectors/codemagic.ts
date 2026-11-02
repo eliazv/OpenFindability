@@ -105,6 +105,13 @@ export function failureLines(log: string, limit = 25): string[] {
 
 const FINAL_STATUSES = ["finished", "failed", "canceled", "timeout", "skipped"];
 
+/** Starts the upload-only workflow for an IPA already built and published as an artifact. */
+export function codemagicUploadRequest(plan: IosPlan, correlationId: string, runner: CodemagicRunner, ipaUrl: string) {
+  const request = codemagicBuildRequest(plan, correlationId, runner);
+  return { ...request, workflowId: "ios-central-upload",
+    environment: { ...request.environment, variables: { ...request.environment.variables, IPA_URL: ipaUrl } } };
+}
+
 export class CodemagicClient {
   constructor(private readonly runner: CodemagicRunner, private readonly request: typeof fetch = fetch) {
     if (!APP_ID.test(runner.appId)) throw new Error("Invalid Codemagic application ID.");
@@ -135,6 +142,32 @@ export class CodemagicClient {
     const body = codemagicBuildRequest(plan, correlationId, this.runner);
     const response = await this.call<{ buildId?: string }>("/builds", {
       method: "POST", body: JSON.stringify(body),
+    });
+    if (!response || typeof response.buildId !== "string" || !BUILD_ID.test(response.buildId))
+      throw new Error("Codemagic accepted an ambiguous build response; inspect Codemagic before retrying.");
+    return { buildId: response.buildId };
+  }
+
+  private async artifactPath(buildId: string, name: string): Promise<string> {
+    if (!BUILD_ID.test(buildId)) throw new Error("Invalid Codemagic build ID.");
+    const response = await this.call<{ build?: { artefacts?: { name?: string; url?: string }[] } }>("/builds/" + buildId);
+    const url = response?.build?.artefacts?.find((artifact) => artifact.name === name)?.url;
+    if (!url?.startsWith(API + "/artifacts/")) throw new Error("Build " + buildId + " has no " + name + " artifact.");
+    return url.slice(API.length);
+  }
+
+  /** Version, build number and SHA recorded by the runner when it produced the IPA. */
+  async releaseReceipt(buildId: string): Promise<{ sha: string; version: string; build: string }> {
+    return await (await this.send(await this.artifactPath(buildId, "release.json"))).json() as { sha: string; version: string; build: string };
+  }
+
+  /** Same no-retry rule as dispatch. The temporary IPA link is valid for one hour. */
+  async dispatchUpload(plan: IosPlan, correlationId: string, sourceBuildId: string): Promise<{ buildId: string }> {
+    const path = await this.artifactPath(sourceBuildId, "release.ipa");
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    const { url } = await (await this.send(path + "/public-url", { method: "POST", body: JSON.stringify({ expiresAt }) })).json() as { url: string };
+    const response = await this.call<{ buildId?: string }>("/builds", {
+      method: "POST", body: JSON.stringify(codemagicUploadRequest(plan, correlationId, this.runner, url)),
     });
     if (!response || typeof response.buildId !== "string" || !BUILD_ID.test(response.buildId))
       throw new Error("Codemagic accepted an ambiguous build response; inspect Codemagic before retrying.");

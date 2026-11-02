@@ -83,6 +83,7 @@ pnpm run release:ios-setup -- --path <app dir> [--apply]    # reads the app fold
 pnpm run release:ios -- --path <app dir> [--build [--unsigned]] [--apply] [--wait]
 pnpm run release:ios-status -- --slug <slug>
 pnpm run release:ios-cancel -- --slug <slug> --build-id <id> [--apply]
+pnpm run release:ios-upload -- --slug <slug> --build-id <id> [--apply] [--wait]   # retry only the upload
 
 # Database
 pnpm run db:backup                  # verified snapshot in data/backups/

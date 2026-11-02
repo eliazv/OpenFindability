@@ -41,6 +41,23 @@ definitions:
       bundle exec fastlane ios release
 
 workflows:
+  ios-central-upload:
+    name: Central iOS upload of an existing IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      <<: *common_environment
+      groups:
+        - ios_signing
+    scripts:
+      - name: Upload the verified IPA to TestFlight
+        script: |
+          cd integrations/ios-release-runner
+          python3 codemagic_runner.py policy
+          bundle config set --local deployment true
+          bundle install
+          bundle exec fastlane ios upload
+
   ios-central-unsigned:
     name: Central iOS compile without signing
     instance_type: mac_mini_m2

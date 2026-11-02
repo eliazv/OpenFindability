@@ -3,7 +3,7 @@ import { getAscApp, listAscApps, listAscBuilds } from "@/lib/connectors/appstore
 import { CodemagicClient, codemagicPinProblems, codemagicRunnerFromEnv } from "@/lib/connectors/codemagic";
 import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
-import { buildIosConfig, ensureCodemagicAccess, flutterLockProblem, localMarketingVersion, podLockIsStale, resolvePushedSha } from "@/lib/release-ios-setup";
+import { buildIosConfig, ensureCodemagicAccess, firebasePodProblem, flutterLockProblem, localMarketingVersion, podLockIsStale, resolvePushedSha } from "@/lib/release-ios-setup";
 import { appendConnectorRun, readProjects, updateProject } from "@/lib/store";
 import { createId } from "@/lib/id";
 import { discoverLocalIosProjects, resolveIosProject } from "@/lib/release-ios-project";
@@ -79,8 +79,8 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
     throw new Error("--provider must be codemagic or github.");
   if (args["--build-id"] && command === "ios")
     throw new Error("--build-id is only supported by ios-status and ios-cancel.");
-  if (command === "ios-cancel" && (provider !== "codemagic" || !args["--build-id"]))
-    throw new Error("ios-cancel requires --build-id and the codemagic provider.");
+  if ((command === "ios-cancel" || command === "ios-upload") && (provider !== "codemagic" || !args["--build-id"]))
+    throw new Error(command + " requires --build-id and the codemagic provider.");
 
   const project = await resolveIosProject(await readProjects(), { slug: args["--slug"], path: args["--path"] });
   if (!project?.iosReleaseConfig) throw new Error("Project has no iosReleaseConfig. See docs/guide/ios-release-setup-handoff.md.");
@@ -124,6 +124,36 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
     return;
   }
 
+  if (command === "ios-upload") {
+    const client = new CodemagicClient(codemagicRunnerFromEnv());
+    const sourceBuildId = args["--build-id"];
+    const release = await client.releaseReceipt(sourceBuildId);
+    const uploadPlan = planIosRelease({ slug: project.slug, config, sha: release.sha, buildName: release.version,
+      buildNumber: release.build, builds, mode: "testflight" });
+    console.log(JSON.stringify({ sourceBuildId, sha: uploadPlan.sha, buildName: uploadPlan.buildName, buildNumber: uploadPlan.buildNumber }, null, 2));
+    if (!flags.has("--apply")) {
+      console.log("Dry run: nothing uploaded. Add --apply to upload this IPA without compiling again.");
+      return;
+    }
+    const correlationId = randomUUID();
+    const startedAt = new Date().toISOString();
+    await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "partial", startedAt,
+      finishedAt: startedAt, stats: { state: "dispatching", provider, correlationId, plan: uploadPlan, sourceBuildId } });
+    const dispatch = await client.dispatchUpload(uploadPlan, correlationId, sourceBuildId);
+    await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "success", startedAt,
+      finishedAt: new Date().toISOString(), stats: { state: "dispatch_accepted", provider, correlationId, plan: uploadPlan, sourceBuildId, dispatch } });
+    console.log(JSON.stringify({ provider, correlationId, dispatch }, null, 2));
+    if (flags.has("--wait")) {
+      const build = await client.waitForBuild(dispatch.buildId, { onStatus: (status) => console.log(new Date().toISOString() + " " + status) });
+      console.log(JSON.stringify(build, null, 2));
+      if (build.status !== "finished") {
+        process.exitCode = 1;
+        if (build.status === "failed") console.log(await client.failureSummary(dispatch.buildId));
+      }
+    }
+    return;
+  }
+
   const local = await localProject(args["--path"], config.bundleIds[0]);
   const sha = args["--sha"] ?? (local ? await resolvePushedSha(local.path, config.repository) : "");
   const buildName = args["--build-name"] ?? (local ? await localMarketingVersion(local) : undefined) ?? "";
@@ -136,8 +166,10 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   console.log(JSON.stringify({ provider, plan }, null, 2));
   if (plan.refreshPods) console.log("Native pods will be resolved again: Podfile.lock is older than the dependency lockfile or --refresh-pods was passed. The new Podfile.lock is a build artifact, to commit in the app repository.");
   if (provider === "codemagic") {
-    const lockProblem = local ? await flutterLockProblem(local, config.flutterVersion) : undefined;
-    const problems = [...codemagicPinProblems(config), ...(lockProblem ? [lockProblem] : [])];
+    const localProblems = local
+      ? [await flutterLockProblem(local, config.flutterVersion), await firebasePodProblem(local, config.firebaseSdkVersion)]
+      : [];
+    const problems = [...codemagicPinProblems(config), ...localProblems.filter((problem): problem is string => Boolean(problem))];
     if (problems.length) {
       console.log(JSON.stringify({ ready: false, problems }, null, 2));
       if (plan.mode !== "check") throw new Error("Codemagic setup is incomplete: no build dispatched.");

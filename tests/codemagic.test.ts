@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CodemagicClient, codemagicBuildRequest, codemagicPinProblems, codemagicRunnerFromEnv, failureLines, runnerPolicy, type CodemagicRunner } from "../lib/connectors/codemagic";
+import { CodemagicClient, codemagicBuildRequest, codemagicPinProblems, codemagicRunnerFromEnv, codemagicUploadRequest, failureLines, runnerPolicy, type CodemagicRunner } from "../lib/connectors/codemagic";
 import { planIosRelease, type IosReleaseConfig } from "../lib/release-ios";
 
 const runner: CodemagicRunner = {
@@ -123,6 +123,26 @@ test("failure lines keep the root cause and drop noise", () => {
   assert.deepEqual(failureLines("a\nb\nc", 2), ["b", "c"]);
   assert.deepEqual(failureLines("[!] just a warning\nok\nFailed to build iOS app\nreason\nreason"), ["Failed to build iOS app", "reason"]);
   assert.deepEqual(failureLines("[!] deprecated pod\nTraceback (most recent call last):\nboom"), ["Traceback (most recent call last):", "boom"]);
+});
+
+test("upload retry reuses the IPA artifact and selects the upload workflow", async () => {
+  const request = codemagicUploadRequest(plan(), correlationId, runner, "https://example.test/ipa");
+  assert.equal(request.workflowId, "ios-central-upload");
+  assert.equal(request.environment.variables.IPA_URL, "https://example.test/ipa");
+  const artifact = "https://api.codemagic.io/artifacts/abc/def/release.ipa";
+  const calls: string[] = [];
+  const client = new CodemagicClient(runner, (async (url, init) => {
+    calls.push((init?.method ?? "GET") + " " + url);
+    if (String(url).endsWith("/public-url")) return Response.json({ url: "https://example.test/temporary" });
+    if (init?.method === "POST") {
+      assert.equal(JSON.parse(String(init.body)).environment.variables.IPA_URL, "https://example.test/temporary");
+      return Response.json({ buildId });
+    }
+    return Response.json({ build: { artefacts: [{ name: "release.ipa", url: artifact }] } });
+  }) as typeof fetch);
+  assert.deepEqual(await client.dispatchUpload(plan(), correlationId, buildId), { buildId });
+  assert.deepEqual(calls, ["GET https://api.codemagic.io/builds/" + buildId, "POST " + artifact + "/public-url", "POST https://api.codemagic.io/builds"]);
+  await assert.rejects(client.releaseReceipt(buildId), /release\.json/);
 });
 
 test("wait polls read-only until a final status", async () => {

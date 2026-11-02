@@ -152,7 +152,40 @@ def receipt(root, state)
   }))
 end
 
+def ensure_new_build_number(app)
+  builds = Spaceship::ConnectAPI::Build.all(app_id: app.fetch("appId").to_s)
+  UI.user_error!("Non-integer ASC build numbering needs manual reconciliation") if builds.any? { |b| b.version !~ /\A[1-9][0-9]*\z/ }
+  highest = builds.map { |b| b.version.to_i }.max || 0
+  UI.user_error!("Build number already consumed; re-plan from Windows") unless ENV.fetch("BUILD_NUMBER").to_i > highest
+end
+
+def upload_ipa(api_key, app, ipa)
+  upload_to_testflight(api_key: api_key, app_identifier: app.fetch("bundleIds").first,
+    apple_id: app.fetch("appId").to_s, ipa: ipa,
+    skip_waiting_for_build_processing: true, skip_submission: true, distribute_external: false)
+end
+
 platform :ios do
+  # Retries only the upload of an IPA from an earlier build, so nothing is compiled again.
+  lane :upload do
+    root = File.expand_path("..", __dir__)
+    app = JSON.parse(File.read(File.join(root, "apps.json"))).fetch(ENV.fetch("SLUG"))
+    sh("python3", File.join(root, "validate.py"))
+    api_key = app_store_connect_api_key(key_id: ENV.fetch("ASC_KEY_ID"), issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_CONTENT"), in_house: false)
+    remote = Spaceship::ConnectAPI::App.get(app_id: app.fetch("appId").to_s)
+    UI.user_error!("ASC identity mismatch") unless remote.bundle_id == app.fetch("bundleIds").first
+    ensure_new_build_number(app)
+    ipa = File.join(root, "output", "release.ipa")
+    FileUtils.mkdir_p(File.dirname(ipa))
+    # Not through sh: the temporary download URL stays out of the log.
+    require "open-uri"
+    URI.parse(ENV.fetch("IPA_URL")).open { |remote_file| File.open(ipa, "wb") { |file| IO.copy_stream(remote_file, file) } }
+    sh("python3", File.join(root, "verify_ipa.py"), ipa)
+    upload_ipa(api_key, app, ipa)
+    receipt(root, "uploaded_processing_unconfirmed")
+  end
+
   lane :unsigned do
     root, app, source = release_context
     prepare_app(app, source)
@@ -183,16 +216,9 @@ platform :ios do
       key_content: ENV.fetch("ASC_KEY_CONTENT"), in_house: false)
     remote = Spaceship::ConnectAPI::App.get(app_id: app.fetch("appId").to_s)
     UI.user_error!("ASC identity mismatch") unless remote.bundle_id == app.fetch("bundleIds").first
-    check_number = lambda do
-      builds = Spaceship::ConnectAPI::Build.all(app_id: app.fetch("appId").to_s)
-      UI.user_error!("Non-integer ASC build numbering needs manual reconciliation") if builds.any? { |b| b.version !~ /\A[1-9][0-9]*\z/ }
-      highest = builds.map { |b| b.version.to_i }.max || 0
-      UI.user_error!("Build number already consumed; re-plan from Windows") unless ENV.fetch("BUILD_NUMBER").to_i > highest
-    end
+    check_number = -> { ensure_new_build_number(app) }
     check_number.call
-    prepare_app(app, source)
-    export_pod_lock(root, app, source)
-    raise_pod_deployment_targets(app, source)
+    # Signing takes seconds and compiling takes minutes, so a signing problem must surface first.
     if ENV["CERTIFICATE_PRIVATE_KEY"].to_s.empty?
       setup_ci(keychain_name: keychain, timeout: 3600)
       match(type: "appstore", readonly: true, api_key: api_key, team_id: app.fetch("teamId"),
@@ -204,6 +230,9 @@ platform :ios do
       profiles, identity = fetch_codemagic_signing(app)
     end
     UI.user_error!("Missing profiles") unless (app.fetch("bundleIds") - profiles.keys).empty?
+    prepare_app(app, source)
+    export_pod_lock(root, app, source)
+    raise_pod_deployment_targets(app, source)
     app.fetch("targets").each do |target, bundle|
       update_code_signing_settings(use_automatic_signing: false, path: File.join(source, native_project(app)),
         targets: [target], team_id: app.fetch("teamId"), bundle_identifier: bundle,
@@ -247,9 +276,7 @@ platform :ios do
     receipt(root, "built")
     if ENV.fetch("MODE") == "testflight"
       check_number.call
-      upload_to_testflight(api_key: api_key, app_identifier: app.fetch("bundleIds").first,
-        apple_id: app.fetch("appId").to_s, ipa: ipas.first,
-        skip_waiting_for_build_processing: true, skip_submission: true, distribute_external: false)
+      upload_ipa(api_key, app, ipas.first)
       receipt(root, "uploaded_processing_unconfirmed")
     end
   end

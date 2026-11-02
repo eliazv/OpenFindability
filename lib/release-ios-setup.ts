@@ -1,4 +1,5 @@
 import { exec, execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -257,6 +258,53 @@ export async function flutterLockProblem(local: LocalIosProject, pinned: string 
     await runShell("flutter pub get --enforce-lockfile --dry-run", { cwd: local.path, timeout: 180_000 });
     return undefined;
   } catch { return "pubspec.lock does not satisfy pubspec.yaml with Flutter " + pinned + ": run flutter pub get and commit the lockfile."; }
+}
+
+const FIREBASE_PODS: Record<string, string> = {
+  firebase_core: "FirebaseCore", firebase_analytics: "FirebaseAnalytics", firebase_auth: "FirebaseAuth",
+  firebase_messaging: "FirebaseMessaging", firebase_crashlytics: "FirebaseCrashlytics", firebase_storage: "FirebaseStorage",
+  firebase_remote_config: "FirebaseRemoteConfig", firebase_app_check: "FirebaseAppCheck",
+  cloud_firestore: "FirebaseFirestore", cloud_functions: "FirebaseFunctions",
+};
+
+function lockedVersion(pubspecLock: string, name: string): string | undefined {
+  const start = pubspecLock.search(new RegExp("^  " + name + ":\\r?$", "m"));
+  if (start < 0) return undefined;
+  return /^    version: "([^"]+)"/m.exec(pubspecLock.slice(start))?.[1];
+}
+
+type PodVersions = (pod: string) => Promise<string[]>;
+
+/** Uses the same public index CocoaPods reads, sharded by the MD5 of the pod name. */
+async function publishedPodVersions(pod: string): Promise<string[]> {
+  const hash = createHash("md5").update(pod).digest("hex");
+  const response = await fetch("https://cdn.cocoapods.org/all_pods_versions_" + hash[0] + "_" + hash[1] + "_" + hash[2] + ".txt", { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error("CocoaPods index " + response.status);
+  const line = (await response.text()).split("\n").find((row) => row.startsWith(pod + "/"));
+  return line ? line.split("/").slice(1) : [];
+}
+
+/** FlutterFire pins an exact SDK version, but not every Firebase pod is published for each patch. */
+export async function missingFirebasePods(pubspecLock: string, sdkVersion: string, versions: PodVersions = publishedPodVersions): Promise<string[]> {
+  const pods = Object.entries(FIREBASE_PODS).filter(([plugin]) => lockedVersion(pubspecLock, plugin)).map(([, pod]) => pod);
+  const missing = await Promise.all(pods.map(async (pod) => (await versions(pod)).includes(sdkVersion) ? undefined : pod));
+  return missing.filter((pod): pod is string => pod !== undefined);
+}
+
+/** Saves a build that would fail at pod install. A failed lookup never blocks a release. */
+export async function firebasePodProblem(local: LocalIosProject, override: string | undefined, env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+  if (local.framework !== "flutter") return undefined;
+  try {
+    const lock = await readFile(join(local.path, "pubspec.lock"), "utf8");
+    const core = lockedVersion(lock, "firebase_core");
+    if (!core) return undefined;
+    const cache = env.PUB_CACHE ?? join(env.LOCALAPPDATA ?? "", "Pub", "Cache");
+    const script = override ? undefined : await readFile(join(cache, "hosted", "pub.dev", "firebase_core-" + core, "ios", "firebase_sdk_version.rb"), "utf8");
+    const sdk = override ?? /'(\d+\.\d+\.\d+)'/.exec(script ?? "")?.[1];
+    if (!sdk) return undefined;
+    const missing = await missingFirebasePods(lock, sdk);
+    return missing.length ? "Firebase " + sdk + " is not published on CocoaPods for: " + missing.join(", ") + ". Set a published version with ios-setup --firebase-sdk x.y.z." : undefined;
+  } catch { return undefined; }
 }
 
 /** Developing on Windows leaves Podfile.lock behind the Dart or npm lockfile, and a strict install then fails. */

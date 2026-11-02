@@ -74,6 +74,7 @@
     "release:ios-status": "tsx scripts/release.ts ios-status",
     "release:ios-cancel": "tsx scripts/release.ts ios-cancel",
     "release:ios-setup": "tsx scripts/release.ts ios-setup",
+    "release:ios-upload": "tsx scripts/release.ts ios-upload",
     "test:ios-release": "tsx --test tests/release-ios.test.ts tests/codemagic.test.ts tests/release-ios-project.test.ts tests/release-ios-setup.test.ts tests/asc-request.test.ts",
     "release:status": "tsx scripts/release.ts status",
     "gsc:sites": "tsx scripts/gsc-sites.ts",

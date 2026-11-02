@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deployKeyVariable, parseEntitlements, parseNativeTargets } from "../lib/release-ios-setup";
+import { deployKeyVariable, missingFirebasePods, parseEntitlements, parseNativeTargets } from "../lib/release-ios-setup";
 
 const id = (n: number) => String(n).padStart(24, "A");
 function target(n: number, name: string, type: string, list: number) {
@@ -47,4 +47,11 @@ test("entitlements require production push and keep array values", () => {
 
 test("deploy key variable name matches what the runner reads", () => {
   assert.equal(deployKeyVariable("sette-e-mezzo-carte-italiane"), "SOURCE_KEY_SETTE_E_MEZZO_CARTE_ITALIANE");
+});
+
+test("finds Firebase pods not published for the pinned SDK, only for plugins in use", async () => {
+  const lock = '  firebase_analytics:\n    dependency: "direct main"\n    version: "13.0.1"\n  cloud_firestore:\n    version: "7.1.0"\n  http:\n    version: "1.0.0"\n';
+  const versions = async (pod: string) => pod === "FirebaseFirestore" ? ["12.19.0", "12.19.3"] : ["12.19.0"];
+  assert.deepEqual(await missingFirebasePods(lock, "12.19.3", versions), ["FirebaseAnalytics"]);
+  assert.deepEqual(await missingFirebasePods(lock, "12.19.0", versions), []);
 });
