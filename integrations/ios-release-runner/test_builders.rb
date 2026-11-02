@@ -115,10 +115,11 @@ platform :ios
     lines = with_pod_deployment_hook(podfile).lines
     hook = lines.index { |line| line.include?("pods_project.targets") }
     assert_operator lines.index("  flutter_settings(installer)\n"), :<, hook
-    assert_equal "end\n", lines[hook + 4]
-    assert_includes lines[hook + 2], 'Gem::Version.new("15.0")'
+    assert_equal "end\n", lines[hook + 5]
+    assert_includes lines[hook + 1], "CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES"
+    assert_includes lines[hook + 3], 'Gem::Version.new("15.0")'
     assert_equal 1, lines.count { |line| line.start_with?("post_install") }
-    assert_equal "abstract_target 'x' do\n", lines[hook + 6]
+    assert_equal "abstract_target 'x' do\n", lines[hook + 7]
   end
 
   def test_pod_deployment_hook_is_added_when_the_podfile_has_none

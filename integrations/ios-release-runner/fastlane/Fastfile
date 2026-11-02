@@ -39,11 +39,13 @@ def export_pod_lock(root, app, source)
   FileUtils.cp(pod_lock(app, source), File.join(root, "output", "Podfile.lock"))
 end
 
-# Current Xcode rejects pods that still declare a target below its minimum. This lives in the Podfile
-# because flutter build ipa runs pod install again, which regenerates the Pods project.
+# Current Xcode rejects pods that still declare a target below its minimum, and with use_frameworks!
+# it rejects SDK private headers that are not modular (AdMob's GoogleMobileAds_Beta.h). This lives in
+# the Podfile because flutter build ipa runs pod install again, which regenerates the Pods project.
 MINIMUM_POD_DEPLOYMENT_TARGET = "15.0"
 POD_DEPLOYMENT_HOOK = <<~RUBY.lines.map { |line| "  #{line}" }.join
   (installer.pods_project.targets.flat_map(&:build_configurations) + installer.pods_project.build_configurations).each do |configuration|
+    configuration.build_settings["CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES"] = "YES"
     current = configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"]
     configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "#{MINIMUM_POD_DEPLOYMENT_TARGET}" if current && Gem::Version.new(current) < Gem::Version.new("#{MINIMUM_POD_DEPLOYMENT_TARGET}")
   end
