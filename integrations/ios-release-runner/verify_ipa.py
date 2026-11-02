@@ -40,7 +40,7 @@ def verify(ipa):
             for key, expected in app.get("requiredEntitlements", {}).get(identifier, {}).items():
                 assert entitlements.get(key) == expected, f"Missing/mismatched entitlement: {key}"
             certificate_prefix = str(Path(temporary) / "signing-cert")
-            subprocess.run(["codesign", "-d", "--extract-certificates", certificate_prefix, str(bundle)], check=True, capture_output=True)
+            subprocess.run(["codesign", "-d", "--extract-certificates=" + certificate_prefix, str(bundle)], check=True, capture_output=True)
             certificate = Path(certificate_prefix + "0").read_bytes()
             assert certificate in profile["DeveloperCertificates"], "Certificate does not match embedded profile"
         assert found[0] == app["bundleIds"][0], "Main app bundle mismatch"

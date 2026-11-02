@@ -96,9 +96,9 @@ export function codemagicBuildRequest(plan: IosPlan, correlationId: string, runn
 /** Keeps the root cause of a step log; stack frames and download noise are dropped. */
 export function failureLines(log: string, limit = 25): string[] {
   const lines = log.replace(/<[^>]+>/g, "").split("\n").filter((line) => !/gems\/|rubygems|CDN: trunk/.test(line));
-  // "[!]" can be a CocoaPods warning, so a reported build failure wins over it.
-  const failedBuild = lines.findIndex((line) => /Failed to build|Error \(Xcode\)|Target Integrity \(Xcode\)/.test(line));
-  const start = failedBuild >= 0 ? failedBuild : lines.findIndex((line) => /\[!\]|\berror\b:|\bfatal\b|Failed to /i.test(line));
+  // "[!]" can be a CocoaPods warning, so a traceback or reported build failure wins, then the last "[!]".
+  const reported = lines.findLastIndex((line) => /Traceback|Failed to build|Error \(Xcode\)|Target Integrity \(Xcode\)/.test(line));
+  const start = reported >= 0 ? reported : lines.findLastIndex((line) => /\[!\]|error:|fatal|Failed to /i.test(line));
   const selected = start < 0 ? lines.slice(-limit) : lines.slice(start);
   return [...new Set(selected.map((line) => line.trimEnd().slice(0, 300)))].slice(0, limit);
 }

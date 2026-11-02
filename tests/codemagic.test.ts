@@ -122,6 +122,9 @@ test("failure lines keep the root cause and drop noise", () => {
   assert.deepEqual(failureLines(log), ["[!] CocoaPods could not find compatible versions", "None of your spec sources contain a spec"]);
   assert.deepEqual(failureLines("a\nb\nc", 2), ["b", "c"]);
   assert.deepEqual(failureLines("[!] just a warning\nok\nFailed to build iOS app\nreason\nreason"), ["Failed to build iOS app", "reason"]);
+  assert.deepEqual(failureLines("[!] deprecated pod
+Traceback (most recent call last):
+boom"), ["Traceback (most recent call last):", "boom"]);
 });
 
 test("wait polls read-only until a final status", async () => {
