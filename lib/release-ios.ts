@@ -15,6 +15,8 @@ export type IosReleaseConfig = {
   scheme?: string;
   targets?: Record<string, string>;
   webBuildScript?: string;
+  /** Overrides the Firebase pods version when a FlutterFire release asks for one that was not published. */
+  firebaseSdkVersion?: string;
   xcodeProject?: string;
   workspace?: string;
   requiredEntitlements?: Record<string, Record<string, unknown>>;
@@ -36,6 +38,7 @@ export function validateIosConfig(config: IosReleaseConfig): IosReleaseConfig {
   if (!Array.isArray(config.bundleIds) || config.bundleIds.length === 0 || config.bundleIds.some((id) => !/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(id)) || new Set(config.bundleIds).size !== config.bundleIds.length) throw new Error("Expected unique explicit bundle IDs: app first, then every extension.");
   if (config.flutterVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(config.flutterVersion)) throw new Error("Invalid Flutter version.");
   if (config.nodeVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(config.nodeVersion)) throw new Error("Invalid Node version.");
+  if (config.firebaseSdkVersion !== undefined && !/^\d+\.\d+\.\d+$/.test(config.firebaseSdkVersion)) throw new Error("Invalid Firebase SDK version.");
   if (config.xcodeVersion !== undefined && !/^\d+\.\d+(?:\.\d+)?$/.test(config.xcodeVersion)) throw new Error("Invalid Xcode version.");
   return config;
 }

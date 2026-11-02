@@ -15,7 +15,7 @@ const runShell = promisify(exec);
 export const DEFAULT_XCODE_VERSION = "27.0";
 
 export type NativeTarget = { name: string; productType: string; bundleId?: string; entitlements?: string; team?: string; marketingVersion?: string };
-export type Overrides = { xcode?: string; flutter?: string; node?: string; webBuildScript?: string };
+export type Overrides = { xcode?: string; flutter?: string; node?: string; webBuildScript?: string; firebaseSdk?: string };
 
 const SHIPPED_PRODUCTS = ["com.apple.product-type.application", "com.apple.product-type.app-extension"];
 
@@ -164,6 +164,7 @@ export async function buildIosConfig(local: LocalIosProject, appId: number, over
     config.xcodeProject = "ios/App/App.xcodeproj";
     config.workspace = "ios/App/App.xcworkspace";
   }
+  if (overrides.firebaseSdk) config.firebaseSdkVersion = overrides.firebaseSdk;
   return validateIosConfig(config);
 }
 
