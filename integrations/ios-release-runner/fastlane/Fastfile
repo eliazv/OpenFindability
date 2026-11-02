@@ -263,10 +263,12 @@ platform :ios do
           "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
       end
     else
-      build_app(workspace: File.join(source, native_workspace(app)), scheme: app.fetch("scheme"),
-        configuration: "Release", clean: true, export_options: export,
-        output_directory: File.join(source, "build", "ios", "ipa"), output_name: "release.ipa",
-        archive_path: File.join(source, "build", "ios", "App.xcarchive"))
+      # Not build_app: its validation rejects the app-store-connect method that current Xcode expects.
+      archive = File.join(source, "build", "ios", "App.xcarchive")
+      sh("xcodebuild", "-workspace", File.join(source, native_workspace(app)), "-scheme", app.fetch("scheme"),
+        "-configuration", "Release", "-destination", "generic/platform=iOS", "-archivePath", archive, "clean", "archive")
+      sh("xcodebuild", "-exportArchive", "-archivePath", archive, "-exportOptionsPlist", export,
+        "-exportPath", File.join(source, "build", "ios", "ipa"))
     end
     ipas = Dir[File.join(source, "build", "ios", "ipa", "*.ipa")]
     UI.user_error!("Expected exactly one IPA") unless ipas.length == 1
