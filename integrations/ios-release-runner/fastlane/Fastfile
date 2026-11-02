@@ -39,25 +39,30 @@ def export_pod_lock(root, app, source)
   FileUtils.cp(pod_lock(app, source), File.join(root, "output", "Podfile.lock"))
 end
 
-# Current Xcode rejects pods that still declare a target below its minimum.
+# Current Xcode rejects pods that still declare a target below its minimum. This lives in the Podfile
+# because flutter build ipa runs pod install again, which regenerates the Pods project.
 MINIMUM_POD_DEPLOYMENT_TARGET = "15.0"
-
-def raise_deployment_targets(configurations)
-  configurations.each do |configuration|
+POD_DEPLOYMENT_HOOK = <<~RUBY.lines.map { |line| "  #{line}" }.join
+  (installer.pods_project.targets.flat_map(&:build_configurations) + installer.pods_project.build_configurations).each do |configuration|
     current = configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"]
-    next unless current && Gem::Version.new(current) < Gem::Version.new(MINIMUM_POD_DEPLOYMENT_TARGET)
-    configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = MINIMUM_POD_DEPLOYMENT_TARGET
+    configuration.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "#{MINIMUM_POD_DEPLOYMENT_TARGET}" if current && Gem::Version.new(current) < Gem::Version.new("#{MINIMUM_POD_DEPLOYMENT_TARGET}")
   end
+RUBY
+
+# Pure: runs last in the app's post_install, so its own settings cannot lower the target again.
+def with_pod_deployment_hook(podfile)
+  lines = podfile.lines
+  start = lines.index { |line| line.match?(/^post_install do/) }
+  return "#{podfile.chomp}\n\npost_install do |installer|\n#{POD_DEPLOYMENT_HOOK}end\n" unless start
+  finish = (start...lines.length).find { |index| lines[index].match?(/^end\s*$/) }
+  UI.user_error!("Unexpected post_install block in Podfile") unless finish
+  lines.insert(finish, POD_DEPLOYMENT_HOOK).join
 end
 
-# Changes only the generated Pods project of the disposable checkout, never the app repository.
-def raise_pod_deployment_targets(app, source)
-  path = File.join(source, File.dirname(native_project(app)), "Pods", "Pods.xcodeproj")
-  return unless File.directory?(path)
-  require "xcodeproj"
-  project = Xcodeproj::Project.open(path)
-  raise_deployment_targets(project.build_configurations + project.targets.flat_map(&:build_configurations))
-  project.save
+# Only the disposable checkout changes, never the app repository.
+def apply_pod_deployment_hook(app, source)
+  podfile = File.join(source, File.dirname(native_project(app)), "Podfile")
+  File.write(podfile, with_pod_deployment_hook(File.read(podfile))) if File.file?(podfile)
 end
 
 def prepare_flutter(source)
@@ -81,6 +86,7 @@ end
 
 def prepare_app(app, source)
   apply_firebase_sdk_version(app, source)
+  apply_pod_deployment_hook(app, source)
   if refresh_pods?
     FileUtils.rm_f(pod_lock(app, source))
     # The machine's spec index can predate what the plugins now require.
@@ -199,7 +205,6 @@ platform :ios do
     root, app, source = release_context
     prepare_app(app, source)
     export_pod_lock(root, app, source)
-    raise_pod_deployment_targets(app, source)
     if app.fetch("framework") == "flutter"
       Dir.chdir(source) do
         sh("flutter", "build", "ios", "--release", "--no-codesign", "--no-pub",
@@ -241,7 +246,6 @@ platform :ios do
     UI.user_error!("Missing profiles") unless (app.fetch("bundleIds") - profiles.keys).empty?
     prepare_app(app, source)
     export_pod_lock(root, app, source)
-    raise_pod_deployment_targets(app, source)
     app.fetch("targets").each do |target, bundle|
       update_code_signing_settings(use_automatic_signing: false, path: File.join(source, native_project(app)),
         targets: [target], team_id: app.fetch("teamId"), bundle_identifier: bundle,

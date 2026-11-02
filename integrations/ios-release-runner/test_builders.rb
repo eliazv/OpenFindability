@@ -94,10 +94,22 @@ platform :ios
     end
   end
 
-  def test_pod_deployment_targets_are_only_raised
-    settings = [{ "IPHONEOS_DEPLOYMENT_TARGET" => "11.0" }, { "IPHONEOS_DEPLOYMENT_TARGET" => "16.0" }, {}]
-    raise_deployment_targets(settings.map { |value| Configuration.new(value) })
-    assert_equal [{ "IPHONEOS_DEPLOYMENT_TARGET" => "15.0" }, { "IPHONEOS_DEPLOYMENT_TARGET" => "16.0" }, {}], settings
+  def test_pod_deployment_hook_runs_last_in_the_existing_post_install
+    podfile = "target 'Runner' do\nend\n\npost_install do |installer|\n  flutter_settings(installer)\nend\n\nabstract_target 'x' do\nend\n"
+    lines = with_pod_deployment_hook(podfile).lines
+    hook = lines.index { |line| line.include?("pods_project.targets") }
+    assert_operator lines.index("  flutter_settings(installer)\n"), :<, hook
+    assert_equal "end\n", lines[hook + 4]
+    assert_includes lines[hook + 2], 'Gem::Version.new("15.0")'
+    assert_equal 1, lines.count { |line| line.start_with?("post_install") }
+    assert_equal "abstract_target 'x' do\n", lines[hook + 6]
+  end
+
+  def test_pod_deployment_hook_is_added_when_the_podfile_has_none
+    result = with_pod_deployment_hook("platform :ios\n")
+    assert_includes result, "post_install do |installer|\n"
+    assert result.end_with?("end\nend\n") || result.end_with?("  end\nend\n")
+    RubyVM::InstructionSequence.compile(result)
   end
 
   def test_profile_mapping_needs_an_app_store_profile_for_every_bundle
