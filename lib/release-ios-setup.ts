@@ -243,6 +243,19 @@ export async function resolvePushedSha(path: string, repository: string): Promis
   return head;
 }
 
+/** Runs before any paid minute: only meaningful when this PC has the SDK the build is pinned to. */
+export async function flutterLockProblem(local: LocalIosProject, pinned: string | undefined): Promise<string | undefined> {
+  if (local.framework !== "flutter" || !pinned) return undefined;
+  try {
+    const { stdout } = await run("flutter", ["--version", "--machine"], { shell: true, timeout: 60_000 });
+    if (exactVersion(JSON.parse(stdout).frameworkVersion) !== pinned) return undefined;
+  } catch { return undefined; }
+  try {
+    await run("flutter", ["pub", "get", "--enforce-lockfile", "--dry-run"], { cwd: local.path, shell: true, timeout: 180_000 });
+    return undefined;
+  } catch { return "pubspec.lock does not satisfy pubspec.yaml with Flutter " + pinned + ": run flutter pub get and commit the lockfile."; }
+}
+
 /** Developing on Windows leaves Podfile.lock behind the Dart or npm lockfile, and a strict install then fails. */
 export async function podLockIsStale(local: LocalIosProject): Promise<boolean> {
   const flutter = local.framework === "flutter";

@@ -3,7 +3,7 @@ import { getAscApp, listAscApps, listAscBuilds } from "@/lib/connectors/appstore
 import { CodemagicClient, codemagicPinProblems, codemagicRunnerFromEnv } from "@/lib/connectors/codemagic";
 import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
-import { buildIosConfig, ensureCodemagicAccess, localMarketingVersion, podLockIsStale, resolvePushedSha } from "@/lib/release-ios-setup";
+import { buildIosConfig, ensureCodemagicAccess, flutterLockProblem, localMarketingVersion, podLockIsStale, resolvePushedSha } from "@/lib/release-ios-setup";
 import { appendConnectorRun, readProjects, updateProject } from "@/lib/store";
 import { createId } from "@/lib/id";
 import { discoverLocalIosProjects, resolveIosProject } from "@/lib/release-ios-project";
@@ -136,7 +136,8 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   console.log(JSON.stringify({ provider, plan }, null, 2));
   if (plan.refreshPods) console.log("Native pods will be resolved again: Podfile.lock is older than the dependency lockfile or --refresh-pods was passed. The new Podfile.lock is a build artifact, to commit in the app repository.");
   if (provider === "codemagic") {
-    const problems = codemagicPinProblems(config);
+    const lockProblem = local ? await flutterLockProblem(local, config.flutterVersion) : undefined;
+    const problems = [...codemagicPinProblems(config), ...(lockProblem ? [lockProblem] : [])];
     if (problems.length) {
       console.log(JSON.stringify({ ready: false, problems }, null, 2));
       if (plan.mode !== "check") throw new Error("Codemagic setup is incomplete: no build dispatched.");
@@ -170,7 +171,10 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
       const { buildId } = dispatch as { buildId: string };
       const build = await codemagic.waitForBuild(buildId, { onStatus: (status) => console.log(new Date().toISOString() + " " + status) });
       console.log(JSON.stringify(build, null, 2));
-      if (build.status !== "finished") process.exitCode = 1;
+      if (build.status !== "finished") {
+        process.exitCode = 1;
+        if (build.status === "failed") console.log(await codemagic.failureSummary(buildId));
+      }
     }
   } catch (error) {
     await appendConnectorRun({ id: createId("run"), projectId: project.id, source: "ios_release", status: "failed", startedAt,

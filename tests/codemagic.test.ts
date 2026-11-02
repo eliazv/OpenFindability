@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CodemagicClient, codemagicBuildRequest, codemagicPinProblems, codemagicRunnerFromEnv, runnerPolicy, type CodemagicRunner } from "../lib/connectors/codemagic";
+import { CodemagicClient, codemagicBuildRequest, codemagicPinProblems, codemagicRunnerFromEnv, failureLines, runnerPolicy, type CodemagicRunner } from "../lib/connectors/codemagic";
 import { planIosRelease, type IosReleaseConfig } from "../lib/release-ios";
 
 const runner: CodemagicRunner = {
@@ -109,6 +109,18 @@ test("stale native lock is passed to the runner only when planned", () => {
   const variables = (refreshPods: boolean) => codemagicBuildRequest({ ...plan(), refreshPods }, correlationId, runner).environment.variables;
   assert.equal(variables(true).REFRESH_PODS, "1");
   assert.equal(variables(false).REFRESH_PODS, "0");
+});
+
+test("failure lines keep the root cause and drop noise", () => {
+  const log = [
+    "Analyzing",
+    "CDN: trunk Relative path downloaded",
+    "<span>[!] CocoaPods could not find compatible versions</span>",
+    "/vendor/bundle/gems/molinillo/resolution.rb:317",
+    "None of your spec sources contain a spec",
+  ].join("\n");
+  assert.deepEqual(failureLines(log), ["[!] CocoaPods could not find compatible versions", "None of your spec sources contain a spec"]);
+  assert.deepEqual(failureLines("a\nb\nc", 2), ["b", "c"]);
 });
 
 test("wait polls read-only until a final status", async () => {

@@ -59,7 +59,7 @@ Con `--path` la CLI usa l'ultimo commit del branch corrente e si ferma se ci son
 
 Se il `Podfile.lock` è più vecchio di `pubspec.lock` o `package-lock.json`, caso normale quando si sviluppa da Windows, il piano lo segnala e Codemagic risolve di nuovo i pod invece di fermarsi. `--refresh-pods` forza lo stesso comportamento. Il nuovo `Podfile.lock` è un artefatto della build: committalo nel repository dell'app per fissare quelle versioni. I pod nativi possono quindi differire da quelli dell'ultima build, perciò prova l'app su TestFlight.
 
-`--wait` attende la fine della build, fino a due ore, e restituisce un errore se non termina con successo. Interrompere l'attesa non ferma la build.
+`--wait` attende la fine della build, fino a due ore, e restituisce un errore se non termina con successo. In caso di fallimento stampa il passaggio fallito e le righe di errore del log. Interrompere l'attesa non ferma la build.
 
 ## Cosa significano i risultati
 
@@ -74,7 +74,7 @@ Se il `Podfile.lock` è più vecchio di `pubspec.lock` o `package-lock.json`, ca
 2. IPA firmato dell'app con più estensioni, poi upload su TestFlight con un build number nuovo.
 3. Prova sul dispositivo: login, push, acquisti e funzioni native.
 
-Il piano gratuito include 500 minuti M2 al mese e una build alla volta, condivisi tra tutte le app. Lancia un dispatch per app alla volta.
+Il piano gratuito include 500 minuti M2 al mese e una build alla volta, condivisi tra tutte le app. Lancia un dispatch per app alla volta. Ogni workflow conserva la cache di pod, pacchetti Dart e gem, quindi le build successive alla prima sono più rapide. Per risparmiare minuti, il preflight controlla prima il `pubspec.lock` quando questo PC ha la stessa versione di Flutter della build.
 
 ## Limiti e rischi noti
 

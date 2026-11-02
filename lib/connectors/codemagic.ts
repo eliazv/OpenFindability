@@ -93,6 +93,13 @@ export function codemagicBuildRequest(plan: IosPlan, correlationId: string, runn
   };
 }
 
+/** Keeps the root cause of a step log; stack frames and download noise are dropped. */
+export function failureLines(log: string, limit = 25): string[] {
+  const lines = log.replace(/<[^>]+>/g, "").split("\n").filter((line) => !/gems\/|rubygems|CDN: trunk/.test(line));
+  const start = lines.findIndex((line) => /\[!\]|\berror\b:|\bfatal\b|Xcode couldn't|Failed to /i.test(line));
+  return (start < 0 ? lines.slice(-limit) : lines.slice(start, start + limit)).map((line) => line.trimEnd().slice(0, 300));
+}
+
 const FINAL_STATUSES = ["finished", "failed", "canceled", "timeout", "skipped"];
 
 export class CodemagicClient {
@@ -179,6 +186,18 @@ export class CodemagicClient {
     if (!variables.length) return;
     await this.send("/variable-groups/" + groupId + "/variables",
       { method: "POST", body: JSON.stringify({ secure: true, variables }) }, API_V3);
+  }
+
+  /** The failed step and the error lines of its log, so a failure can be read without opening Codemagic. */
+  async failureSummary(buildId: string): Promise<string> {
+    if (!BUILD_ID.test(buildId)) throw new Error("Invalid Codemagic build ID.");
+    const response = await this.call<{ build?: { message?: string; buildActions?: { status?: string; logUrl?: string; subactions?: { logUrl?: string }[] }[] } }>("/builds/" + buildId);
+    const failed = response?.build?.buildActions?.find((action) => action.status === "failed");
+    const logUrl = failed?.subactions?.[0]?.logUrl ?? failed?.logUrl;
+    const message = response?.build?.message ?? "Build failed.";
+    if (!logUrl?.startsWith(API + "/")) return message;
+    const log = await (await this.send(logUrl.slice(API.length))).text();
+    return [message, ...failureLines(log)].join("\n");
   }
 
   /** Read-only polling; stops at a final status or when the limit passes, leaving the build running. */
