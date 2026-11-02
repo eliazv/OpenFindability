@@ -37,7 +37,7 @@ async function runIosSetup(args: Record<string, string>, apply: boolean): Promis
     return;
   }
   await updateProject(project.slug, { iosReleaseConfig: config, appStoreTrackId: Number(ascApp.id) });
-  const added = await ensureCodemagicAccess(new CodemagicClient(codemagicRunnerFromEnv()), project.slug, config.repository);
+  const added = await ensureCodemagicAccess(new CodemagicClient(codemagicRunnerFromEnv()), project.slug, config.repository, local.path);
   console.log("Added on Codemagic: " + (added.join(", ") || "nothing, already configured"));
   console.log("Saved. Release it with: npx tsx scripts/release.ts ios --path <app folder>");
 }

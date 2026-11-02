@@ -99,6 +99,9 @@ export function failureLines(log: string, limit = 25): string[] {
   // "[!]" can be a CocoaPods warning, so a traceback or reported build failure wins, then the last "[!]".
   const reported = lines.findLastIndex((line) => /Traceback|Failed to build|Error \(Xcode\)|Target Integrity \(Xcode\)/.test(line));
   const start = reported >= 0 ? reported : lines.findLastIndex((line) => /\[!\]|\berror\b:|\bfatal\b|Failed to /i.test(line));
+  // A failed Xcode script phase prints its cause just above, after pages of compiler warnings.
+  const phase = lines.findLastIndex((line) => /Target \S+ failed:|Command \w+ failed with a nonzero exit code/.test(line));
+  if (phase >= 0) return lines.slice(Math.max(0, phase - 2), phase + 3).map((line) => line.trimEnd().slice(0, 300));
   const selected = start < 0 ? lines.slice(-limit) : lines.slice(start);
   return [...new Set(selected.map((line) => line.trimEnd().slice(0, 300)))].slice(0, limit);
 }

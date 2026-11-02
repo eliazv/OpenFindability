@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deployKeyVariable, missingFirebasePods, parseEntitlements, parseNativeTargets } from "../lib/release-ios-setup";
+import { appEnvVariable, declaresEnvAsset, deployKeyVariable, missingFirebasePods, parseEntitlements, parseNativeTargets } from "../lib/release-ios-setup";
 
 const id = (n: number) => String(n).padStart(24, "A");
 function target(n: number, name: string, type: string, list: number) {
@@ -54,4 +54,10 @@ test("finds Firebase pods not published for the pinned SDK, only for plugins in 
   const versions = async (pod: string) => pod === "FirebaseFirestore" ? ["12.19.0", "12.19.3"] : ["12.19.0"];
   assert.deepEqual(await missingFirebasePods(lock, "12.19.3", versions), ["FirebaseAnalytics"]);
   assert.deepEqual(await missingFirebasePods(lock, "12.19.0", versions), []);
+});
+
+test("detects a .env Flutter asset and names its variable like the runner", () => {
+  assert.equal(declaresEnvAsset("flutter:\n  assets:\n    - .env\n    - assets/\n"), true);
+  assert.equal(declaresEnvAsset("flutter:\n  assets:\n    - assets/.env.example\n"), false);
+  assert.equal(appEnvVariable("sette-e-mezzo"), "APP_ENV_SETTE_E_MEZZO");
 });

@@ -121,6 +121,8 @@ test("failure lines keep the root cause and drop noise", () => {
   ].join("\n");
   assert.deepEqual(failureLines(log), ["[!] CocoaPods could not find compatible versions", "None of your spec sources contain a spec"]);
   assert.deepEqual(failureLines("a\nb\nc", 2), ["b", "c"]);
+  assert.deepEqual(failureLines("Failed to build iOS app\nwarning: noise\nmissing asset\nTarget bundle failed: Exception\nCommand PhaseScriptExecution failed with a nonzero exit code\nnote: more"),
+    ["missing asset", "Target bundle failed: Exception", "Command PhaseScriptExecution failed with a nonzero exit code", "note: more"]);
   assert.deepEqual(failureLines("[!] just a warning\nok\nFailed to build iOS app\nreason\nreason"), ["Failed to build iOS app", "reason"]);
   assert.deepEqual(failureLines("[!] deprecated pod\nTraceback (most recent call last):\nboom"), ["Traceback (most recent call last):", "boom"]);
 });

@@ -205,8 +205,16 @@ async function certificateKey(): Promise<string> {
   return await readFile(CERTIFICATE_KEY_PATH, "utf8");
 }
 
+export function appEnvVariable(slug: string): string {
+  return "APP_ENV_" + slug.toUpperCase().replace(/-/g, "_");
+}
+
+export function declaresEnvAsset(pubspec: string): boolean {
+  return /^\s*-\s*\.env\s*$/m.test(pubspec);
+}
+
 /** Adds only what is missing on Codemagic and GitHub, and reports names, never values. */
-export async function ensureCodemagicAccess(client: CodemagicClient, slug: string, repository: string, env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+export async function ensureCodemagicAccess(client: CodemagicClient, slug: string, repository: string, appPath: string, env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
   const added: string[] = [];
   const signingGroup = await client.ensureVariableGroup("ios_signing");
   const signing = await client.listVariableNames(signingGroup);
@@ -231,6 +239,17 @@ export async function ensureCodemagicAccess(client: CodemagicClient, slug: strin
   if (!(await client.listVariableNames(sourceGroup)).includes(variable)) {
     await client.addSecrets(sourceGroup, [{ name: variable, value: await createDeployKey(repository) }]);
     added.push(variable);
+  }
+  // Flutter bundles this file into the app, so it can only hold values already public in the IPA.
+  const pubspec = await optional(join(appPath, "pubspec.yaml"));
+  if (pubspec && declaresEnvAsset(pubspec)) {
+    const name = appEnvVariable(slug);
+    const value = await optional(join(appPath, ".env"));
+    if (!value) throw new Error("pubspec.yaml declares .env but the file is missing at " + appPath + ".");
+    if (!(await client.listVariableNames(sourceGroup)).includes(name)) {
+      await client.addSecrets(sourceGroup, [{ name, value }]);
+      added.push(name);
+    }
   }
   return added;
 }

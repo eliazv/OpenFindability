@@ -94,6 +94,22 @@ platform :ios
     end
   end
 
+  def test_app_env_is_written_only_when_declared_and_missing
+    ENV["SLUG"] = "demo-app"
+    Dir.mktmpdir do |app|
+      write_app_env(app)
+      refute File.exist?(File.join(app, ".env"))
+      File.write(File.join(app, "pubspec.yaml"), "flutter:\n  assets:\n    - .env\n")
+      assert_raises(RuntimeError) { write_app_env(app) }
+      ENV["APP_ENV_DEMO_APP"] = "KEY=value\n"
+      write_app_env(app)
+      assert_equal "KEY=value\n", File.read(File.join(app, ".env"))
+    end
+  ensure
+    ENV.delete("SLUG")
+    ENV.delete("APP_ENV_DEMO_APP")
+  end
+
   def test_pod_deployment_hook_runs_last_in_the_existing_post_install
     podfile = "target 'Runner' do\nend\n\npost_install do |installer|\n  flutter_settings(installer)\nend\n\nabstract_target 'x' do\nend\n"
     lines = with_pod_deployment_hook(podfile).lines

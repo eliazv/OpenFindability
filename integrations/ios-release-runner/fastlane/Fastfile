@@ -65,7 +65,20 @@ def apply_pod_deployment_hook(app, source)
   File.write(podfile, with_pod_deployment_hook(File.read(podfile))) if File.file?(podfile)
 end
 
+# A gitignored .env declared as a Flutter asset is not in the checkout, and its absence
+# would only surface when Xcode bundles the assets, many minutes into the build.
+def write_app_env(source)
+  pubspec = File.join(source, "pubspec.yaml")
+  return unless File.file?(pubspec) && File.read(pubspec).match?(/^\s*-\s*\.env\s*$/)
+  env_file = File.join(source, ".env")
+  return if File.file?(env_file)
+  variable = "APP_ENV_#{ENV.fetch("SLUG").upcase.tr("-", "_")}"
+  UI.user_error!("#{variable} is missing: run ios-setup --apply for this app.") if ENV[variable].to_s.empty?
+  File.write(env_file, ENV.fetch(variable))
+end
+
 def prepare_flutter(source)
+  write_app_env(source)
   Dir.chdir(source) do
     sh("flutter", "pub", "get", "--enforce-lockfile")
     # Generate Flutter's xcconfig before resolving Pods; preserve native project/workarounds.
