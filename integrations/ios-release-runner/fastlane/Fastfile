@@ -13,8 +13,14 @@ def release_context
   source = File.expand_path(File.join(root, "source", app.fetch("workingDirectory")))
   sha, ok = Open3.capture2("git", "-C", source, "rev-parse", "HEAD")
   UI.user_error!("Checkout SHA mismatch") unless ok.success? && sha.strip == ENV.fetch("SHA")
-  UI.user_error!("Commit Podfile.lock before building") unless refresh_pods? || File.file?(pod_lock(app, source))
+  UI.user_error!("Commit Podfile.lock before building") if uses_cocoapods?(app, source) && !refresh_pods? && !File.file?(pod_lock(app, source))
   [root, app, source]
+end
+
+# Swift Package Manager-only projects (Flutter with enable-swift-package-manager) have no Podfile:
+# every CocoaPods step is skipped and Xcode resolves the packages itself.
+def uses_cocoapods?(app, source)
+  File.file?(File.join(source, File.dirname(native_project(app)), "Podfile"))
 end
 
 def native_project(app)
@@ -34,7 +40,7 @@ def pod_lock(app, source)
 end
 
 def export_pod_lock(root, app, source)
-  return unless refresh_pods?
+  return unless refresh_pods? && File.file?(pod_lock(app, source))
   FileUtils.mkdir_p(File.join(root, "output"))
   FileUtils.cp(pod_lock(app, source), File.join(root, "output", "Podfile.lock"))
 end
@@ -95,7 +101,9 @@ def prepare_flutter(source)
     # Generate Flutter's xcconfig before resolving Pods; preserve native project/workarounds.
     sh("flutter", "build", "ios", "--config-only", "--release", "--no-codesign",
        "--build-name", ENV.fetch("BUILD_NAME"), "--build-number", ENV.fetch("BUILD_NUMBER"))
-    Dir.chdir("ios") { refresh_pods? ? sh("pod", "install") : sh("pod", "install", "--deployment") }
+    if File.file?(File.join("ios", "Podfile"))
+      Dir.chdir("ios") { refresh_pods? ? sh("pod", "install") : sh("pod", "install", "--deployment") }
+    end
   end
 end
 
@@ -111,7 +119,7 @@ end
 def prepare_app(app, source)
   apply_firebase_sdk_version(app, source)
   apply_pod_deployment_hook(app, source)
-  if refresh_pods?
+  if refresh_pods? && uses_cocoapods?(app, source)
     FileUtils.rm_f(pod_lock(app, source))
     # The machine's spec index can predate what the plugins now require.
     sh("pod", "repo", "update")
