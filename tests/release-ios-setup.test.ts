@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { appEnvVariable, declaresEnvAsset, deployKeyVariable, missingFirebasePods, parseEntitlements, parseNativeTargets } from "../lib/release-ios-setup";
+import { appEnvVariable, declaresEnvAsset, publicViteEnv, deployKeyVariable, missingFirebasePods, parseEntitlements, parseNativeTargets } from "../lib/release-ios-setup";
 
 const id = (n: number) => String(n).padStart(24, "A");
 function target(n: number, name: string, type: string, list: number) {
@@ -54,6 +54,12 @@ test("finds Firebase pods not published for the pinned SDK, only for plugins in 
   const versions = async (pod: string) => pod === "FirebaseFirestore" ? ["12.19.0", "12.19.3"] : ["12.19.0"];
   assert.deepEqual(await missingFirebasePods(lock, "12.19.3", versions), ["FirebaseAnalytics"]);
   assert.deepEqual(await missingFirebasePods(lock, "12.19.0", versions), []);
+});
+
+test("Capacitor env keeps only the public VITE_ lines", () => {
+  const dotenv = "# commento\nVITE_SUPABASE_ANON_KEY=pub\r\nGLITCHTIP_API_TOKEN=secret\nNOT_VITE_X=1\n  VITE_FLAG = true\nFIREBASE_SERVICE_ACCOUNT_JSON={}\n";
+  assert.equal(publicViteEnv(dotenv), "VITE_SUPABASE_ANON_KEY=pub\nVITE_FLAG = true\n");
+  assert.equal(publicViteEnv("SECRET=1\n"), "");
 });
 
 test("detects a .env Flutter asset and names its variable like the runner", () => {

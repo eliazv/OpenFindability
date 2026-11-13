@@ -209,6 +209,16 @@ export function appEnvVariable(slug: string): string {
   return "APP_ENV_" + slug.toUpperCase().replace(/-/g, "_");
 }
 
+/**
+ * Only the VITE_* lines of a Capacitor/Vite .env: Vite inlines exactly these into the
+ * public JS bundle, so they are already public. Tokens and service accounts that live
+ * in the same file never leave this machine.
+ */
+export function publicViteEnv(dotenv: string): string {
+  const lines = dotenv.split(/\r?\n/).filter((line) => /^\s*VITE_[A-Z0-9_]*\s*=/.test(line));
+  return lines.length ? lines.map((line) => line.trim()).join("\n") + "\n" : "";
+}
+
 export function declaresEnvAsset(pubspec: string): boolean {
   return /^\s*-\s*\.env\s*$/m.test(pubspec);
 }
@@ -247,6 +257,15 @@ export async function ensureCodemagicAccess(client: CodemagicClient, slug: strin
     const value = await optional(join(appPath, ".env"));
     if (!value) throw new Error("pubspec.yaml declares .env but the file is missing at " + appPath + ".");
     if (!(await client.listVariableNames(sourceGroup)).includes(name)) {
+      await client.addSecrets(sourceGroup, [{ name, value }]);
+      added.push(name);
+    }
+  } else if (!pubspec && (await optional(join(appPath, "package.json")))?.includes("@capacitor/")) {
+    // The runner writes it back as .env before `npm run build` (Fastfile write_web_env).
+    const dotenv = await optional(join(appPath, ".env"));
+    const value = dotenv ? publicViteEnv(dotenv) : "";
+    const name = appEnvVariable(slug);
+    if (value && !(await client.listVariableNames(sourceGroup)).includes(name)) {
       await client.addSecrets(sourceGroup, [{ name, value }]);
       added.push(name);
     }

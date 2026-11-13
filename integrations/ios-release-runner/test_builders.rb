@@ -121,6 +121,23 @@ platform :ios
     ENV.delete("APP_ENV_DEMO_APP")
   end
 
+  def test_capacitor_web_env_is_written_before_the_web_build
+    ENV["SLUG"] = "demo-app"
+    Dir.mktmpdir do |app|
+      File.write(File.join(app, "package-lock.json"), "{}")
+      Xcodeproj::Project.fixture = NativeProject.new([Target.new("App", [Configuration.new({})])], false)
+      config = { "framework" => "capacitor", "targets" => { "App" => "com.example.demo" } }
+      prepare_app(config, app)
+      refute File.exist?(File.join(app, ".env")), "no variable, no file"
+      ENV["APP_ENV_DEMO_APP"] = "VITE_KEY=value\n"
+      prepare_app(config, app)
+      assert_equal "VITE_KEY=value\n", File.read(File.join(app, ".env"))
+    end
+  ensure
+    ENV.delete("SLUG")
+    ENV.delete("APP_ENV_DEMO_APP")
+  end
+
   def test_pod_deployment_hook_runs_last_in_the_existing_post_install
     podfile = "target 'Runner' do\nend\n\npost_install do |installer|\n  flutter_settings(installer)\nend\n\nabstract_target 'x' do\nend\n"
     lines = with_pod_deployment_hook(podfile).lines

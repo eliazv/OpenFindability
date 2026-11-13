@@ -86,6 +86,18 @@ def write_app_env(source)
   File.write(env_file, ENV.fetch(variable))
 end
 
+# Capacitor/Vite reads its VITE_* values from the gitignored .env at build time: without it the
+# web bundle compiles fine but ships with empty keys (backend, purchases, ads). ios-setup uploads
+# only the VITE_ lines, which end up in the public bundle anyway. Optional: apps without .env skip it.
+def write_web_env(source)
+  slug = ENV["SLUG"].to_s
+  return if slug.empty?
+  value = ENV["APP_ENV_#{slug.upcase.tr("-", "_")}"].to_s
+  env_file = File.join(source, ".env")
+  return if value.empty? || File.file?(env_file)
+  File.write(env_file, value)
+end
+
 # The Runner target imports the plugin modules too, so it needs the settings given to the pods.
 def relax_runner_module_checks(source)
   xcconfig = File.join(source, "ios", "Flutter", "Release.xcconfig")
@@ -127,6 +139,7 @@ def prepare_app(app, source)
   return prepare_flutter(source) if app.fetch("framework") == "flutter"
   pnpm = File.file?(File.join(source, "pnpm-lock.yaml"))
   UI.user_error!("Capacitor requires a committed package-lock.json or pnpm-lock.yaml") unless pnpm || File.file?(File.join(source, "package-lock.json"))
+  write_web_env(source)
   Dir.chdir(source) do
     if pnpm
       # Corepack installs the exact pnpm named by the app's packageManager field.
