@@ -20,6 +20,8 @@ import { syncAscAnalyticsProject } from "@/lib/connectors/appstoreconnect-analyt
 import { upsertAsoCacheRows } from "@/lib/aso-cache";
 import { readData, writeData } from "@/lib/store";
 import { reconcileGscProjectLinks } from "@/lib/gsc-project-links";
+import { selectSyncProjects } from "@/lib/sync-project-selection";
+import { cliErrorMessage } from "@/lib/cli-error";
 import type {
   AdmobMediationMetric,
   AscAnalyticsMetric,
@@ -99,11 +101,12 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
   const source = options.source;
   const backfillDays = options.backfillDays ?? 30;
   const data = await readData();
-  reconcileGscProjectLinks(data);
+  const projects = selectSyncProjects(data.projects, options.projectSlug);
+  reconcileGscProjectLinks(data, options.projectSlug ? projects[0].id : undefined);
   const results: SyncResult[] = [];
   const startedAt = nowIso();
 
-  for (const project of data.projects) {
+  for (const project of projects) {
     if (!source || source === "ga4_landing") {
       try {
         const start=daysAgo(backfillDays), end=daysAgo(2);
@@ -311,12 +314,20 @@ export async function syncProjects(options: SyncOptions = {}): Promise<SyncResul
     `${item.projectId}\u0000${item.type}\u0000${item.title}`,
     item,
   ] as const));
-  data.opportunities = buildOpportunities(data).map((item) => {
+  const scopedIds = new Set(projects.map(project => project.id));
+  const opportunityData = options.projectSlug ? { ...data,
+    searchQueries: data.searchQueries.filter(row => scopedIds.has(row.projectId)),
+    pageMetrics: data.pageMetrics.filter(row => scopedIds.has(row.projectId)),
+  } : data;
+  const rebuilt = buildOpportunities(opportunityData).map((item) => {
     const previous = prior.get(`${item.projectId}\u0000${item.type}\u0000${item.title}`);
     return previous
       ? { ...item, id: previous.id, status: previous.status, detectedAt: previous.detectedAt }
       : item;
   });
+  data.opportunities = options.projectSlug
+    ? [...data.opportunities.filter(item => !scopedIds.has(item.projectId)), ...rebuilt]
+    : rebuilt;
   await writeData(data);
   return results;
 }
@@ -326,7 +337,7 @@ function failed(source: SourceType, projectId: string, error: unknown): SyncResu
     source,
     projectId,
     status: "failed",
-    message: error instanceof Error ? error.message : "Unknown sync error.",
+    message: cliErrorMessage(error),
     inserted: { snapshots: 0, queries: 0, pages: 0 },
   };
 }

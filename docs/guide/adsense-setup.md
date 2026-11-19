@@ -53,6 +53,12 @@ O su un progetto esistente, imposta `adsenseSiteDomain` nel DB (nessuno script d
 pnpm run sync:adsense
 ```
 
+Per aggiornare un solo progetto senza interrogare gli altri:
+
+```powershell
+pnpm exec tsx scripts/sync.ts adsense 45 --project example-site
+```
+
 (oppure incluso di default in `pnpm run sync`). Per un backfill storico completo:
 
 ```bash

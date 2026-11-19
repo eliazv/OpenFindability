@@ -1,5 +1,8 @@
 # Implementation notes
 
+- `scripts/sync.ts [source] [days] --project <slug>` scopes provider collection to one configured project. The selector rejects unknown/ambiguous slugs before reconciliation, provider calls or store writes; the default remains all projects. Days must be positive integers. Google AdSense helpers and the sync CLI log only sanitized error messages, never provider error objects containing OAuth request bodies.
+- GA4 projects with `type=web` request `platform=web`, excluding Android/iOS screen views when a property contains multiple platforms. Newly fetched daily raw payloads record `ga4PlatformScope=web`; refetch historical windows before comparing them with older unscoped snapshots. App projects retain their existing property scope.
+
 Detailed, per-topic notes on how each part of OpenFindability works and why: API quirks, storage shapes, dedupe keys, known limitations. `AGENTS.md` holds the short rules; this file holds the depth. Read the section for the area you are about to change, and add to it (under the matching heading) when you ship a feature there.
 
 ## Storage (SQLite, Drizzle, store API)

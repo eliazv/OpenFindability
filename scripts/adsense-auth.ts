@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createServer } from "node:http";
 import { google } from "googleapis";
+import { cliErrorMessage } from "@/lib/cli-error";
 
 const PORT = Number(process.env.ADSENSE_AUTH_PORT ?? 53683);
 const REDIRECT_URI = `http://localhost:${PORT}/oauth2callback`;
@@ -76,6 +77,6 @@ function waitForAuthCode(port: number): Promise<string> {
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error(cliErrorMessage(error));
   process.exit(1);
 });

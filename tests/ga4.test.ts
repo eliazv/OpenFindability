@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeGa4Days } from "../lib/connectors/ga4";
+import { normalizeGa4Days, syncGa4Project } from "../lib/connectors/ga4";
+import type { Project } from "../lib/types";
+
+test("web projects exclude native-app screen views even in a shared GA4 property", async () => {
+  for (const type of ["web", "app"] as const) {
+    let body: Record<string, unknown> = {};
+    const request = (async (_url, init) => {
+      body = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ rows: [{ dimensionValues: [{ value: "20261117" }], metricValues: ["4","5","6","0"].map(value => ({ value })) }] }), { status: 200 });
+    }) as typeof fetch;
+    const result = await syncGa4Project({ id: "p", slug: "example", type, ga4PropertyId: "123" } as Project, "2026-11-17", "2026-11-17", request, async () => "fixture-token");
+    assert.deepEqual(body.dimensionFilter, type === "web" ? { filter: { fieldName: "platform", stringFilter: { matchType: "EXACT", value: "web" } } } : undefined);
+    assert.equal((result.snapshots[0].rawJson as Record<string, unknown>).ga4PlatformScope, type === "web" ? "web" : undefined);
+  }
+});
 
 test("GA4 daily responses normalize known metrics and preserve provider grain", () => {
   const result = normalizeGa4Days("project-1", {

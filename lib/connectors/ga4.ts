@@ -12,7 +12,7 @@ export type Ga4RunReportResponse = {
 export function normalizeGa4Days(
   projectId: string,
   payload: Ga4RunReportResponse,
-  createdAt: string,
+  createdAt: string, platformScope?: "web",
 ): MetricSnapshot[] {
   const rows = payload.rows ?? [];
   if (payload.rowCount !== undefined && payload.rowCount !== rows.length) {
@@ -53,6 +53,7 @@ export function normalizeGa4Days(
         activeUsers, sessions, screenPageViews: views, keyEvents,
         ga4TimeZone: payload.metadata?.timeZone ?? null,
         grain: "daily",
+        ...(platformScope ? { ga4PlatformScope: platformScope } : {}),
       },
       createdAt,
     };
@@ -72,6 +73,7 @@ export async function ga4AccessToken(): Promise<string | null> {
 
 export async function syncGa4Project(
   project: Project, startDate: string, endDate: string,
+  request: typeof fetch = fetch, tokenProvider = ga4AccessToken,
 ): Promise<{ result: SyncResult; snapshots: MetricSnapshot[] }> {
   const source = "ga4" as const;
   const inserted = { snapshots: 0, queries: 0, pages: 0 };
@@ -83,15 +85,17 @@ export async function syncGa4Project(
   const property = project.ga4PropertyId.replace(/^properties\//, "");
   if (!/^\d+$/.test(property)) throw new Error("GA4 property ID must be numeric.");
 
-  const token = await ga4AccessToken();
+  const token = await tokenProvider();
   if (!token) return skipped("Configure GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE.");
 
-  const response = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`, {
+  const platformScope = project.type === "web" ? "web" : undefined;
+  const response = await request(`https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       dateRanges: [{ startDate, endDate }],
       dimensions: [{ name: "date" }],
+      ...(platformScope ? { dimensionFilter: { filter: { fieldName: "platform", stringFilter: { matchType: "EXACT", value: "web" } } } } : {}),
       metrics: [
         { name: "activeUsers" }, { name: "sessions" },
         { name: "screenPageViews" }, { name: "keyEvents" },
@@ -103,7 +107,7 @@ export async function syncGa4Project(
     throw new Error(`GA4 runReport failed for ${project.slug}: HTTP ${response.status}`);
   }
   const payload = await response.json() as Ga4RunReportResponse;
-  const snapshots = normalizeGa4Days(project.id, payload, new Date().toISOString());
+  const snapshots = normalizeGa4Days(project.id, payload, new Date().toISOString(), platformScope);
   return {
     result: {
       source, projectId: project.id,

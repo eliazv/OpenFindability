@@ -21,17 +21,17 @@ export function resolveGscProject(projects: Project[], siteUrl: string): Project
   return matches.length === 1 ? matches[0] : undefined;
 }
 
-export function reconcileGscProjectLinks(data: Pick<AppData, "projects" | "gscIndexInspections" | "connectorRuns">) {
+export function reconcileGscProjectLinks(data: Pick<AppData, "projects" | "gscIndexInspections" | "connectorRuns">, projectId?: string) {
   let inspections = 0, runs = 0;
   for (const row of data.gscIndexInspections) {
     if (row.projectId) continue;
     const project = resolveGscProject(data.projects, row.siteUrl);
-    if (project) { row.projectId = project.id; inspections++; }
+    if (project && (!projectId || project.id === projectId)) { row.projectId = project.id; inspections++; }
   }
   for (const run of data.connectorRuns) {
     if (run.projectId || run.source !== "gsc_index" || typeof run.stats?.siteUrl !== "string") continue;
     const project = resolveGscProject(data.projects, run.stats.siteUrl);
-    if (project) { run.projectId = project.id; runs++; }
+    if (project && (!projectId || project.id === projectId)) { run.projectId = project.id; runs++; }
   }
   return { inspections, runs };
 }

@@ -18,3 +18,14 @@ test("domain fallback never maps an unrelated subdomain or ambiguous website", (
   assert.equal(resolveGscProject([{ ...missing,websiteUrl:"https://app.example.com/" }],"sc-domain:example.com"),undefined);
   assert.equal(resolveGscProject([missing,{ ...missing,id:"other" }],"sc-domain:example.com"),undefined);
 });
+
+test("scoped reconciliation preserves other projects and still checks the full catalog for ambiguity", () => {
+  const other = { ...project, id: "other", slug: "other", gscProperty: "sc-domain:other.com" };
+  const rows = [{ siteUrl: project.gscProperty }, { siteUrl: other.gscProperty }] as AppData["gscIndexInspections"];
+  const runs = [{ source: "gsc_index", stats: { siteUrl: other.gscProperty } }] as AppData["connectorRuns"];
+  assert.deepEqual(reconcileGscProjectLinks({ projects: [project, other], gscIndexInspections: rows, connectorRuns: runs }, project.id), { inspections: 1, runs: 0 });
+  assert.equal(rows[1].projectId, undefined);
+  assert.equal(runs[0].projectId, undefined);
+  const ambiguous = [{ siteUrl: project.gscProperty }] as AppData["gscIndexInspections"];
+  assert.equal(reconcileGscProjectLinks({ projects: [project, { ...project, id: "duplicate" }], gscIndexInspections: ambiguous, connectorRuns: [] }, project.id).inspections, 0);
+});
