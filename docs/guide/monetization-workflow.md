@@ -118,7 +118,7 @@ Both cards show a setup hint instead of numbers until at least one snapshot exis
 
 The "Progetti" table also includes per-project "Ricavi Ads" and "MRR" columns, reusing the same `summarizeProject` fields as the cards.
 
-All of this is still computed server-side from `data/openfindability.json` by plain functions in `lib/insights.ts` — the charts/tables are a presentation layer only. Nothing here changes how the data is synced, stored or scripted: `pnpm run sync*`, `pnpm run doctor` and the JSON store remain the source of truth and stay fully usable from the CLI/AI side without the web UI.
+All of this is computed server-side from SQLite (`data/openfindability.db`) through `lib/store.ts` and the functions in `lib/insights.ts`. Charts and tables are a presentation layer; `pnpm run sync*`, `pnpm run doctor` and the same SQLite store remain usable from the CLI/AI side without the web UI. MotherDuck is a selective analytics replica, not the operational source of truth.
 
 ## Report
 
