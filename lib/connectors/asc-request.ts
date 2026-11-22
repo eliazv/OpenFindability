@@ -18,6 +18,19 @@ function networkDetail(error: unknown): string {
   return "network connection failed; verify network access and proxy settings.";
 }
 
+/** Only Apple's structured JSON:API error codes/details, never a raw body (it could echo request data). */
+async function appleErrorDetail(response: Response): Promise<string> {
+  try {
+    const body = await response.json() as { errors?: { code?: unknown; detail?: unknown }[] };
+    const parts = (body.errors ?? []).slice(0, 5)
+      .map((error) => [error.code, error.detail].filter((value) => typeof value === "string").join(": "))
+      .filter(Boolean);
+    return parts.length ? " " + parts.join(" | ").slice(0, 600) : "";
+  } catch {
+    return "";
+  }
+}
+
 /** No automatic retries: the same client is used for metadata writes. */
 export async function requestAscJson<T>(path: string, token: string, init: RequestInit = {}, request: typeof fetch = fetch): Promise<T> {
   const url = ascUrl(path);
@@ -35,7 +48,7 @@ export async function requestAscJson<T>(path: string, token: string, init: Reque
   if (response.status === 204) return undefined as T;
   if (!response.ok) {
     const hint = response.status === 401 ? " Check API key, issuer and system clock." : response.status === 403 ? " Check the API key role and app access." : "";
-    throw new Error(`App Store Connect API ${response.status} on ${url.pathname}.${hint}`);
+    throw new Error(`App Store Connect API ${response.status} on ${url.pathname}.${hint}${await appleErrorDetail(response)}`);
   }
   try { return await response.json() as T; }
   catch { throw new Error(`App Store Connect returned invalid JSON on ${url.pathname}.`); }

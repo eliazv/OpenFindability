@@ -77,6 +77,17 @@ npx tsx scripts/release.ts ios-upload --path C:\percorso\app --build-id <id> --a
 - Un'app è su TestFlight solo quando la build esatta risulta `VALID` su App Store Connect. Prima di una release pubblica restano metadata, compliance, scelta della build e richiesta di revisione.
 - In `connectorRuns` il tentativo risulta `partial` con `state=dispatching`; solo `dispatch_accepted` conta come successo.
 
+## Invio in revisione App Store
+
+Quando la build e' `VALID`, `ios-submit` crea (o riusa) la versione App Store, collega la build, scrive le note "Novita'" in tutte le lingue della versione e la invia in revisione (flusso `reviewSubmissions`). Senza `--apply` mostra solo il piano e i blocchi: build non `VALID` o scaduta, export compliance mancante, versione gia' pubblicata, un'altra revisione in corso.
+
+```powershell
+npx tsx scripts/release.ts ios-submit --path C:\percorso\app --notes-file note.txt            # piano, nessuna scrittura
+npx tsx scripts/release.ts ios-submit --path C:\percorso\app --notes-file note.txt --apply    # invia in revisione
+```
+
+La versione e' quella del `pubspec.yaml`/progetto (`--build-name` per forzarla); la build e' l'ultima caricata per quella versione (`--build-number` per sceglierla). Il tipo di rilascio copia quello dell'ultima versione pubblicata. Screenshot e altri metadata restano quelli della versione precedente.
+
 ## Primo collaudo
 
 1. Build senza firma di un'app Flutter, poi di una Capacitor.

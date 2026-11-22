@@ -101,7 +101,7 @@ async function printStatus(project: Project, packageName: string) {
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2).filter((token) => token !== "--");
-  if (command === "ios" || command === "ios-status" || command === "ios-cancel" || command === "ios-setup" || command === "ios-upload") {
+  if (command === "ios" || command === "ios-status" || command === "ios-cancel" || command === "ios-setup" || command === "ios-upload" || command === "ios-submit") {
     const { runIosReleaseCli } = await import("@/scripts/release-ios");
     await runIosReleaseCli(command, rest);
     return;

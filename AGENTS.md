@@ -84,6 +84,7 @@ pnpm run release:ios -- --path <app dir> [--build [--unsigned]] [--apply] [--wai
 pnpm run release:ios-status -- --slug <slug>
 pnpm run release:ios-cancel -- --slug <slug> --build-id <id> [--apply]
 pnpm run release:ios-upload -- --slug <slug> --build-id <id> [--apply] [--wait]   # retry only the upload
+pnpm run release:ios-submit -- --slug <slug> [--build-name 1.2.3] [--build-number n] [--notes-file f] [--apply]   # VALID build -> App Store review
 
 # Database
 pnpm run db:backup                  # verified snapshot in data/backups/

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { getAscApp, listAscApps, listAscBuilds } from "@/lib/connectors/appstoreconnect";
+import { readFile } from "node:fs/promises";
+import { getAscApp, getAscToken, listAscApps, listAscBuilds } from "@/lib/connectors/appstoreconnect";
+import { requestAscJson } from "@/lib/connectors/asc-request";
+import { AscReviewClient } from "@/lib/connectors/asc-review";
 import { CodemagicClient, codemagicPinProblems, codemagicRunnerFromEnv } from "@/lib/connectors/codemagic";
 import { GitHubActionsClient, releaseRunnerFromEnv } from "@/lib/connectors/github-actions";
 import { iosWorkflowInputs, planIosRelease } from "@/lib/release-ios";
@@ -57,6 +60,42 @@ async function runIosCancel(projectId: string, buildId: string, apply: boolean):
   console.log(JSON.stringify({ provider: "codemagic", buildId, result }, null, 2));
 }
 
+/**
+ * Sends an already VALID TestFlight build to App Store review. Dry-run unless --apply.
+ * Defaults to the most recent build of --build-name (or of the local marketing version).
+ */
+async function runIosSubmit(projectId: string, appId: string, builds: Awaited<ReturnType<typeof listAscBuilds>>,
+  args: Record<string, string>, apply: boolean): Promise<void> {
+  const local = args["--path"] ? (await discoverLocalIosProjects(args["--path"]))[0] : undefined;
+  const versionString = args["--build-name"] ?? (local ? await localMarketingVersion(local) : undefined);
+  if (!versionString) throw new Error("ios-submit needs --build-name <marketing version> or --path <app folder>.");
+  let buildNumber: string | undefined = args["--build-number"];
+  if (!buildNumber) {
+    const token = await getAscToken();
+    const res = await requestAscJson<{ data: { attributes?: { version?: string; uploadedDate?: string } }[] }>(
+      `/builds?filter[app]=${encodeURIComponent(appId)}&filter[preReleaseVersion.version]=${encodeURIComponent(versionString)}&sort=-uploadedDate&limit=1`, token);
+    buildNumber = res.data[0]?.attributes?.version;
+    if (!buildNumber) throw new Error(`No build uploaded for version ${versionString}. Known builds: ${builds.map((b) => b.version).join(", ")}`);
+  }
+  const whatsNew = args["--notes-file"] ? (await readFile(args["--notes-file"], "utf8")).trim() : undefined;
+  if (whatsNew && whatsNew.length > 4000) throw new Error("Release notes exceed the 4000-character App Store limit.");
+
+  const client = new AscReviewClient(await getAscToken());
+  const input = { appId, versionString, buildNumber, whatsNew };
+  const plan = await client.plan(input);
+  console.log(JSON.stringify({ versionString, buildNumber, whatsNew: whatsNew ?? "(unchanged)", plan }, null, 2));
+  if (!apply) {
+    console.log(plan.problems.length ? "Blocked: fix the problems above first." : "Dry run: nothing changed. Add --apply to submit for App Store review.");
+    return;
+  }
+  const startedAt = new Date().toISOString();
+  const result = await client.submit(input, plan);
+  await appendConnectorRun({ id: createId("run"), projectId, source: "ios_release", status: "success", startedAt,
+    finishedAt: new Date().toISOString(), stats: { state: "review_submitted", versionString, buildNumber, ...result } });
+  console.log(JSON.stringify(result, null, 2));
+  console.log("Submitted for App Store review. Release type: " + result.releaseType + ".");
+}
+
 /** Codemagic is the explicit default to avoid unintended GitHub Actions minutes. */
 export async function runIosReleaseCli(command: string, argv: string[]): Promise<void> {
   const args: Record<string, string> = {};
@@ -64,7 +103,7 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
     if (["--build", "--apply", "--unsigned", "--wait", "--refresh-pods"].includes(key)) { flags.add(key); continue; }
-    if (!["--slug", "--path", "--sha", "--build-name", "--build-number", "--provider", "--build-id", "--xcode", "--flutter", "--node", "--web-script", "--firebase-sdk"].includes(key) ||
+    if (!["--slug", "--path", "--sha", "--build-name", "--build-number", "--provider", "--build-id", "--xcode", "--flutter", "--node", "--web-script", "--firebase-sdk", "--notes-file"].includes(key) ||
         !argv[i + 1] || argv[i + 1].startsWith("--"))
       throw new Error("Invalid/missing iOS argument: " + key);
     args[key] = argv[++i];
@@ -95,6 +134,11 @@ export async function runIosReleaseCli(command: string, argv: string[]): Promise
   if (app.bundleId !== config.bundleIds[0])
     throw new Error("ASC app bundle ID does not match the configured main bundle ID.");
   const builds = await listAscBuilds(String(config.appId));
+
+  if (command === "ios-submit") {
+    await runIosSubmit(project.id, String(config.appId), builds, args, flags.has("--apply"));
+    return;
+  }
 
   if (command === "ios-status") {
     const recentBuilds = [...builds].sort((a, b) => Date.parse(b.uploadedDate ?? "") - Date.parse(a.uploadedDate ?? ""))
