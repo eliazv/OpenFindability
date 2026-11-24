@@ -1,11 +1,13 @@
 import type { AppData, Project, SourceType } from "@/lib/types";
-import { dayRange, latestDay, measure, snapshotObservations, type Observation } from "./metrics";
+import { dayRange, latestDay, measure, measureRatio, snapshotObservations, type Observation } from "./metrics";
 import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
 
-export type MetricSpec = { source: SourceType; key: string; label: string; unit: "count"|"currency"|"percent"|"decimal"; kind?: "snapshot"; lowerBetter?: boolean };
+export type MetricSpec = { source: SourceType; key: string; label: string; unit: "count"|"currency"|"percent"|"decimal"; kind?: "snapshot" | "ratio"; lowerBetter?: boolean };
 export const METRICS = {
   clicks:{source:"gsc",key:"clicks",label:"Click organici",unit:"count"},
   impressions:{source:"gsc",key:"impressions",label:"Impression",unit:"count"},
+  ctr:{source:"gsc",key:"ctr",label:"CTR",unit:"percent",kind:"ratio"},
+  position:{source:"gsc",key:"avgPosition",label:"Posizione media",unit:"decimal",kind:"ratio",lowerBetter:true},
   sessions:{source:"ga4",key:"sessions",label:"Sessioni GA4",unit:"count"},
   visitors:{source:"umami",key:"visitors",label:"Visitatori giornalieri (somma)",unit:"count"},
   downloads:{source:"asc_analytics",key:"downloads",label:"Primi download iOS",unit:"count"},
@@ -41,6 +43,12 @@ export function projectMetric(data:AppData,id:string,spec:MetricSpec,days:number
   const observations=metricObservations(data,id,spec);
   const latest=latestDay(observations);
   const range=dayRange(end??latest??new Date().toISOString().slice(0,10),days);
+  if(spec.kind==="ratio"){
+    const rows=data.metricSnapshots.filter(r=>r.projectId===id&&r.source===spec.source);
+    const dedup=new Map<string,typeof rows[number]>();
+    for(const row of rows)if(!dedup.has(row.date)||dedup.get(row.date)!.createdAt<row.createdAt)dedup.set(row.date,row);
+    return {spec,latest,result:measureRatio([...dedup.values()].map(r=>({date:r.date,denominator:r.impressions??null,numerator:spec.key==="ctr"?r.clicks??null:r.avgPosition!==undefined&&r.impressions!==undefined?r.avgPosition*r.impressions:null})),range,spec.key==="ctr"?100:1)};
+  }
   return {spec,latest,result:measure(observations,range,spec.kind??"sum",spec.unit==="currency")};
 }
 export function openOpportunities(data:AppData,id?:string){

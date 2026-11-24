@@ -54,3 +54,16 @@ export function formatMetric(value: number|null|undefined, unit: "count"|"curren
   if(unit==="currency") { if(!currency||!/^[A-Z]{3}$/.test(currency)) return "—"; return value.toLocaleString("it-IT",{style:"currency",currency}); }
   return value.toLocaleString("it-IT",{maximumFractionDigits:unit==="count"?0:2})+(unit==="percent"?"%":"");
 }
+
+export function measureRatio(rows:{date:string;numerator:number|null;denominator:number|null}[],range:Range,scale=1):MetricResult {
+ const valid=rows.filter(r=>r.numerator!==null&&r.denominator!==null&&Number.isFinite(r.numerator)&&Number.isFinite(r.denominator)&&r.denominator>=0);
+ const model=measure(valid.map(r=>({date:r.date,value:r.denominator!>0?r.numerator!/r.denominator!*scale:null})),range);
+ const aggregate=(window:Range)=>{
+  const subset=valid.filter(r=>inRange(r.date,window));
+  const denominator=subset.reduce((s,r)=>s+r.denominator!,0);
+  return {value:denominator>0?subset.reduce((s,r)=>s+r.numerator!,0)/denominator*scale:null,observed:new Set(subset.map(r=>r.date)).size};
+ };
+ const current=aggregate(range),previous=aggregate(model.previousRange);
+ const delta=current.observed===model.expected&&previous.observed===model.expected&&current.value!==null&&previous.value!==null?current.value-previous.value:null;
+ return {...model,value:current.value,previous:previous.value,observed:current.observed,previousObserved:previous.observed,delta,deltaPercent:delta!==null&&previous.value!==null&&previous.value!==0?delta/Math.abs(previous.value)*100:null};
+}

@@ -7,7 +7,7 @@ import { MetricCard,MetricSeries } from "@/components/analytics/metric-card";
 import { Explorer,PeriodPicker,queryHref,type Params } from "@/components/analytics/explorer";
 export default async function ProjectPage({params,searchParams}:{params:Promise<{slug:string}>;searchParams:Promise<Params>}){
  const [{slug},query]=await Promise.all([params,searchParams]);const data=await readDashboardData("overview",slug),p=data.projects.find(p=>p.slug===slug);if(!p)notFound();
- const days=parseDays(query.days),specs=p.type==="web"?[METRICS.clicks,METRICS.impressions,METRICS.sessions,METRICS.visitors]:p.type==="app"?[METRICS.downloads,METRICS.installs,METRICS.mrr,METRICS.ads]:[METRICS.clicks,METRICS.downloads,METRICS.mrr,METRICS.ads];
+ const days=parseDays(query.days),specs=p.type==="web"?[METRICS.clicks,METRICS.impressions,METRICS.ctr,METRICS.position]:p.type==="app"?[METRICS.downloads,METRICS.installs,METRICS.mrr,METRICS.ads]:[METRICS.clicks,METRICS.downloads,METRICS.mrr,METRICS.ads];
  const cards=specs.map(s=>projectMetric(data,p.id,s,days));const main=cards.find(c=>c.spec.source+":"+c.spec.key===query.metric)??cards.find(c=>c.result.observed>0)??cards[0];
  const opp=openOpportunities(data,p.id);
  return <div className="space-y-5"><div className="flex flex-wrap justify-between items-center gap-2"><h2 className="text-lg font-semibold">Panoramica</h2><PeriodPicker params={query}/></div>

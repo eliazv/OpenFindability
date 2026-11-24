@@ -30,7 +30,7 @@ export default async function Section({params,searchParams}:{params:Promise<{slu
   const gscRows=(rows:ReturnType<typeof aggregateQueriesByText>)=>rows.map(r=>({id:r.key,cells:[r.key,r.clicks,r.impressions,r.impressions>0?r.ctr*100:null,r.impressions>0?r.avgPosition:null]}));
   const landing=within(byProject(data.ga4LandingMetrics??[]));
   const geo=byProject(data.seoGeoObservations??[]).sort((a,b)=>b.windowEnd.localeCompare(a.windowEnd));
-  content=<>{p.type!=="app"&&<>{charts([METRICS.clicks,METRICS.impressions,METRICS.sessions,METRICS.visitors])}
+  content=<>{p.type!=="app"&&<>{charts([METRICS.clicks,METRICS.impressions,METRICS.ctr,METRICS.position,METRICS.sessions,METRICS.visitors])}
   <div className="grid gap-4 xl:grid-cols-2"><Card><CardHeader><CardTitle>Query con più click</CardTitle></CardHeader><CardContent><BarList data={[...queries].sort((a,b)=>b.clicks-a.clicks).slice(0,10).map(r=>({name:r.key,value:r.clicks}))}/>{queries.length===0&&<p className="text-sm text-muted-foreground">Nessuna query disponibile.</p>}</CardContent></Card><SeoScatter data={queries.filter(r=>r.impressions>0&&r.avgPosition>0).slice(0,200).map(r=>({name:r.key,position:r.avgPosition,ctr:r.ctr*100,impressions:r.impressions}))}/></div>
   {table("Query Google",["Query","Click","Impression","CTR %","Posizione"],gscRows(queries),"queries","Estratto GSC, non inventario completo · "+range.from+" – "+range.to)}
   {table("Pagine Google",["URL","Click","Impression","CTR %","Posizione"],gscRows(pages),"pages","Stessa finestra dei totali GSC; righe legacy escluse.")}
@@ -47,7 +47,7 @@ export default async function Section({params,searchParams}:{params:Promise<{slu
   {table("Keyword ASO",["Data","Keyword","Paese","Popolarità","Difficoltà","Score","Rank"],keywords.map(r=>({id:r.id,cells:[r.date,r.keyword,r.country,r.popularityScore,r.difficultyScore,r.opportunityScore,r.appRank]})),"keywords")}
   {table("Storico ranking ASO",["Data","Keyword","Paese","Rank"],byProject(data.asoAppRankSnapshots).sort((a,b)=>b.date.localeCompare(a.date)).map(r=>({id:r.id,cells:[r.date,r.keyword,r.country,r.appRank]})),"ranks")}
   {table("Schede App Store",["Data","Locale","Tipo","Nome","Sottotitolo","Keyword","Descrizione"],byProject(data.ascMetadataSnapshots).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(r=>({id:r.id,cells:[r.createdAt,r.locale,r.kind,r.name,r.subtitle,r.keywords,r.description]})),"metadata")}
-  {table("Esperimenti App Store",["Nome","Stato","Tipo","Data"],byProject(data.ascExperiments).map(r=>({id:r.id,cells:[r.name,r.state,r.elementType,r.createdAt]})),"experiments")}
+  {table("Esperimenti App Store",["Nome","Stato","Tipo","Data"],byProject(data.ascExperiments).map(r=>({id:r.id,cells:[r.name,r.state,r.elementType,r.createdAt]})),"experiments")}{table("Varianti esperimenti",["Esperimento","Variante","Stato","Data"],data.ascExperimentTreatments.map(r=>({id:r.id,cells:[data.ascExperiments.find(e=>e.id===r.experimentId)?.name??r.experimentId,r.name,r.state,r.createdAt]})),"treatments")}
   <p className="text-sm text-muted-foreground">Retention iOS: non disponibile finché il parser delle coorti non è validato.</p><a className="text-sm underline" href={"http://127.0.0.1:5177/?project="+encodeURIComponent(slug)} target="_blank" rel="noreferrer">Apri Store Studio</a></>;
  }else if(section==="revenue"){
   const mediation=within(byProject(data.admobMediationMetrics)).sort((a,b)=>b.date.localeCompare(a.date));

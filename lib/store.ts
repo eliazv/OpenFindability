@@ -483,9 +483,9 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
     .from(appReviewsTable).where(projectId ? eq(appReviewsTable.projectId, projectId) : undefined)
     .all()
     .map((row) => {
-      const { reviewText, ...rest } = denull(row) : []);
+      const { reviewText, ...rest } = denull(row);
       return { ...rest, text: reviewText } as AppReview;
-    });
+    }) : []);
 
   // appRank is nullable (not just optional) for these two tables, so keep the literal null from the row.
   const appKeywords = (["portfolio","overview","store","settings","data"].includes(scope) ? database
