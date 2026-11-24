@@ -50,7 +50,7 @@ export function SyncButton({ sidebar = false, projectSlug, source }: { sidebar?:
         title="Avvia sincronizzazione manuale (solo localhost)"
       >
         <RefreshCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
-        <span>{busy ? "Sincronizzazione..." : projectSlug ? "Aggiorna progetto" : "Sync manuale"}</span>
+        <span>{busy ? "Sincronizzazione..." : source ? "Aggiorna fonte" : projectSlug ? "Aggiorna progetto" : "Sync manuale"}</span>
       </button>
       {feedback && <p role="status" className="mt-1 max-w-xs text-xs text-muted-foreground">{feedback}</p>}
     </div>

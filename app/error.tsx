@@ -1,0 +1,2 @@
+"use client";
+export default function ErrorPage({reset}:{error:Error & {digest?:string};reset:()=>void}){return <main className="p-6"><h1 className="text-xl font-semibold">Impossibile caricare la vista</h1><p className="text-sm text-muted-foreground mt-2">Controlla il log locale e riprova. Nessuna sincronizzazione viene avviata automaticamente.</p><button onClick={reset} className="mt-4 rounded-md bg-primary px-3 py-2 text-primary-foreground text-sm">Riprova</button></main>;}
