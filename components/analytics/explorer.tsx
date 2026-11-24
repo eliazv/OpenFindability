@@ -5,7 +5,7 @@ export type Params=Record<string,string|string[]|undefined>;
 export type Cell=string|number|null|undefined;
 export type Row={id:string;cells:Cell[]};
 export function queryHref(params:Params,patch:Record<string,string>={}){
- const q=new URLSearchParams();for(const [k,v] of Object.entries(params))if(typeof v==="string")q.set(k,v);for(const [k,v] of Object.entries(patch))q.set(k,v);return "?"+q.toString();
+ const q=new URLSearchParams();for(const [k,v] of Object.entries(params))if(typeof v==="string"&&!(patch.days!==undefined&&k.endsWith("_page")))q.set(k,v);for(const [k,v] of Object.entries(patch))q.set(k,v);return "?"+q.toString();
 }
 export function PeriodPicker({params}:{params:Params}){
  return <nav aria-label="Periodo" className="flex flex-wrap gap-1 rounded-lg border bg-card p-1">{[7,28,90,365].map(n=><Link key={n} href={queryHref(params,{days:String(n),page:"1"})} aria-current={(params.days??"28")===String(n)?"true":undefined} className={"rounded px-3 py-1.5 text-xs "+((params.days??"28")===String(n)?"bg-primary text-primary-foreground":"hover:bg-muted")}>{n} g</Link>)}</nav>;

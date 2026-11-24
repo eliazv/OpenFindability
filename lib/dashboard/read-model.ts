@@ -11,7 +11,7 @@ export const METRICS = {
   downloads:{source:"asc_analytics",key:"downloads",label:"Primi download iOS",unit:"count"},
   installs:{source:"play_stats",key:"userInstalls",label:"Installazioni utenti Android",unit:"count"},
   events:{source:"play_stats",key:"installEvents",label:"Eventi installazione Android",unit:"count"},
-  uninstalls:{source:"play_stats",key:"userUninstalls",label:"Disinstallazioni utenti Android",unit:"count"},
+  uninstalls:{source:"play_stats",key:"userUninstalls",label:"Disinstallazioni utenti Android",unit:"count",lowerBetter:true},
   devices:{source:"play_stats",key:"activeDeviceInstalls",label:"Dispositivi attivi Android",unit:"count",kind:"snapshot"},
   mrr:{source:"revenuecat",key:"mrr",label:"MRR",unit:"currency",kind:"snapshot"},
   subscribers:{source:"revenuecat",key:"activeSubscribers",label:"Abbonati attivi",unit:"count",kind:"snapshot"},

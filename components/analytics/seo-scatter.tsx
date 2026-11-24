@@ -1,0 +1,9 @@
+"use client";
+import {CartesianGrid,Scatter,ScatterChart,XAxis,YAxis,ZAxis,Tooltip} from "recharts";
+import {ChartContainer,type ChartConfig} from "@/components/ui/chart";
+import {Card,CardContent,CardHeader,CardTitle} from "@/components/ui/card";
+type Point={name:string;position:number;ctr:number;impressions:number};
+const config={ctr:{label:"CTR",color:"var(--chart-1)"}} satisfies ChartConfig;
+export function SeoScatter({data}:{data:Point[]}){
+ return <Card className="min-w-0"><CardHeader><CardTitle>CTR e posizione</CardTitle><p className="text-xs text-muted-foreground">Prime {data.length} query per impression · area del punto proporzionale alle impression</p></CardHeader><CardContent>{data.length?<ChartContainer config={config} className="h-[280px] aspect-auto w-full"><ScatterChart margin={{bottom:20}}><CartesianGrid/><XAxis dataKey="position" type="number" name="Posizione" label={{value:"Posizione media (1 = migliore)",position:"insideBottom",offset:-10}}/><YAxis dataKey="ctr" type="number" name="CTR" unit="%" width={52}/><ZAxis dataKey="impressions" type="number" range={[16,180]} name="Impression"/><Tooltip content={({active,payload})=>{const p=payload?.[0]?.payload as Point|undefined;return active&&p?<div className="rounded border bg-card p-2 text-xs shadow"><p className="font-medium max-w-64 break-words">{p.name}</p><p>Posizione: {p.position.toFixed(1)} · CTR: {p.ctr.toFixed(2)}%</p><p>Impression: {p.impressions.toLocaleString("it-IT")}</p></div>:null}}/><Scatter data={data} fill="var(--chart-1)" fillOpacity={.6} isAnimationActive={false}/></ScatterChart></ChartContainer>:<p className="text-sm text-muted-foreground">Nessuna misura disponibile.</p>}<p className="text-xs text-muted-foreground">Esplora tutte le query nella tabella. Nessuna attribuzione causale ad AI Overview.</p></CardContent></Card>;
+}
