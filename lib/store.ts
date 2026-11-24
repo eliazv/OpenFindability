@@ -474,7 +474,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
   const projectId = slug ? projects[0]?.id ?? "__dashboard_missing_project__" : undefined;
   const metricSnapshots = (["portfolio","overview","acquisition","store","revenue","health","settings","data","interventions"].includes(scope) ? database.select().from(metricSnapshotsTable).where(projectId ? eq(metricSnapshotsTable.projectId, projectId) : undefined).all().map(denull) as MetricSnapshot[] : []);
   const searchQueries = (["acquisition"].includes(scope) ? database.select().from(searchQueriesTable).where(projectId ? eq(searchQueriesTable.projectId, projectId) : undefined).all().map(denull) as SearchQueryMetric[] : []);
-  const pageMetrics = (["acquisition"].includes(scope) ? database.select().from(pageMetricsTable).where(projectId ? eq(pageMetricsTable.projectId, projectId) : undefined).all().map(denull) as PageMetric[] : []);
+  const pageMetrics = (["acquisition","interventions"].includes(scope) ? database.select().from(pageMetricsTable).where(projectId ? eq(pageMetricsTable.projectId, projectId) : undefined).all().map(denull) as PageMetric[] : []);
   const opportunities = (["portfolio","overview","opportunities"].includes(scope) ? database.select().from(opportunitiesTable).where(projectId ? eq(opportunitiesTable.projectId, projectId) : undefined).all().map(denull) as Opportunity[] : []);
   const connectorRuns = (["portfolio","overview","settings","data"].includes(scope) ? database.select().from(connectorRunsTable).where(projectId ? eq(connectorRunsTable.projectId, projectId) : undefined).all().map(denull) as ConnectorRun[] : []);
 
@@ -547,7 +547,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
     .map(denull) as AscAnalyticsMetric[] : []);
 
   const snapshot: AppData = {
-    ga4LandingMetrics: (["portfolio","overview","acquisition","settings","data"].includes(scope) ? database.select().from(ga4LandingMetricsTable).where(projectId ? eq(ga4LandingMetricsTable.projectId, projectId) : undefined).all() : []),
+    ga4LandingMetrics: (["portfolio","overview","acquisition","settings","data","interventions"].includes(scope) ? database.select().from(ga4LandingMetricsTable).where(projectId ? eq(ga4LandingMetricsTable.projectId, projectId) : undefined).all() : []),
     webPerformanceMetrics: (["health"].includes(scope) ? database.select().from(webPerformanceMetricsTable).where(projectId ? eq(webPerformanceMetricsTable.projectId, projectId) : undefined).all() : []),
     projectInterventions: (["overview","acquisition","store","revenue","health","interventions"].includes(scope) ? database.select().from(projectInterventionsTable).where(projectId ? eq(projectInterventionsTable.projectId, projectId) : undefined).all() : []),
     seoGeoObservations: (["portfolio","overview","acquisition","settings","data"].includes(scope) ? database.select().from(seoGeoObservationsTable).where(projectId ? eq(seoGeoObservationsTable.projectId, projectId) : undefined).all() as NonNullable<AppData["seoGeoObservations"]> : []),

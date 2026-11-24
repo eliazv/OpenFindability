@@ -49,10 +49,10 @@ export function measure(rows: Observation[], range: Range, kind: MetricKind = "s
   const delta=comparable&&value!==null&&prior!==null?value-prior:null;
   return {value,previous:prior,delta,deltaPercent:delta!==null&&prior!==null&&prior!==0?delta/Math.abs(prior)*100:null,range,previousRange,observed:current.length,expected,previousObserved:previous.length,currency,warning:invalidCurrency?"Valute miste o mancanti: totale non disponibile.":undefined,points};
 }
-export function formatMetric(value: number|null|undefined, unit: "count"|"currency"|"percent"|"decimal" = "count", currency?:string): string {
+export function formatMetric(value: number|null|undefined, unit: "count"|"currency"|"percent"|"decimal" = "count", currency?:string, precision?:number): string {
   if(value==null||!Number.isFinite(value)) return "—";
   if(unit==="currency") { if(!currency||!/^[A-Z]{3}$/.test(currency)) return "—"; return value.toLocaleString("it-IT",{style:"currency",currency}); }
-  return value.toLocaleString("it-IT",{maximumFractionDigits:unit==="count"?0:2})+(unit==="percent"?"%":"");
+  return value.toLocaleString("it-IT",{maximumFractionDigits:precision??(unit==="count"?0:2)})+(unit==="percent"?"%":"");
 }
 
 export function measureRatio(rows:{date:string;numerator:number|null;denominator:number|null}[],range:Range,scale=1):MetricResult {

@@ -19,6 +19,7 @@ export interface BarListItem {
 export interface BarListProps extends React.ComponentProps<"div"> {
   data: BarListItem[]
   valueFormatter?: (value: number) => string
+  currency?: string
   sortOrder?: "descending" | "ascending" | "none"
   /** Any CSS color. Defaults to chart-1. */
   color?: string
@@ -29,7 +30,8 @@ export interface BarListProps extends React.ComponentProps<"div"> {
 
 function BarList({
   data,
-  valueFormatter = (value) => formatNumber(value, { format: "compact" }),
+  currency,
+  valueFormatter = (value) => currency ? value.toLocaleString("it-IT",{style:"currency",currency}) : formatNumber(value, { format: "compact" }),
   sortOrder = "descending",
   color = "var(--chart-1)",
   showPercentage = false,
