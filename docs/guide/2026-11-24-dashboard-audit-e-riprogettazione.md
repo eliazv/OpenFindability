@@ -4,6 +4,8 @@ Data: 24 novembre 2026
 
 Stato: analisi del codice e proposta operativa. In questa modifica è implementato solo l’avvio congiunto dashboard + Store Studio e aggiornata la relativa istruzione nella pagina progetto. Il redesign descritto sotto non è ancora implementato.
 
+**Approfondimento successivo:** [Sistema visuale, librerie e piano di refactor](2026-11-24-dashboard-visual-system-e-librerie.md). Integra questo audit con evidenze sul wrapper Recharts, atlante grafici per dominio, componenti pronti shadcn/Tremor/dashboardcn, TanStack Table, DTO, wireframe e backlog con criteri di accettazione. La proposta conserva il motore dati, la sync manuale e Studio indipendente; non è ancora implementata.
+
 ## 1. Valutazione
 
 OpenFindability ha più capacità di quelle che l’interfaccia lascia vedere. Il backend gestisce acquisizione, monetizzazione, store, qualità dell’app, performance web e operazioni di pubblicazione; la UI resta principalmente una home e una lunga pagina per progetto. Conviene riprogettare la gerarchia e rendere accessibili queste capacità, mantenendo Next.js, SQLite e i componenti shadcn esistenti.
