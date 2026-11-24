@@ -16,9 +16,9 @@ export const METRICS = {
   visitors:{source:"umami",key:"visitors",label:"Visitatori/giorno (somma)",unit:"count"},
   downloads:{source:"asc_analytics",key:"downloads",label:"Primi download iOS",unit:"count"},
   installs:{source:"play_stats",key:"userInstalls",label:"Installazioni utenti Android",unit:"count"},
-  deviceInstalls:{source:"play_stats",key:"installs",label:"Installazioni dispositivi",unit:"count"},
-  deviceUninstalls:{source:"play_stats",key:"uninstalls",label:"Disinstallazioni dispositivi",unit:"count",lowerBetter:true},
-  uninstallEvents:{source:"play_stats",key:"uninstallEvents",label:"Eventi disinstallazione",unit:"count",lowerBetter:true},
+  deviceInstalls:{source:"play_stats",key:"installs",label:"Installazioni dispositivi Android",unit:"count"},
+  deviceUninstalls:{source:"play_stats",key:"uninstalls",label:"Disinstallazioni dispositivi Android",unit:"count",lowerBetter:true},
+  uninstallEvents:{source:"play_stats",key:"uninstallEvents",label:"Eventi disinstallazione Android",unit:"count",lowerBetter:true},
   rating:{source:"play_console",key:"avgRating",label:"Valutazione Play Store",unit:"decimal",kind:"snapshot",precision:2},
   reviewCount:{source:"play_console",key:"totalReviews",label:"Totale recensioni Play",unit:"count",kind:"snapshot"},
   events:{source:"play_stats",key:"installEvents",label:"Eventi installazione Android",unit:"count"},
@@ -66,20 +66,26 @@ export function projectMetric(data:AppData,id:string,spec:MetricSpec,days:number
   return {spec,latest,result:measure(observations,range,spec.kind??"sum",spec.unit==="currency")};
 }
 export function openOpportunities(data:AppData,id?:string){
-  return data.opportunities.filter(r=>r.status==="open"&&(!id||r.projectId===id)).sort((a,b)=>b.score-a.score||b.detectedAt.localeCompare(a.detectedAt));
+  const severity={high:3,medium:2,low:1};
+  return data.opportunities.filter(r=>r.status==="open"&&(!id||r.projectId===id)).sort((a,b)=>severity[b.severity]-severity[a.severity]||b.score-a.score||b.detectedAt.localeCompare(a.detectedAt));
 }
 export function configuredSources(p:Project):SourceType[]{
- const flags:Partial<Record<SourceType,boolean>>={gsc:!!p.gscProperty,ga4:!!p.ga4PropertyId,ga4_landing:!!(p.ga4PropertyId&&p.websiteUrl),umami:!!p.umamiWebsiteId,bing_webmaster:!!p.bingSiteUrl,cloudflare_ai:!!p.cloudflareZoneId,clarity:!!p.clarityProjectId,play_console:!!p.playConsolePackageName,play_stats:!!p.playConsolePackageName,play_vitals:!!p.playConsolePackageName,asc_analytics:!!p.appStoreTrackId,aso:!!p.respectAsoAppId,revenuecat:!!p.revenueCatProjectId,admob:!!(p.admobAppId||p.admobAppIdIos),adsense:!!p.adsenseSiteDomain};
+ const flags:Partial<Record<SourceType,boolean>>={gsc:!!p.gscProperty,ga4:!!p.ga4PropertyId,ga4_landing:!!(p.ga4PropertyId&&p.websiteUrl),umami:!!p.umamiWebsiteId,bing_webmaster:!!p.bingSiteUrl,cloudflare_ai:!!p.cloudflareZoneId,clarity:!!(p.clarityProjectId&&p.clarityTokenEnv),play_console:!!p.playConsolePackageName,play_stats:!!p.playConsolePackageName,play_vitals:!!p.playConsolePackageName,asc_analytics:!!p.appStoreTrackId,aso:!!p.asoKeywords?.length,revenuecat:!!p.revenueCatProjectId,admob:!!(p.admobAppId||p.admobAppIdIos),adsense:!!p.adsenseSiteDomain};
  return (Object.keys(flags) as SourceType[]).filter(s=>flags[s]);
 }
 export function sourceRows(data:AppData,p:Project){
- const id=p.id;return configuredSources(p).map(source=>{
+ const id=p.id;
+ const sources=new Set(configuredSources(p));
+ for(const source of ["pagespeed","crux"] as const)if((data.webPerformanceMetrics??[]).some(r=>r.projectId===id&&r.source===source)||data.connectorRuns.some(r=>r.projectId===id&&r.source===source))sources.add(source);
+ return [...sources].map(source=>{
   const snapshots=data.metricSnapshots.filter(r=>r.projectId===id&&r.source===source);
-  const dates=[...snapshots.map(r=>r.date),...(source==="admob"?data.admobMediationMetrics.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="play_stats"?data.playInstallStats.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="play_vitals"?data.playVitalsMetrics.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="asc_analytics"?data.ascAnalyticsMetrics.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="ga4_landing"?(data.ga4LandingMetrics??[]).filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="aso"?data.appKeywords.filter(r=>r.projectId===id).map(r=>r.date):[]),...(data.seoGeoObservations??[]).filter(r=>r.projectId===id&&r.source===source).map(r=>r.windowEnd.slice(0,10))];
+  const dates=[...snapshots.map(r=>r.date),...(source==="admob"?data.admobMediationMetrics.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="play_stats"?data.playInstallStats.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="play_vitals"?data.playVitalsMetrics.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="asc_analytics"?data.ascAnalyticsMetrics.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="ga4_landing"?(data.ga4LandingMetrics??[]).filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="aso"?data.appKeywords.filter(r=>r.projectId===id).map(r=>r.date):[]),...(source==="pagespeed"||source==="crux"?(data.webPerformanceMetrics??[]).filter(r=>r.projectId===id&&r.source===source&&r.status==="available").map(r=>r.date):[]),...(data.seoGeoObservations??[]).filter(r=>r.projectId===id&&r.source===source).map(r=>r.windowEnd.slice(0,10))];
   const latest=latestDay(dates.map(date=>({date})));
   const run=data.connectorRuns.filter(r=>r.projectId===id&&r.source===source).sort((a,b)=>b.finishedAt.localeCompare(a.finishedAt))[0];
-  const stale=latest!==undefined&&(Date.now()-Date.parse(latest))/86400000>CONNECTOR_CATALOG[source].staleAfterDays;
-  return {source,label:CONNECTOR_CATALOG[source].label,latest,run:run?.finishedAt,status:run?.status??"never",stale};
+  const lastSuccess=data.connectorRuns.filter(r=>r.projectId===id&&r.source===source&&r.status==="success").sort((a,b)=>b.finishedAt.localeCompare(a.finishedAt))[0];
+  const freshness=CONNECTOR_CATALOG[source].grain==="events"?lastSuccess?.finishedAt??latest:latest;
+  const stale=freshness!==undefined&&(Date.now()-Date.parse(freshness))/86400000>CONNECTOR_CATALOG[source].staleAfterDays;
+  return {source,label:CONNECTOR_CATALOG[source].label,latest,run:run?.finishedAt,status:run?.status??"never",stale,manualAudit:source==="pagespeed"||source==="crux"};
  });
 }
 

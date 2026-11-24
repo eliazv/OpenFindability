@@ -2,10 +2,11 @@ import type {AppData} from "@/lib/types";
 import {configuredSources,metricObservations,projectMetric,type MetricSpec} from "./read-model";
 import {latestDay,dayRange} from "./metrics";
 /** Use a common end date and one currency per total; exclude incomplete projects explicitly. */
-export function portfolioMetric(data:AppData,spec:MetricSpec,days:number){
+export function portfolioMetric(data:AppData,spec:MetricSpec,days:number,endOverride?:string){
  const eligible=data.projects.filter(p=>configuredSources(p).includes(spec.source)||metricObservations(data,p.id,spec).some(o=>o.value!==null));
  const endpoints=eligible.map(p=>latestDay(metricObservations(data,p.id,spec).filter(o=>o.value!==null))).filter((d):d is string=>!!d).sort();
- const end=endpoints[0],groups=new Map<string,{value:number;count:number;previous:number;compared:number}>();
+ // Do not let a disconnected/stale project shift the complete portfolio into the past.
+ const end=endOverride??endpoints.at(-1),groups=new Map<string,{value:number;count:number;previous:number;compared:number}>();
  const excluded:string[]=[];
  if(end)for(const p of eligible){
   const {result:m}=projectMetric(data,p.id,spec,days,end);

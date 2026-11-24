@@ -510,7 +510,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
 
   const gscSitemaps = (["health"].includes(scope) ? database.select().from(gscSitemapsTable).where(projectId ? eq(gscSitemapsTable.projectId, projectId) : undefined).all().map(denull) as GscSitemap[] : []);
 
-  const gscIndexInspections = (["health"].includes(scope) ? database
+  const gscIndexInspections = (["health","data"].includes(scope) ? database
     .select()
     .from(gscIndexInspectionsTable).where(projectId ? eq(gscIndexInspectionsTable.projectId, projectId) : undefined)
     .all()
@@ -548,7 +548,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
 
   const snapshot: AppData = {
     ga4LandingMetrics: (["portfolio","overview","acquisition","settings","data","interventions"].includes(scope) ? database.select().from(ga4LandingMetricsTable).where(projectId ? eq(ga4LandingMetricsTable.projectId, projectId) : undefined).all() : []),
-    webPerformanceMetrics: (["health"].includes(scope) ? database.select().from(webPerformanceMetricsTable).where(projectId ? eq(webPerformanceMetricsTable.projectId, projectId) : undefined).all() : []),
+    webPerformanceMetrics: (["health","settings","data","portfolio","overview"].includes(scope) ? database.select().from(webPerformanceMetricsTable).where(projectId ? eq(webPerformanceMetricsTable.projectId, projectId) : undefined).all() : []),
     projectInterventions: (["overview","acquisition","store","revenue","health","interventions"].includes(scope) ? database.select().from(projectInterventionsTable).where(projectId ? eq(projectInterventionsTable.projectId, projectId) : undefined).all() : []),
     seoGeoObservations: (["portfolio","overview","acquisition","settings","data"].includes(scope) ? database.select().from(seoGeoObservationsTable).where(projectId ? eq(seoGeoObservationsTable.projectId, projectId) : undefined).all() as NonNullable<AppData["seoGeoObservations"]> : []),
     projects,
