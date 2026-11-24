@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readProjects } from "@/lib/store";
 import { syncProjects } from "@/lib/sync";
 import type { SourceType } from "@/lib/types";
 
@@ -26,15 +27,19 @@ export async function POST(request: Request) {
   if (!localHost || origin !== url.origin) {
     return NextResponse.json({ error: "Sync is restricted to same-origin localhost." }, { status: 403 });
   }
-  const body = await request.json().catch(() => null) as { source?: unknown } | null;
-  if (body === null || (body.source !== undefined && (typeof body.source !== "string" || !allowedSources.includes(body.source as SourceType)))) {
+  const body = await request.json().catch(() => null) as { source?: unknown; projectSlug?: unknown } | null;
+  if (body === null || typeof body !== "object" || Array.isArray(body) || (body.source !== undefined && (typeof body.source !== "string" || !allowedSources.includes(body.source as SourceType)))) {
     return NextResponse.json({ error: "Invalid source." }, { status: 400 });
+  }
+  const projectSlug = body.projectSlug;
+  if (projectSlug !== undefined && (typeof projectSlug !== "string" || !(await readProjects()).some(p => p.slug === projectSlug))) {
+    return NextResponse.json({ error: "Invalid project." }, { status: 400 });
   }
   if (running) return NextResponse.json({ error: "A sync is already running." }, { status: 409 });
   running = true;
   try {
     const source = body.source as SourceType | undefined;
-    const results = await syncProjects({ source });
+    const results = await syncProjects({ source, projectSlug: projectSlug as string | undefined });
     const failed = results.some((result) => result.status === "failed");
     return NextResponse.json({ results }, { status: failed ? 207 : 200 });
   } catch (error) {

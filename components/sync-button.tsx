@@ -1,10 +1,11 @@
 "use client";
 
+import type { SourceType } from "@/lib/types";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
-export function SyncButton({ sidebar = false }: { sidebar?: boolean }) {
+export function SyncButton({ sidebar = false, projectSlug, source }: { sidebar?: boolean; projectSlug?: string; source?: SourceType }) {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const router = useRouter();
@@ -18,7 +19,7 @@ export function SyncButton({ sidebar = false }: { sidebar?: boolean }) {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ projectSlug, source }),
       });
       const payload = await response.json() as { error?: string; results?: Array<{ status: string }> };
       if (!response.ok && response.status !== 207) throw new Error(payload.error ?? "Sincronizzazione non riuscita.");
@@ -49,7 +50,7 @@ export function SyncButton({ sidebar = false }: { sidebar?: boolean }) {
         title="Avvia sincronizzazione manuale (solo localhost)"
       >
         <RefreshCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
-        <span>{busy ? "Sincronizzazione..." : "Sync manuale"}</span>
+        <span>{busy ? "Sincronizzazione..." : projectSlug ? "Aggiorna progetto" : "Sync manuale"}</span>
       </button>
       {feedback && <p role="status" className="mt-1 max-w-xs text-xs text-muted-foreground">{feedback}</p>}
     </div>

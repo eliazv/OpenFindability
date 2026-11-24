@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Layers, LayoutDashboard, Smartphone, Stethoscope } from "lucide-react";
+import { Database, LayoutDashboard, Wrench } from "lucide-react";
 
-import type { Project, ProjectType } from "@/lib/types";
-import { SyncButton } from "@/components/sync-button";
+import type { Project } from "@/lib/types";
 import {
   Sidebar,
   SidebarContent,
@@ -20,13 +19,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-const projectTypeIcon: Record<ProjectType, typeof Globe> = {
-  web: Globe,
-  app: Smartphone,
-  web_app: Layers,
-};
 
-export function AppSidebar({ projects }: { projects: Project[] }) {
+export function AppSidebar({ projects }: { projects: Pick<Project, "id" | "slug" | "name" | "type">[] }) {
   const pathname = usePathname();
 
   return (
@@ -49,13 +43,12 @@ export function AppSidebar({ projects }: { projects: Project[] }) {
           <SidebarGroupContent>
             <SidebarMenu>
               {projects.map((project) => {
-                const Icon = projectTypeIcon[project.type];
                 const href = `/project/${project.slug}`;
                 return (
                   <SidebarMenuItem key={project.id}>
-                    <SidebarMenuButton asChild isActive={pathname === href} tooltip={project.name}>
+                    <SidebarMenuButton asChild isActive={pathname === href || pathname.startsWith(href + "/")} tooltip={project.name}>
                       <Link href={href}>
-                        <Icon />
+                        <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center rounded bg-sidebar-accent text-[10px] font-semibold text-sidebar-accent-foreground">{project.name.slice(0, 2).toUpperCase()}</span>
                         <span>{project.name}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -69,15 +62,10 @@ export function AppSidebar({ projects }: { projects: Project[] }) {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Doctor">
-              <a href="/api/doctor">
-                <Stethoscope />
-                <span>Doctor</span>
-              </a>
-            </SidebarMenuButton>
+            <SidebarMenuButton asChild isActive={pathname === "/tools"} tooltip="Strumenti"><Link href="/tools"><Wrench /><span>Strumenti</span></Link></SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SyncButton sidebar />
+            <SidebarMenuButton asChild isActive={pathname === "/data"} tooltip="Centro dati"><Link href="/data"><Database /><span>Centro dati</span></Link></SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

@@ -1,6 +1,7 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
+import { useId } from "react";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import type { TrendPoint } from "@/lib/insights";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -18,17 +19,19 @@ function formatDateLabel(date: string) {
 }
 
 export function RevenueCatMrrChart({ data, currency }: { data: TrendPoint[]; currency?: string }) {
+  const gradientId = useId();
   return (
     <ChartContainer config={chartConfig} className="aspect-auto h-[200px] w-full">
       <AreaChart data={data} margin={{ left: 0, right: 0 }}>
         <defs>
-          <linearGradient id="fillRevenueCatMrr" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-value)" stopOpacity={0.8} />
-            <stop offset="95%" stopColor="var(--color-value)" stopOpacity={0.05} />
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--color-value)" stopOpacity={0.16} />
+            <stop offset="95%" stopColor="var(--color-value)" stopOpacity={0.01} />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={formatDateLabel} />
+        <YAxis tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => v.toLocaleString("it-IT", { notation: "compact" })} />
         <ChartTooltip
           content={
             <ChartTooltipContent
@@ -50,7 +53,7 @@ export function RevenueCatMrrChart({ data, currency }: { data: TrendPoint[]; cur
             />
           }
         />
-        <Area dataKey="value" type="natural" fill="url(#fillRevenueCatMrr)" stroke="var(--color-value)" />
+        <Area dataKey="value" type="linear" fill={`url(#${gradientId})`} stroke="var(--color-value)" />
       </AreaChart>
     </ChartContainer>
   );
