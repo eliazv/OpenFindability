@@ -92,3 +92,41 @@
     font-family: var(--font-sans);
   }
 }
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.19 0.012 165);
+  --foreground: oklch(0.93 0.012 90);
+  --card: oklch(0.23 0.012 165);
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.75 0.1 170);
+  --primary-foreground: oklch(0.17 0.03 170);
+  --secondary: oklch(0.28 0.015 165);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--secondary);
+  --muted-foreground: oklch(0.73 0.015 165);
+  --accent: oklch(0.32 0.04 170);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.75 0.14 25);
+  --destructive-foreground: oklch(0.17 0.03 25);
+  --border: oklch(0.36 0.014 165);
+  --input: var(--border);
+  --ring: var(--primary);
+  --success: oklch(0.77 0.13 145);
+  --warning: oklch(0.8 0.12 80);
+  --chart-1: var(--primary);
+  --chart-2: var(--warning);
+  --chart-3: var(--destructive);
+  --chart-4: oklch(0.78 0.08 220);
+  --chart-5: oklch(0.77 0.09 145);
+  --sidebar: oklch(0.21 0.012 165);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
