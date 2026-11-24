@@ -9,8 +9,9 @@ export type Row={id:string;cells:Cell[]};
 export function queryHref(params:Params,patch:Record<string,string>={}){
  const q=new URLSearchParams();for(const [k,v] of Object.entries(params))if(typeof v==="string"&&!(patch.days!==undefined&&k.endsWith("_page")))q.set(k,v);for(const [k,v] of Object.entries(patch))q.set(k,v);return "?"+q.toString();
 }
-export function PeriodPicker({params}:{params:Params}){
- return <nav aria-label="Periodo" className="flex flex-wrap gap-1 rounded-lg border bg-card p-1">{[7,28,90,365].map(n=><Link key={n} href={queryHref(params,{days:String(n),page:"1"})} aria-current={parseDays(params.days)===n?"true":undefined} className={"rounded px-3 py-1.5 text-xs "+(parseDays(params.days)===n?"bg-primary text-primary-foreground":"hover:bg-muted")}>{n} g</Link>)}</nav>;
+export function PeriodPicker({params,options=[7,28,90,365]}:{params:Params;options?:number[]}){
+ const chosen=Math.min(parseDays(params.days),Math.max(...options));
+ return <nav aria-label="Periodo" className="flex flex-wrap gap-1 rounded-lg border bg-card p-1">{options.map(n=><Link key={n} href={queryHref(params,{days:String(n)})} aria-current={chosen===n?"true":undefined} className={"rounded px-3 py-1.5 text-xs "+(chosen===n?"bg-primary text-primary-foreground":"hover:bg-muted")}>{n} g</Link>)}</nav>;
 }
 export function Explorer({title,columns,rows,params,scope="table",note,visibleColumns,defaultSort}:{title:string;columns:string[];rows:Row[];params:Params;scope?:string;note?:string;visibleColumns?:number[];defaultSort?:string}){
  const searchKey=scope+"_q",sortKey=scope+"_sort",pageKey=scope+"_page";

@@ -38,3 +38,7 @@ pnpm dev
 ```
 
 Verificare con progetti web/app/misti, sorgenti mancanti, valute diverse, periodi incompleti, dataset vuoto, navigazione mobile e tema scuro. Per le icone opzionali inserire PNG locali in `data/project-icons/<slug>.png`; altrimenti viene tentata l'icona della configurazione Store Studio locale e usato il fallback delle iniziali.
+
+## Revisione successiva — gerarchia e copertura
+
+Vedi [Dashboard — gerarchia e copertura](2026-11-25-dashboard-gerarchia-e-copertura.md) per le correzioni successive: dashboard orientata ai risultati, metriche ripristinate, un grafico per sezione, dettagli espandibili, microcopy ridotto, copertura per fonte e calendario ricavi. Revisione statica; nessun nuovo test, build o verifica visuale in questa fase.

@@ -95,8 +95,9 @@ export function availableMetrics(data:AppData,p:Project,specs:readonly MetricSpe
  return specs.filter(s=>configured.has(s.source)||metricObservations(data,p.id,s).some(o=>o.value!==null&&Number.isFinite(o.value))||(s.kind==="ratio"&&data.metricSnapshots.some(r=>r.projectId===p.id&&r.source===s.source&&r.impressions!==undefined)));
 }
 export function overviewMetrics(data:AppData,p:Project,days:number){
- const web=[METRICS.clicks,METRICS.visitors,METRICS.sessions,METRICS.gaViews,METRICS.impressions,METRICS.ctr,METRICS.position,METRICS.adsense];
- const app=[METRICS.ads,METRICS.mrr,METRICS.downloads,METRICS.installs,METRICS.deviceInstalls,METRICS.subscribers,METRICS.rating,METRICS.devices];
+ const web=[METRICS.clicks,METRICS.visitors,METRICS.adsense,METRICS.impressions,METRICS.sessions,METRICS.ctr,METRICS.position,METRICS.gaViews,METRICS.umamiViews,METRICS.gaUsers];
+ const hasUserInstalls=metricObservations(data,p.id,METRICS.installs).some(o=>o.value!==null);
+ const app=[METRICS.ads,METRICS.mrr,METRICS.downloads,METRICS.installs,...(!hasUserInstalls?[METRICS.deviceInstalls]:[]),METRICS.subscribers,METRICS.rating,METRICS.devices,...(hasUserInstalls?[METRICS.deviceInstalls]:[])];
  const order=p.type==="web"?web:p.type==="app"?app:[METRICS.clicks,METRICS.ads,METRICS.mrr,METRICS.downloads,METRICS.installs,...web,...app];
  const unique=[...new Map(order.map(s=>[s.source+":"+s.key,s])).values()];
  const models=availableMetrics(data,p,unique).map(s=>projectMetric(data,p.id,s,days));

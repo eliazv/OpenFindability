@@ -14,11 +14,11 @@ export function MetricCard({spec,result:m,latest}:Props){
  const sparse=spec.kind==="snapshot";
  const lastValue=m.points.findLast(p=>p.current!==null)?.date;
  const detail=CONNECTOR_CATALOG[spec.source].label+" · "+m.range.from+" – "+m.range.to+" · "+m.observed+"/"+m.expected+" giorni osservati";
- return <Card className="min-w-0 gap-1 py-4"><CardHeader className="px-4 pb-0"><CardTitle className="text-sm font-medium text-muted-foreground">{spec.label}</CardTitle></CardHeader><CardContent className="px-4">
+ return <Card className="min-w-0 h-full gap-1 py-4"><CardHeader className="px-4 pb-0"><CardTitle className="text-sm font-medium text-muted-foreground">{spec.label}</CardTitle></CardHeader><CardContent className="px-4">
  <div className="text-2xl font-semibold tabular-nums truncate" title={formatMetric(m.value,spec.unit,m.currency,spec.precision)}>{formatMetric(m.value,spec.unit,m.currency,spec.precision)}</div>
- <div className="flex items-center justify-between gap-2">{m.delta===null?<span className="text-xs text-muted-foreground">{m.value===null?"Nessun dato":"— confronto"}</span>:spec.kind==="ratio"?<DeltaBadge delta={m.delta} invert={spec.lowerBetter} variant="soft">{m.delta>0?"+":""}{formatMetric(m.delta,"decimal")} {spec.unit==="percent"?"pp":"pos."}</DeltaBadge>:m.deltaPercent===null?<span className="text-xs tabular-nums">{m.delta>0?"+":""}{formatMetric(m.delta,spec.unit,m.currency)}</span>:<DeltaBadge delta={m.deltaPercent/100} invert={spec.lowerBetter} variant="soft"/>}
+ <div className="flex items-center justify-between gap-2">{m.delta===null?<span className="text-xs text-muted-foreground" title="Periodo precedente non confrontabile">{m.value===null?"":"Confronto —"}</span>:spec.kind==="ratio"?<DeltaBadge delta={m.delta} invert={spec.lowerBetter} variant="soft">{m.delta>0?"+":""}{formatMetric(m.delta,"decimal")} {spec.unit==="percent"?"pp":"pos."}</DeltaBadge>:m.deltaPercent===null?<span className="text-xs tabular-nums">{m.delta>0?"+":""}{formatMetric(m.delta,spec.unit,m.currency)}</span>:<DeltaBadge delta={m.deltaPercent/100} invert={spec.lowerBetter} variant="soft"/>}
  {m.observed>1&&<Sparkline data={m.points.map(p=>p.current)} className="w-20 shrink-0"/>}</div>
- <p title={detail} className="text-xs text-muted-foreground">{sparse?lastValue?"Al "+lastValue:"Nessuna misura":m.observed<m.expected?m.observed+"/"+m.expected+" giorni · dati parziali":"Al "+(latest??m.range.to)}</p>{m.warning&&<p className="text-xs text-warning">{m.warning}</p>}
+ <p title={detail} className="text-xs text-muted-foreground">{m.value===null?"Nessun dato":sparse?lastValue?"Al "+lastValue:"Nessuna misura":m.observed<m.expected?m.observed+"/"+m.expected+" giorni · parziale":"Al "+(latest??m.range.to)}</p>{m.warning&&<p className="text-xs text-warning">{m.warning}</p>}
  </CardContent></Card>;
 }
 export function MetricSeries({spec,result:m,annotations=[]}:Props & {annotations?:{date:string;title:string}[]}){
