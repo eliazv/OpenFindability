@@ -151,4 +151,15 @@ L'header raggruppa progetto/set e formato/lingua, mostra l'icona e separa le azi
 
 Per aggiungere un progetto: creare il config e almeno un JSON con `engine: 1`, `platforms`, `locales`, `slides`, `elements`. `components.js` deve esportare un oggetto di funzioni `(el, ctx) => html`; usare `ctx.esc` sui dati testuali. Ogni elemento ha ID univoco, tipo (o `kind`), coordinate `x/y/w` e, per contenitori con altezza fissa, `h`; `over.<platform>` conserva gli override. Le coordinate mantengono il contratto originale del panorama. La versione incompatibile viene rifiutata esplicitamente.
 
-Il caricamento `studio:push` e il collegamento dalla dashboard Next.js rimangono fasi successive. Nessuna pubblicazione sugli store viene eseguita dal nuovo studio.
+La dashboard Next.js include nella pagina del progetto la scheda ?Screenshot per gli store?, con comando di avvio e pulsante ?Apri Store Studio?. Il caricamento `studio:push` rimane una fase successiva. Nessuna pubblicazione sugli store viene eseguita dal nuovo studio.
+
+
+### Se non compaiono set
+
+Lo studio usa il percorso registrato nel progetto: `--repo` vale solo per la sessione corrente. Per collegare un repository in modo permanente, dalla cartella OpenFindability:
+
+```powershell
+npx tsx scripts/update-project.ts --slug <slug> --flutter-path "C:/percorso/repository"
+```
+
+Nella radice indicata deve esistere `store/studio/studio.config.json`. Ricaricare la pagina dello studio: il registro viene letto nuovamente senza riavviare il server. Gli screenshot non vengono copiati dentro OpenFindability: galleria ed editor leggono gli stessi set nel repository dell?app. Nella dashboard del progetto compare ?Screenshot per gli store?; avviare manualmente `pnpm studio` e usare ?Apri Store Studio?.

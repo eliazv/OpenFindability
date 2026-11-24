@@ -43,13 +43,14 @@ export async function discoverProjects({ repo = arg('repo'), slug = arg('slug'),
 }
 const mime = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.jpg':'image/jpeg','.webp':'image/webp','.ttf':'font/ttf','.woff2':'font/woff2' };
 export async function startServer(port = Number(process.env.STUDIO_PORT ?? 5177), options = {}) {
-  const projects = await discoverProjects(options);
+  let projects = await discoverProjects(options);
   const server = createServer(async (req, res) => {
     try {
       if (!/^127\.0\.0\.1(?::\d+)?$/.test(req.headers.host ?? '')) { res.writeHead(403).end('Host non consentito'); return; }
       const url = new URL(req.url, `http://${req.headers.host}`);
       const json = (value) => { res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(value)); };
       if (req.method === 'GET' && url.pathname === '/api/projects') {
+        projects = await discoverProjects(options);
         json(projects.map(p => ({ slug:p.slug, name:p.config.name ?? p.slug, icon:`/p/${p.slug}/${p.config.icon ?? ''}`, defaultSet:p.config.defaultSet, components:`/p/${p.slug}/${p.config.components ?? 'components.js'}`, css:`/p/${p.slug}/${p.config.css ?? 'components.css'}`, sets:p.sets, setsPath:p.config.sets ?? 'sets' }))); return;
       }
       if (req.method === 'POST' && url.pathname === '/api/save') {

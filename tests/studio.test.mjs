@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -25,10 +25,12 @@ test('multi-project discovery, public files, origin guard and isolated atomic sa
    const repo=join(dir,slug),studio=join(repo,'store/studio');await mkdir(join(studio,'sets'),{recursive:true});await mkdir(join(studio,'assets'));
    await writeFile(join(studio,'studio.config.json'),JSON.stringify({name:slug,sets:'sets',defaultSet:'main',components:'components.js',css:'components.css',icon:'assets/icon.png'}));
    await writeFile(join(studio,'sets/main.json'),JSON.stringify(valid()));await writeFile(join(studio,'components.js'),'export default {};');await writeFile(join(studio,'private.txt'),'secret');
-   db.prepare('INSERT INTO projects VALUES (?,?)').run(slug,repo);
+   db.prepare('INSERT INTO projects VALUES (?,?)').run(slug,slug === 'first' ? null : repo);
   }db.close();
-  assert.equal((await discoverProjects({dbPath,repo:null,slug:null})).length,2);
+  assert.equal((await discoverProjects({dbPath,repo:null,slug:null})).length,1);
   const started=await startServer(0,{dbPath,repo:null,slug:null});server=started.server;const base=`http://127.0.0.1:${started.port}`;
+  const mapping = new DatabaseSync(dbPath);
+  mapping.prepare('UPDATE projects SET flutter_project_path = ? WHERE slug = ?').run(join(dir,'first'),'first');mapping.close();
   const projects=await(await fetch(base+'/api/projects')).json();assert.equal(projects.length,2);assert.equal('dir' in projects[0],false);
   assert.equal((await fetch(base+'/p/first/components.js')).status,200);
   for(const path of ['/p/first/private.txt','/p/first/studio.config.json','/p/first/assets/%2e%2e%2fprivate.txt','/engine/serve.mjs']) assert.notEqual((await fetch(base+path)).status,200);

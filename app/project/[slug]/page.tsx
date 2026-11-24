@@ -1,9 +1,12 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getLatestGscIndexInspections, getProjectMetricTrend, summarizeProject } from "@/lib/insights";
 import { aggregatePagesByUrl, aggregateQueriesByText } from "@/lib/report";
 import { readData } from "@/lib/store";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -29,6 +32,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
     notFound();
   }
 
+  const hasStudio = Boolean(project.flutterProjectPath && existsSync(join(project.flutterProjectPath, "store", "studio", "studio.config.json")));
+  const studioUrl = `http://127.0.0.1:5177/?project=${encodeURIComponent(project.slug)}`;
   const summary = summarizeProject(data, project.id);
 
   const gscSnapshots = data.metricSnapshots.filter((m) => m.projectId === project.id && m.source === "gsc");
@@ -108,6 +113,34 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         </div>
         <Badge>{summary.opportunities} opportunita&apos; aperte</Badge>
       </header>
+
+      {(hasStudio || project.type !== "web") && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Screenshot per gli store</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {hasStudio
+                  ? "Modifica le composizioni e genera gli screenshot con Store Studio. I set sono collegati al repository dell?app."
+                  : "Collega il repository dell?app per trovare i suoi set di screenshot in Store Studio."}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {hasStudio ? "Avvia dal terminale di OpenFindability, poi apri lo studio:" : "Dalla cartella OpenFindability, configura il percorso:"}
+              </p>
+              <code className="block overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs">
+                {hasStudio ? `pnpm studio --slug ${project.slug}` : `npx tsx scripts/update-project.ts --slug ${project.slug} --flutter-path "<repository>"`}
+              </code>
+            </div>
+            {hasStudio && (
+              <Button asChild className="shrink-0">
+                <a href={studioUrl} target="_blank" rel="noreferrer">Apri Store Studio</a>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {indexInspections.length > 0 && (
