@@ -1,5 +1,5 @@
 import { db, getSqliteHandle, type AppDb } from "@/lib/db/client";
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import {
   ga4LandingMetrics as ga4LandingMetricsTable,
   webPerformanceMetrics as webPerformanceMetricsTable,
@@ -464,3 +464,115 @@ export async function updateData(mutator: (data: AppData) => AppData | void): Pr
   }
   throw new Error("Unreachable store retry state.");
 }
+
+/** Read-only dashboard projection; deliberately never registered as a writable snapshot. */
+export type DashboardScope = "portfolio"|"overview"|"acquisition"|"store"|"revenue"|"health"|"opportunities"|"interventions"|"settings"|"data";
+export function readDashboardDataWith(database: AppDb, scope: DashboardScope, slug?: string): AppData {
+ return getSqliteHandle(database).transaction(() => {
+  const projects = database.select().from(projectsTable).where(slug ? eq(projectsTable.slug, slug) : undefined).all().map(denull) as Project[];
+  // Unknown slugs must never fall through to a global read.
+  const projectId = slug ? projects[0]?.id ?? "__dashboard_missing_project__" : undefined;
+  const metricSnapshots = (["portfolio","overview","acquisition","store","revenue","health","settings","data","interventions"].includes(scope) ? database.select().from(metricSnapshotsTable).where(projectId ? eq(metricSnapshotsTable.projectId, projectId) : undefined).all().map(denull) as MetricSnapshot[] : []);
+  const searchQueries = (["acquisition"].includes(scope) ? database.select().from(searchQueriesTable).where(projectId ? eq(searchQueriesTable.projectId, projectId) : undefined).all().map(denull) as SearchQueryMetric[] : []);
+  const pageMetrics = (["acquisition"].includes(scope) ? database.select().from(pageMetricsTable).where(projectId ? eq(pageMetricsTable.projectId, projectId) : undefined).all().map(denull) as PageMetric[] : []);
+  const opportunities = (["portfolio","overview","opportunities"].includes(scope) ? database.select().from(opportunitiesTable).where(projectId ? eq(opportunitiesTable.projectId, projectId) : undefined).all().map(denull) as Opportunity[] : []);
+  const connectorRuns = (["portfolio","overview","settings","data"].includes(scope) ? database.select().from(connectorRunsTable).where(projectId ? eq(connectorRunsTable.projectId, projectId) : undefined).all().map(denull) as ConnectorRun[] : []);
+
+  const appReviews = (["store"].includes(scope) ? database
+    .select()
+    .from(appReviewsTable).where(projectId ? eq(appReviewsTable.projectId, projectId) : undefined)
+    .all()
+    .map((row) => {
+      const { reviewText, ...rest } = denull(row) : []);
+      return { ...rest, text: reviewText } as AppReview;
+    });
+
+  // appRank is nullable (not just optional) for these two tables, so keep the literal null from the row.
+  const appKeywords = (["portfolio","overview","store","settings","data"].includes(scope) ? database
+    .select()
+    .from(appKeywordsTable).where(projectId ? eq(appKeywordsTable.projectId, projectId) : undefined)
+    .all()
+    .map((row) => ({ ...denull(row), appRank: row.appRank })) as AppKeywordMetric[] : []);
+
+  const asoKeywordSnapshots = (["store"].includes(scope) ? database.select().from(asoKeywordSnapshotsTable).where(undefined).all().map(denull) as AsoKeywordSnapshot[] : []);
+
+  const asoAppRankSnapshots = (["store"].includes(scope) ? database
+    .select()
+    .from(asoAppRankSnapshotsTable).where(projectId ? eq(asoAppRankSnapshotsTable.projectId, projectId) : undefined)
+    .all()
+    .map((row) => ({ ...denull(row), appRank: row.appRank })) as AsoAppRankSnapshot[] : []);
+
+  const gscDimensionBreakdowns = (["acquisition"].includes(scope) ? database
+    .select()
+    .from(gscDimensionBreakdownsTable).where(projectId ? eq(gscDimensionBreakdownsTable.projectId, projectId) : undefined)
+    .all()
+    .map(denull) as GscDimensionBreakdown[] : []);
+
+  const gscSitemaps = (["health"].includes(scope) ? database.select().from(gscSitemapsTable).where(projectId ? eq(gscSitemapsTable.projectId, projectId) : undefined).all().map(denull) as GscSitemap[] : []);
+
+  const gscIndexInspections = (["health"].includes(scope) ? database
+    .select()
+    .from(gscIndexInspectionsTable).where(projectId ? eq(gscIndexInspectionsTable.projectId, projectId) : undefined)
+    .all()
+    .map(denull) as GscIndexInspection[] : []);
+
+  const admobMediationMetrics = (["portfolio","overview","revenue","settings","data"].includes(scope) ? database
+    .select()
+    .from(admobMediationMetricsTable).where(projectId ? eq(admobMediationMetricsTable.projectId, projectId) : undefined)
+    .all()
+    .map(denull) as AdmobMediationMetric[] : []);
+
+  const ascMetadataSnapshots = (["store"].includes(scope) ? database
+    .select()
+    .from(ascMetadataSnapshotsTable).where(projectId ? eq(ascMetadataSnapshotsTable.projectId, projectId) : undefined)
+    .all()
+    .map(denull) as AscMetadataSnapshot[] : []);
+
+  const ascExperiments = (["store"].includes(scope) ? database.select().from(ascExperimentsTable).where(projectId ? eq(ascExperimentsTable.projectId, projectId) : undefined).all().map(denull) as AscExperiment[] : []);
+
+  const ascExperimentTreatments = (["store"].includes(scope) ? database
+    .select()
+    .from(ascExperimentTreatmentsTable).where(ascExperiments.length ? inArray(ascExperimentTreatmentsTable.experimentId, ascExperiments.map(r=>r.id)) : sql`0`)
+    .all()
+    .map(denull) as AscExperimentTreatment[] : []);
+
+  const playVitalsMetrics = (["portfolio","overview","health","settings","data"].includes(scope) ? database.select().from(playVitalsMetricsTable).where(projectId ? eq(playVitalsMetricsTable.projectId, projectId) : undefined).all().map(denull) as PlayVitalsMetric[] : []);
+
+  const playInstallStats = (["portfolio","overview","acquisition","store","settings","data"].includes(scope) ? database.select().from(playInstallStatsTable).where(projectId ? eq(playInstallStatsTable.projectId, projectId) : undefined).all().map(denull) as PlayInstallStat[] : []);
+
+  const ascAnalyticsMetrics = (["portfolio","overview","acquisition","store","settings","data"].includes(scope) ? database
+    .select()
+    .from(ascAnalyticsMetricsTable).where(projectId ? eq(ascAnalyticsMetricsTable.projectId, projectId) : undefined)
+    .all()
+    .map(denull) as AscAnalyticsMetric[] : []);
+
+  const snapshot: AppData = {
+    ga4LandingMetrics: (["portfolio","overview","acquisition","settings","data"].includes(scope) ? database.select().from(ga4LandingMetricsTable).where(projectId ? eq(ga4LandingMetricsTable.projectId, projectId) : undefined).all() : []),
+    webPerformanceMetrics: (["health"].includes(scope) ? database.select().from(webPerformanceMetricsTable).where(projectId ? eq(webPerformanceMetricsTable.projectId, projectId) : undefined).all() : []),
+    projectInterventions: (["overview","acquisition","store","revenue","health","interventions"].includes(scope) ? database.select().from(projectInterventionsTable).where(projectId ? eq(projectInterventionsTable.projectId, projectId) : undefined).all() : []),
+    seoGeoObservations: (["portfolio","overview","acquisition","settings","data"].includes(scope) ? database.select().from(seoGeoObservationsTable).where(projectId ? eq(seoGeoObservationsTable.projectId, projectId) : undefined).all() as NonNullable<AppData["seoGeoObservations"]> : []),
+    projects,
+    metricSnapshots,
+    searchQueries,
+    pageMetrics,
+    opportunities,
+    connectorRuns,
+    appReviews,
+    appKeywords,
+    asoKeywordSnapshots,
+    asoAppRankSnapshots,
+    gscDimensionBreakdowns,
+    gscSitemaps,
+    gscIndexInspections,
+    admobMediationMetrics,
+    ascMetadataSnapshots,
+    ascExperiments,
+    ascExperimentTreatments,
+    playVitalsMetrics,
+    playInstallStats,
+    ascAnalyticsMetrics,
+  };
+  return snapshot;
+ })();
+}
+export async function readDashboardData(scope: DashboardScope, slug?: string): Promise<AppData> {return readDashboardDataWith(db,scope,slug);}

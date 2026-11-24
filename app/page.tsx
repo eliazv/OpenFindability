@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { readData } from "@/lib/store";
+import { readDashboardData } from "@/lib/store";
 import { METRICS,projectMetric,openOpportunities,sourceRows } from "@/lib/dashboard/read-model";
 import { formatMetric,parseDays } from "@/lib/dashboard/metrics";
 import { Explorer,PeriodPicker,type Params } from "@/components/analytics/explorer";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { SyncButton } from "@/components/sync-button";
 export default async function Home({searchParams}:{searchParams:Promise<Params>}){
- const query=await searchParams,days=parseDays(query.days),data=await readData(),opps=openOpportunities(data);
+ const query=await searchParams,days=parseDays(query.days),data=await readDashboardData("portfolio"),opps=openOpportunities(data);
  const projects=data.projects.map(p=>({p,metrics:(p.type==="web"?[METRICS.clicks,METRICS.sessions]:p.type==="app"?[METRICS.downloads,METRICS.installs,METRICS.mrr]:[METRICS.clicks,METRICS.downloads,METRICS.mrr]).map(s=>projectMetric(data,p.id,s,days)),sources:sourceRows(data,p),opps:opps.filter(o=>o.projectId===p.id).length}));
  const attention=projects.flatMap(p=>p.sources).filter(s=>s.stale||s.status==="failed"||s.status==="partial"||!s.latest).length;
  return <main className="mx-auto max-w-[1680px] w-full min-w-0 p-4 lg:p-7 space-y-5"><header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Panoramica</h1><p className="text-sm text-muted-foreground">Portafoglio progetti · dati locali</p></div><div className="flex flex-wrap items-start gap-2"><PeriodPicker params={query}/><SyncButton/></div></header>

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readData } from "@/lib/store";
+import { readDashboardData, type DashboardScope } from "@/lib/store";
 import { getLatestGscIndexInspections } from "@/lib/insights";
 import { aggregatePagesByUrl,aggregateQueriesByText } from "@/lib/report";
 import { METRICS,projectMetric,sourceRows } from "@/lib/dashboard/read-model";
@@ -15,7 +15,7 @@ import type { MetricSpec } from "@/lib/dashboard/read-model";
 const labels:Record<string,string>={acquisition:"Acquisizione",store:"Store",revenue:"Ricavi",health:"Salute",opportunities:"Opportunità",interventions:"Interventi",settings:"Integrazioni"};
 export default async function Section({params,searchParams}:{params:Promise<{slug:string;section:string}>;searchParams:Promise<Params>}){
  const [{slug,section},query]=await Promise.all([params,searchParams]);if(!Object.hasOwn(labels,section))notFound();
- const data=await readData(),p=data.projects.find(p=>p.slug===slug);if(!p||section==="store"&&p.type==="web")notFound();
+ const data=await readDashboardData(section as DashboardScope,slug),p=data.projects.find(p=>p.slug===slug);if(!p||section==="store"&&p.type==="web")notFound();
  const days=parseDays(query.days),id=p.id;
  const byProject=<T extends {projectId?:string}>(rows:T[])=>rows.filter(r=>r.projectId===id);
  const windowFor=<T extends {date:string}>(rows:T[]):Range=>dayRange(latestDay(rows)??new Date().toISOString().slice(0,10),days);
