@@ -12,9 +12,9 @@
   },
   "license": "MIT",
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
+    "dev": "node scripts/dashboard.mjs dev",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1",
+    "start": "node scripts/dashboard.mjs start",
     "typecheck": "tsc --noEmit",
     "doctor": "tsx scripts/doctor.ts",
     "db:backup": "tsx scripts/backup-db.ts",
@@ -89,7 +89,8 @@
     "db:migrate-json": "tsx scripts/migrate-json-to-sqlite.ts",
     "studio": "node studio/serve.mjs",
     "studio:export": "node studio/export.mjs",
-    "test:studio": "node --test tests/studio.test.mjs"
+    "test:studio": "node --test tests/studio.test.mjs",
+    "test:dashboard": "node --test tests/dashboard-launch.test.mjs"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.6-r.1",

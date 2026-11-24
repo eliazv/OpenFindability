@@ -29,6 +29,8 @@ test('multi-project discovery, public files, origin guard and isolated atomic sa
   }db.close();
   assert.equal((await discoverProjects({dbPath,repo:null,slug:null})).length,1);
   const started=await startServer(0,{dbPath,repo:null,slug:null});server=started.server;const base=`http://127.0.0.1:${started.port}`;
+  const health = await (await fetch(base+'/api/studio/status')).json();
+  assert.equal(health.service,'openfindability-studio');assert.equal(health.protocol,1);
   const mapping = new DatabaseSync(dbPath);
   mapping.prepare('UPDATE projects SET flutter_project_path = ? WHERE slug = ?').run(join(dir,'first'),'first');mapping.close();
   const projects=await(await fetch(base+'/api/projects')).json();assert.equal(projects.length,2);assert.equal('dir' in projects[0],false);

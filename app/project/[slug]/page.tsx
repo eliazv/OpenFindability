@@ -127,7 +127,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
                   : "Collega il repository dell?app per trovare i suoi set di screenshot in Store Studio."}
               </p>
               <p className="text-sm text-muted-foreground">
-                {hasStudio ? "Avvia dal terminale di OpenFindability, poi apri lo studio:" : "Dalla cartella OpenFindability, configura il percorso:"}
+                {hasStudio ? "Lo studio parte insieme alla dashboard. Per avviarlo anche da solo:" : "Dalla cartella OpenFindability, configura il percorso:"}
               </p>
               <code className="block overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs">
                 {hasStudio ? `pnpm studio --slug ${project.slug}` : `npx tsx scripts/update-project.ts --slug ${project.slug} --flutter-path "<repository>"`}

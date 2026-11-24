@@ -105,7 +105,7 @@ Stato nell'URL, così ogni vista è un link: `/?project=scadenzario&set=blue&pla
 
 Cambiando progetto: formato e lingua restano se il nuovo set li supporta, il set torna al `defaultSet`. Con modifiche non salvate nell'editor, conferma prima di cambiare. "Aggiungi…" elenca i componenti generici più quelli del progetto attivo.
 
-Opzionale: nella pagina progetto della dashboard Next.js, un link "Apri Store Studio" a `http://127.0.0.1:5177/?project=<slug>`. Lo studio resta uno script separato, non una route Next.js.
+Opzionale: nella pagina progetto della dashboard Next.js, un link "Apri Store Studio" a `http://127.0.0.1:5177/?project=<slug>`. Lo studio resta uno script separato, non una route Next.js; viene avviato anche insieme alla dashboard.
 
 ## Migrazione
 
@@ -143,7 +143,7 @@ pnpm studio:export --slug scadenzario --check --strict
 pnpm test:studio
 ```
 
-`pnpm studio` scopre i repository già registrati tramite `flutterProjectPath`, purché contengano il config. `--repo` aggiunge o sostituisce un progetto solo per la sessione; funziona anche per app non Flutter senza cambiare il database. Aprire `http://127.0.0.1:5177/`. Il server deve essere avviato manualmente.
+`pnpm studio` scopre i repository già registrati tramite `flutterProjectPath`, purché contengano il config. `--repo` aggiunge o sostituisce un progetto solo per la sessione; funziona anche per app non Flutter senza cambiare il database. Aprire `http://127.0.0.1:5177/`. `pnpm dev` avvia dashboard e Studio insieme; `pnpm start` fa lo stesso per una dashboard gi? compilata. `pnpm studio` avvia soltanto Studio. Chiudendo la dashboard si chiude lo Studio avviato da essa; uno Studio gi? aperto separatamente resta attivo.
 
 Il motore effettivo è in `studio/engine.js`, con helper, contratto, componenti generici, CSS, server, export e UI condivisa. In Scadenzario sono rimasti config, Azzurro, componenti app, CSS, font e icona. Originale, Lime e il set Notion, insieme al vecchio strumento, sono conservati in `store/studio/archive/` e non compaiono nello studio condiviso.
 
@@ -162,4 +162,4 @@ Lo studio usa il percorso registrato nel progetto: `--repo` vale solo per la ses
 npx tsx scripts/update-project.ts --slug <slug> --flutter-path "C:/percorso/repository"
 ```
 
-Nella radice indicata deve esistere `store/studio/studio.config.json`. Ricaricare la pagina dello studio: il registro viene letto nuovamente senza riavviare il server. Gli screenshot non vengono copiati dentro OpenFindability: galleria ed editor leggono gli stessi set nel repository dell?app. Nella dashboard del progetto compare ?Screenshot per gli store?; avviare manualmente `pnpm studio` e usare ?Apri Store Studio?.
+Nella radice indicata deve esistere `store/studio/studio.config.json`. Ricaricare la pagina dello studio: il registro viene letto nuovamente senza riavviare il server. Gli screenshot non vengono copiati dentro OpenFindability: galleria ed editor leggono gli stessi set nel repository dell?app. Nella dashboard del progetto compare ?Screenshot per gli store?; con `pnpm dev` lo studio parte automaticamente; usare ?Apri Store Studio?. `pnpm studio` resta disponibile per usare solo gli screenshot.

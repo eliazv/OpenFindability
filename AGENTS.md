@@ -8,7 +8,7 @@ This file stays short on purpose. The depth (API quirks, storage shapes, dedupe 
 
 OpenFindability is a local, self-hosted tool for deciding what to improve across the owner's web projects and mobile apps: it pulls search, analytics, download and revenue data from the platforms into one SQLite file, derives SEO opportunities, and writes reports.
 
-It is a single Next.js app in the repository root, with manual sync only. Do not introduce a monorepo, SaaS billing, auth, queues, a server process or cron scheduling unless explicitly requested. Store Studio (`studio/`) is an intentional exception: a separate loopback-only, dependency-free Node 24 tool, started manually; its standalone HTML UI uses native controls and shared vanilla CSS. Project content stays in each app repository.
+It is a single Next.js app in the repository root, with manual sync only. Do not introduce a monorepo, SaaS billing, auth, queues, a server process or cron scheduling unless explicitly requested. Store Studio (`studio/`) is an intentional exception: a separate loopback-only, dependency-free Node 24 tool, started automatically by dashboard `dev`/`start` or independently with `pnpm studio`; its standalone HTML UI uses native controls and shared vanilla CSS. Project content stays in each app repository.
 
 ## Structure
 
@@ -31,10 +31,12 @@ Use pnpm. On Windows, pnpm's `--` passthrough mis-quotes extra positional args: 
 
 ```bash
 # Run and check
-pnpm dev
+pnpm dev                           # dashboard + Store Studio
+pnpm start                         # production dashboard + Studio (after build)
 pnpm studio                        # local screenshot editor, port 5177
 pnpm studio:export --slug <slug> --set <set> --strict
 pnpm test:studio
+pnpm test:dashboard                # launcher lifecycle, no real Next.js startup
 pnpm typecheck
 pnpm build
 pnpm run test:gsc

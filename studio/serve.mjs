@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile, writeFile, readdir, realpath, rename, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -7,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { validateSet } from './contract.mjs';
 export const ENGINE = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(ENGINE, '..');
+export const STUDIO_IDENTITY = createHash('sha256').update(ROOT).digest('hex');
 export function arg(name) { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : null; }
 export function inside(root, target) { const rel = relative(root, target); return !rel.startsWith('..') && !isAbsolute(rel); }
 export async function safePath(root, name) {
@@ -49,6 +51,9 @@ export async function startServer(port = Number(process.env.STUDIO_PORT ?? 5177)
       if (!/^127\.0\.0\.1(?::\d+)?$/.test(req.headers.host ?? '')) { res.writeHead(403).end('Host non consentito'); return; }
       const url = new URL(req.url, `http://${req.headers.host}`);
       const json = (value) => { res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'no-store' }).end(JSON.stringify(value)); };
+      if (req.method === 'GET' && url.pathname === '/api/studio/status') {
+        json({ service: 'openfindability-studio', instance: STUDIO_IDENTITY, protocol: 1 }); return;
+      }
       if (req.method === 'GET' && url.pathname === '/api/projects') {
         projects = await discoverProjects(options);
         json(projects.map(p => ({ slug:p.slug, name:p.config.name ?? p.slug, icon:`/p/${p.slug}/${p.config.icon ?? ''}`, defaultSet:p.config.defaultSet, components:`/p/${p.slug}/${p.config.components ?? 'components.js'}`, css:`/p/${p.slug}/${p.config.css ?? 'components.css'}`, sets:p.sets, setsPath:p.config.sets ?? 'sets' }))); return;
