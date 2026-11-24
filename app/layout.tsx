@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { cookies } from "next/headers";
+import { projectIcon } from "@/lib/dashboard/project-icon";
 import { readProjects } from "@/lib/store";
 import { ThemeToggle } from "@/components/analytics/theme-toggle";
 import { ProjectSwitcher } from "@/components/analytics/project-switcher";
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const projects = (await readProjects()).map(({ id, slug, name, type }) => ({ id, slug, name, type }));
+  const projects = await Promise.all((await readProjects()).map(async (p) => ({ id:p.id, slug:p.slug, name:p.name, type:p.type, icon:await projectIcon(p) })));
   const cookieStore = await cookies();
   const dark = cookieStore.get("dashboard_theme")?.value === "dark";
 
@@ -25,7 +26,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <SidebarProvider defaultOpen={cookieStore.get("sidebar_state")?.value !== "false"}>
           <AppSidebar projects={projects} />
-          <SidebarInset>
+          <SidebarInset className="min-w-0">
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
               <SidebarTrigger />
               <Separator orientation="vertical" className="h-4" />

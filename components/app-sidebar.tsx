@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Database, LayoutDashboard, Wrench } from "lucide-react";
 
+import { ProjectAvatar } from "@/components/analytics/project-avatar";
 import type { Project } from "@/lib/types";
 import {
   Sidebar,
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 
-export function AppSidebar({ projects }: { projects: Pick<Project, "id" | "slug" | "name" | "type">[] }) {
+export function AppSidebar({ projects }: { projects: (Pick<Project, "id" | "slug" | "name" | "type"> & {icon?:string})[] }) {
   const pathname = usePathname();
 
   return (
@@ -48,7 +49,7 @@ export function AppSidebar({ projects }: { projects: Pick<Project, "id" | "slug"
                   <SidebarMenuItem key={project.id}>
                     <SidebarMenuButton asChild isActive={pathname === href || pathname.startsWith(href + "/")} tooltip={project.name}>
                       <Link href={href}>
-                        <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center rounded bg-sidebar-accent text-[10px] font-semibold text-sidebar-accent-foreground">{project.name.slice(0, 2).toUpperCase()}</span>
+                        <ProjectAvatar name={project.name} icon={project.icon}/>
                         <span>{project.name}</span>
                       </Link>
                     </SidebarMenuButton>

@@ -1,29 +1,40 @@
-# Dashboard refactor — implementazione e verifica
+# Refactor dashboard — stato del branch
 
-Branch: feat/dashboard-analytics-refactor. Base: ultimo master 4d5ab688 + due commit audit.
-Stato: implementazione ampia, non certificata. Non è un merge-ready completo: l'ambiente non risolve github.com per git clone, non dispone di pnpm e usa Node 22 anziché Node 24. Modifiche tramite GitHub API. Non eseguiti build/typecheck/test/browser o accessi al database reale.
+Branch: `feat/dashboard-analytics-refactor`. Base: ultimo master `4d5ab68829a9c4146294d5a27ab6ca2861a846a8` + due commit di analisi. Non modificare master fino al collaudo.
 
-## Implementato
-- Shell DTO minimale, cookie sidebar ripristinato, iniziali progetto, route attiva, navigazione contestuale, strumenti e centro dati.
-- Home per gruppi web/app/misti e overview con KPI, sparklines, confronto periodi, scelta metrica; missing/null, coverage e valute.
-- Sezioni Acquisizione, Store, Ricavi, Salute, Opportunità, Interventi e Integrazioni. Tabelle shadcn con ricerca, sort e paginazione lato server (in memoria), query string; dati provider nativi espliciti.
-- Grafici con serie precedente, dati tabellari, annotazioni interventi, scatter CTR/posizione, ranked list, distribuzione recensioni. Grafici legacy meno saturi, assi, zero e resize.
-- Sync per progetto/fonte con validazione e protezione same-origin invariata; niente chiamate automatiche. Store Studio resta indipendente. Tool hub espone comandi e non esegue release.
-- Test unitari nuovi in tests/dashboard-metrics.test.ts (non eseguiti).
+## Implementato nel codice
 
-## Componenti esterni
-Importati/adattati Sparkline, DeltaBadge e BarList da https://github.com/NoahGdev/dashboardcn/tree/b1ffacbca0f7a0be60135c8665b9e8c267205c48/apps/web/registry/dashboardcn/ui, licenza MIT conservata in docs/reference/dashboardcn-LICENSE.txt. Sparkline adattata a Recharts 2 (no AreaRevealShape, gaps null, animazioni off). Formattazione locale IT e colori token esistenti. KPI, explorer e scatter sono implementazioni locali. Nessuna nuova dipendenza o lockfile modificato. Non installato TanStack Table v9 o Recharts v3 senza poter verificare le peer dependencies.
+- Portfolio con KPI globali omogenei, confronti, esclusioni esplicite dei progetti con copertura/valuta incompatibile, ricerca e filtro web/app/misto.
+- Sidebar persistente, icone locali con fallback, navigazione per progetto, ricerca rapida Ctrl/Cmd+K e tema chiaro/scuro persistente.
+- Panoramica progetto e sezioni Acquisizione, Store, Ricavi, Salute, Opportunità, Interventi, Integrazioni; Centro dati e Strumenti globali.
+- Componenti dashboardcn adattati: Sparkline, DeltaBadge e BarList. Licenza MIT conservata. Chart principali e scatter SEO su Recharts 2 esistente.
+- Periodi 7/28/90/365 giorni, confronto con periodo precedente, coverage, gap null, CTR ponderato, posizione ponderata, ranking query, scatter, grafici ASO, metriche store, ricavi per fonte/valuta, andamento crash/ANR e performance web per URL/dispositivo/fonte. Annotazioni e confronto degli interventi, senza attribuzione causale implicita.
+- Explorer riusabile con ricerca, sort, paginazione, dettaglio laterale e CSV della pagina corrente con neutralizzazione formule. Letture SQLite per dominio/progetto, senza migrazioni; ordinamento e paginazione avvengono dopo lettura scoped, non tramite LIMIT SQL.
+- Stato connettori, ultimo dato vs ultima sincronizzazione, registro e tracker 14 giorni. Sync manuale mirato con controlli same-origin; niente sync automatico né pubblicazione da una visita. Doctor completo resta un comando esplicito.
+- Loading/error state, test dedicati metriche/CSV/store, note di implementazione.
 
-## Rimanente prima di considerare concluso il piano
-- Typecheck, test, build e QA visiva; verificare eventuali regressioni e semantica dati con fixture isolate.
-- Query SQL di dominio (attualmente readData completo nelle pagine, solo shell ottimizzata); benchmark e indici.
-- Icone reali, search/filtri portfolio, KPI globali con valuta/coverage omogenee, selettore custom date e confronto anno precedente.
-- CTR e posizione come KPI ponderati; drill-down dettaglio riga, CSV safe, colonne configurabili, TanStack Table; metriche landing aggregate, ASO scatter/rank trend, vitals e performance charts, breakdown ricavi, tracker sync e timeline release, confronto interventi più approfondito.
-- Dark mode, command palette, test accessibilità; stato non configurato vs pending vs parziale per tutti i connettori; dettagli Doctor filtrati, variant PPO.
-- Strumenti operativi con preflight e anteprima esplicita; attualmente solo comandi documentati.
-- Nessun dato fittizio in produzione e nessun parser retention/coorti inventato.
+## Verifiche effettive
 
-## Verifica locale suggerita
-Checkout del branch, Node 24, pnpm install --frozen-lockfile; pnpm typecheck; pnpm exec tsx --test tests/dashboard-metrics.test.ts; pnpm run test:gsc; pnpm run test:reliability; pnpm run test:integrations; pnpm run test:growth-evidence; pnpm run test:seo-geo; pnpm test:dashboard; pnpm build. Avviare pnpm dev solo su DB isolato per i test demo. Verificare periodi, valori null/zero, valute, sparse snapshot, filtri e pagina mobile; no sync durante smoke test. Non usare --apply.
+I 7 test puri di `dashboard-metrics.test.ts` e `dashboard-csv.test.ts` sono passati (7/7), eseguendo i quattro file sorgente/test corrispondenti ai blob Git verificati del branch, transpilation TypeScript e Node 22 nell'ambiente isolato. Non equivale al typecheck completo. Il repo richiede Node 24 e pnpm; checkout git bloccato da DNS e pnpm non disponibile nell'ambiente. Nessun avvio Next.js, screenshot, build o test SQLite completo eseguito. Nessun dato locale reale letto, nessun sync, nessuna modifica ai database utente. Non considerare il branch pronto al merge finché questi controlli non passano.
 
-Riferimenti: [audit](2026-11-24-dashboard-audit-e-riprogettazione.md), [sistema visuale](2026-11-24-dashboard-visual-system-e-librerie.md).
+## Cosa resta
+
+- Eseguire collaudo completo: installazione da lockfile, typecheck, suite analytics/reliability, build, navigazione desktop/mobile e controllo visivo con dataset locale; correggere eventuali regressioni.
+- Valutare TanStack Table e Recharts 3 in una migrazione separata dopo test di compatibilità; i componenti importati sono adattati alla versione installata. Non è stata installata l'intera registry dashboardcn, Tremor o altre librerie.
+- Date arbitrarie, confronto anno precedente, selezione colonne persistente, CSV dell'intero risultato filtrato, paginazione SQL e virtualizzazione se necessaria dopo profiling.
+- Ulteriori grafici specialistici (scatter ASO, soglie ufficiali dove verificabili, breakdown avanzati), workflow operativi guidati con preflight e conferma esplicita; distinzione più fine delle fonti non configurate/in attesa/parziali.
+- Test visuali e accessibilità completa. Non sono stati introdotti dati demo al posto di dati reali mancanti.
+
+## Collaudo locale (Node 24)
+
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test:dashboard-analytics
+pnpm test:reliability
+pnpm test:gsc
+pnpm build
+pnpm dev
+```
+
+Verificare con progetti web/app/misti, sorgenti mancanti, valute diverse, periodi incompleti, dataset vuoto, navigazione mobile e tema scuro. Per le icone opzionali inserire PNG locali in `data/project-icons/<slug>.png`; altrimenti viene tentata l'icona della configurazione Store Studio locale e usato il fallback delle iniziali.
