@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { google } from "googleapis";
+import { cliErrorMessage } from "@/lib/cli-error";
 
 async function main() {
   const clientId = process.env.ADSENSE_CLIENT_ID?.trim();
@@ -24,6 +25,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error(cliErrorMessage(error));
   process.exit(1);
 });

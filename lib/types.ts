@@ -414,6 +414,7 @@ export type AppData = {
 export type SyncOptions = {
   source?: SourceType;
   backfillDays?: number;
+  projectSlug?: string;
 };
 
 export type SeoGeoSource = "bing_webmaster" | "cloudflare_ai" | "clarity";

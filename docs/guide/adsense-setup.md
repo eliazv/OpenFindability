@@ -45,12 +45,22 @@ pnpm run project:add -- --name "Nome sito" --slug slug --type web \
   --adsense-domain example.com
 ```
 
-O su un progetto esistente, imposta `adsenseSiteDomain` nel DB (nessuno script di update dedicato ancora — modifica diretta via `pnpm run db:studio` o ricrea il progetto).
+Su un progetto esistente usa il comando di aggiornamento, senza ricrearlo:
+
+```powershell
+pnpm exec tsx scripts/update-project.ts --slug example-site --adsense-domain example.com
+```
 
 ## 6. Sync
 
 ```bash
 pnpm run sync:adsense
+```
+
+Per aggiornare un solo progetto senza interrogare gli altri:
+
+```powershell
+pnpm exec tsx scripts/sync.ts adsense 45 --project example-site
 ```
 
 (oppure incluso di default in `pnpm run sync`). Per un backfill storico completo:
