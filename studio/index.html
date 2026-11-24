@@ -1,0 +1,24 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Store Studio · OpenFindability</title><link rel="stylesheet" href="/engine/engine.css"><link rel="stylesheet" href="/engine/chrome.css"></head><body><header class="studio-header">
+  <div class="brand"><span class="brand-mark" aria-hidden="true">▥</span><div><strong>Store Studio</strong><small>OpenFindability</small></div></div>
+  <div class="selectors"><label class="project-field"><img id="app-icon" alt=""><span>Progetto<select id="project" aria-label="Progetto"></select></span></label><label>Set<select id="set" aria-label="Set"></select></label></div>
+  <div class="selectors"><label>Formato<select id="platform" aria-label="Formato"></select></label><label>Lingua<select id="locale" aria-label="Lingua"></select></label></div>
+  <div class="actions"><a id="edit" class="button primary">Apri editor →</a></div>
+</header><main class="gallery"><h1 id="title">I tuoi screenshot, insieme</h1><p id="description">Scegli progetto e set per iniziare</p><div id="proposals" aria-live="polite"></div></main>
+<script type="module">
+import {buildPanorama} from '/engine/engine.js';
+import {loadSession,connectHeader,showError} from '/engine/session.js';
+try {
+const session=await loadSession();connectHeader(session);
+const $=id=>document.getElementById(id),{set,project}=session;
+$('title').textContent=set.name;
+$('description').textContent=`${project.name} · ${set.slides.length} schermate · I contenuti restano nel repository del progetto`;
+function render(){
+ const main=$('proposals');main.replaceChildren();const href=`/engine/editor.html?${location.search.slice(1)}`;$('edit').href=href;
+ const strip=document.createElement('div');strip.className='strip';
+ const {root,slideW,slideH}=buildPanorama(set,{platform:$('platform').value,locale:$('locale').value});
+ const width=290,scale=width/slideW,frame=document.createElement('div');frame.className='scaled';frame.style.width=`${set.slides.length*width}px`;frame.style.height=`${slideH*scale}px`;root.style.transform=`scale(${scale})`;frame.append(root);
+ const links=document.createElement('div');links.className='slide-links';set.slides.forEach((_,i)=>{const a=document.createElement('a');a.style.width=`${width-10}px`;a.href=`${href}&slide=${i+1}`;a.textContent=`${String(i+1).padStart(2,'0')} · Modifica schermata`;links.append(a);});strip.append(frame,links);main.append(strip);
+}
+for(const key of ['platform','locale'])$(key).addEventListener('input',render);render();
+} catch(error) {showError(error);}
+</script></body></html>

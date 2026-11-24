@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Store Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=block">
+<link rel="stylesheet" href="/engine/engine.css">
+<link rel="stylesheet" href="/engine/chrome.css">
+<style>
+  main { display: grid; grid-template-columns: minmax(0,1fr) 320px; min-height: calc(100dvh - var(--toolbar-height, 128px)); }
+  #viewport { overflow: auto; padding: 40px; }
+  #canvas { position: relative; transform-origin: 0 0; }
+  aside { border-left: 1px solid #ddd; background: #fff; padding: 14px; overflow: auto; max-height: calc(100dvh - var(--toolbar-height, 128px)); position: sticky; top: var(--toolbar-height, 128px); }
+  aside h2 { font-size: 13px; margin: 0 0 8px; }
+  aside label { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 6px; margin: 4px 0; }
+  aside input[type=number] { width: 100%; }
+  aside textarea { width: 100%; height: 300px; font: 12px/1.4 ui-monospace, monospace; }
+  aside .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .hint { color: #777; font-size: 12px; }
+</style>
+</head>
+<body>
+<header class="studio-header">
+  <div class="brand"><span class="brand-mark" aria-hidden="true">▥</span><div><strong>Store Studio</strong><small>OpenFindability</small></div></div>
+  <div class="selectors"><label class="project-field"><img id="app-icon" alt=""><span>Progetto<select id="project" aria-label="Progetto"></select></span></label><label>Set<select id="set" aria-label="Set"></select></label></div>
+  <div class="selectors"><label>Formato<select id="platform" aria-label="Formato"></select></label><label>Lingua<select id="locale" aria-label="Lingua"></select></label></div>
+  <div class="actions"><a id="gallery" class="button" href="/">Galleria</a><label>Zoom <input id="zoom" type="range" min="0.05" max="0.5" step="0.01" value="0.16"></label><select id="add" aria-label="Aggiungi componente"><option value="">+ Aggiungi…</option></select><button id="undo" title="Annulla ultima modifica (Ctrl+Z)">↶ Annulla</button><button id="save" class="primary">Salva nel repo</button><span id="status" role="status" aria-live="polite">Tutto salvato</span></div>
+</header>
+<main>
+  <div id="viewport"><div id="canvas" class="editing"></div></div>
+  <aside>
+    <h2 id="sel-title">Nessun elemento selezionato</h2>
+    <p class="hint">Trascina per spostare. Alt + rotella per ridimensionare, Shift + rotella per ruotare.
+      Frecce = sposta di poco (Shift = di più). Le modifiche valgono per la piattaforma
+      scelta solo se attivi "Solo questa piattaforma".</p>
+    <div id="inspector" hidden>
+      <label><span>x</span><input id="f-x" type="number" step="0.01"></label>
+      <label><span>y</span><input id="f-y" type="number" step="0.01"></label>
+      <label><span>w</span><input id="f-w" type="number" step="0.01"></label>
+      <label><span>rot</span><input id="f-rot" type="number" step="0.5"></label>
+      <label><span>z</span><input id="f-z" type="number" step="1"></label>
+      <label style="grid-template-columns:auto 1fr"><input id="f-over" type="checkbox"><span>Solo questa piattaforma</span></label>
+      <div class="row"><button id="dup">Duplica</button><button id="del">Elimina</button></div>
+      <h2>JSON elemento</h2>
+      <textarea id="json" spellcheck="false"></textarea>
+      <div class="row"><button id="apply">Applica JSON</button></div>
+    </div>
+    <h2 style="margin-top:18px">Slide</h2>
+    <p class="hint">Titoli e sfondi delle slide: modifica la sezione <code>slides</code> qui sotto.</p>
+    <textarea id="slides" spellcheck="false" style="height:220px"></textarea>
+    <div class="row"><button id="apply-slides">Applica slide</button></div>
+  </aside>
+</main>
+<script type="module">
+  import { buildPanorama, resolved, COMPONENT_TYPES } from '/engine/engine.js';
+
+  import { loadSession, connectHeader, showError } from '/engine/session.js';
+  try {
+  const $ = (id) => document.getElementById(id);
+  new ResizeObserver(([entry]) => document.documentElement.style.setProperty('--toolbar-height', `${entry.target.offsetHeight}px`)).observe(document.querySelector('header'));
+  const session = await loadSession();
+  const {q, project, setName} = session;
+  let set = session.set;
+  const history = [];
+  let selectedId = null;
+  let dirty = false;
+
+  const prefs = (() => { try { return JSON.parse(localStorage.getItem('studio') || '{}'); } catch { return {}; } })();
+  const savePrefs = () => { try { localStorage.setItem('studio', JSON.stringify({ platform: $('platform').value, locale: $('locale').value, zoom: $('zoom').value })); } catch {} };
+
+  connectHeader(session, () => dirty, () => { dirty=false; });
+  for (const type of COMPONENT_TYPES) $('add').add(new Option(type, type));
+  if (prefs.zoom) $('zoom').value = prefs.zoom;
+  const platform = () => $('platform').value;
+  const status = (text) => { $('status').textContent = text; };
+  const markDirty = () => { dirty = true; $('status').dataset.dirty='true'; status('● Modifiche non salvate'); };
+  const snapshot = () => { history.push(JSON.stringify(set)); if (history.length > 80) history.shift(); };
+  const findEl = (id) => set.elements.find((e) => e.id === id);
+
+  let geo = { W: 1, H: 1 };
+  function render() {
+    const { root, slideW, slideH } = buildPanorama(set, { platform: platform(), locale: $('locale').value });
+    geo = { W: slideW, H: slideH };
+    const canvas = $('canvas');
+    canvas.replaceChildren(root);
+    const zoom = Number($('zoom').value);
+    canvas.style.transform = `scale(${zoom})`;
+    canvas.style.width = `${root.style.width}`;
+    canvas.style.height = `${root.style.height}`;
+    canvas.parentElement.style.setProperty('--zoom', zoom);
+    // Reserve the scaled size so the viewport scrolls correctly.
+    canvas.style.marginRight = `${-parseFloat(root.style.width) * (1 - zoom)}px`;
+    canvas.style.marginBottom = `${-parseFloat(root.style.height) * (1 - zoom)}px`;
+    for (const node of root.querySelectorAll('.el')) {
+      node.classList.toggle('selected', node.dataset.id === selectedId);
+      node.addEventListener('pointerdown', startDrag);
+      node.addEventListener('wheel', onWheel, { passive: false });
+    }
+    $('slides').value = JSON.stringify(set.slides, null, 2);
+    savePrefs();
+  }
+
+  // Values edited in the canvas go to the base element, or to
+  // el.over[platform] when "Solo questa piattaforma" is on.
+  function target(el) {
+    if (!$('f-over').checked) return el;
+    el.over ??= {};
+    return (el.over[platform()] ??= {});
+  }
+
+  function inspect() {
+    const el = selectedId && findEl(selectedId);
+    $('inspector').hidden = !el;
+    $('sel-title').textContent = el ? `${el.kind ?? el.type} · ${el.id}` : 'Nessun elemento selezionato';
+    if (!el) return;
+    const r = resolved(el, platform());
+    for (const k of ['x', 'y', 'w', 'rot', 'z']) $(`f-${k}`).value = r[k] ?? (k === 'z' ? 10 : 0);
+    $('json').value = JSON.stringify(el, null, 2);
+  }
+
+  function select(id) { selectedId = id; render(); inspect(); }
+
+  function startDrag(ev) {
+    ev.stopPropagation();
+    const id = ev.currentTarget.dataset.id;
+    if (id !== selectedId) select(id);
+    const el = findEl(id);
+    const start = resolved(el, platform());
+    const zoom = Number($('zoom').value);
+    const x0 = ev.clientX, y0 = ev.clientY;
+    let moved = false;
+    const move = (e) => {
+      if (!moved) { snapshot(); moved = true; }
+      const t = target(el);
+      t.x = +(start.x + (e.clientX - x0) / zoom / geo.W).toFixed(4);
+      t.y = +(start.y + (e.clientY - y0) / zoom / geo.H).toFixed(4);
+      const node = document.querySelector(`.el[data-id="${CSS.escape(id)}"]`);
+      const r = resolved(el, platform());
+      node.style.left = `${r.x * geo.W - (r.w * geo.W) / 2}px`;
+      node.style.top = `${r.y * geo.H}px`;
+    };
+    const up = () => {
+      removeEventListener('pointermove', move);
+      removeEventListener('pointerup', up);
+      if (moved) { markDirty(); inspect(); }
+    };
+    addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+  }
+
+  function onWheel(ev) {
+    if (!ev.altKey && !ev.shiftKey) return;
+    ev.preventDefault();
+    const el = findEl(ev.currentTarget.dataset.id);
+    if (!el) return;
+    snapshot();
+    const r = resolved(el, platform());
+    const t = target(el);
+    const dir = Math.sign(ev.deltaY || ev.deltaX);
+    if (ev.altKey) t.w = +Math.max(0.03, r.w * (1 - dir * 0.03)).toFixed(4);
+    else t.rot = +((r.rot ?? 0) - dir).toFixed(1);
+    selectedId = el.id;
+    markDirty(); render(); inspect();
+  }
+
+  for (const k of ['x', 'y', 'w', 'rot', 'z']) {
+    $(`f-${k}`).addEventListener('change', (e) => {
+      const el = findEl(selectedId); if (!el) return;
+      snapshot(); target(el)[k] = Number(e.target.value); markDirty(); render(); inspect();
+    });
+  }
+
+  addEventListener('keydown', (e) => {
+    if (e.target.closest('textarea, input, select')) return;
+    const el = selectedId && findEl(selectedId);
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+    if (!el) return;
+    const step = e.shiftKey ? 0.02 : 0.002;
+    const r = resolved(el, platform());
+    const moves = { ArrowLeft: ['x', -step], ArrowRight: ['x', step], ArrowUp: ['y', -step], ArrowDown: ['y', step] };
+    if (moves[e.key]) {
+      e.preventDefault(); snapshot();
+      const [k, d] = moves[e.key]; target(el)[k] = +(r[k] + d).toFixed(4);
+      markDirty(); render(); inspect();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      $('del').click();
+    } else if (e.key === 'Escape') { select(null); }
+  });
+
+  $('canvas').addEventListener('pointerdown', () => select(null));
+
+  $('apply').onclick = () => {
+    try {
+      const next = JSON.parse($('json').value);
+      snapshot();
+      const i = set.elements.findIndex((e) => e.id === selectedId);
+      set.elements[i] = next; selectedId = next.id; markDirty(); render(); inspect();
+    } catch (err) { status('JSON non valido: ' + err.message); }
+  };
+  $('apply-slides').onclick = () => {
+    try { const next = JSON.parse($('slides').value); snapshot(); set.slides = next; markDirty(); render(); }
+    catch (err) { status('JSON non valido: ' + err.message); }
+  };
+  $('dup').onclick = () => {
+    const el = findEl(selectedId); if (!el) return;
+    snapshot();
+    const copy = structuredClone(el); copy.id = `${el.type}-${Date.now().toString(36)}`; copy.x += 0.05; copy.y += 0.02;
+    set.elements.push(copy); markDirty(); select(copy.id);
+  };
+  $('del').onclick = () => {
+    if (!selectedId) return;
+    snapshot(); set.elements = set.elements.filter((e) => e.id !== selectedId); markDirty(); select(null);
+  };
+  $('add').onchange = (e) => {
+    const type = e.target.value; e.target.value = '';
+    if (!type) return;
+    const example = set.elements.find(el => (el.kind ?? el.type) === type);
+    const template = set.templates?.[type] ?? example ?? {};
+    if (set.layout === 'campaign' && !example && !set.templates?.[type]) { status('Aggiungi dati e dimensioni nel JSON del componente'); }
+    const vp = $('viewport');
+    const x = (vp.scrollLeft + vp.clientWidth / 2) / Number($('zoom').value) / geo.W;
+    snapshot();
+    const el = { y: 0.4, w: 0.6, rot: 0, z: 20, h: 0.4, text: { it: 'Nuovo testo', en: 'New text' }, title: { it: 'Titolo', en: 'Title' }, ...structuredClone(template), id: `${type}-${Date.now().toString(36)}`, type, x: +x.toFixed(3) };
+    delete el.kind;
+    set.elements.push(el); markDirty(); select(el.id);
+  };
+  function undo() {
+    const prev = history.pop(); if (!prev) return;
+    set = JSON.parse(prev); markDirty(); render(); inspect();
+  }
+  $('undo').onclick = undo;
+
+  async function save() {
+    const saved = JSON.stringify(set, null, 2);
+    $('save').disabled = true;
+    status('Salvataggio…');
+    try {
+      const res = await fetch(`/api/save?project=${encodeURIComponent(project.slug)}&set=${encodeURIComponent(setName)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: saved,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      dirty = JSON.stringify(set, null, 2) !== saved; $('status').dataset.dirty=String(dirty); status(dirty ? '● Modifiche non salvate' : `Salvato in store/studio/sets/${setName}.json`);
+    } catch (err) { status('Errore: ' + err.message); } finally { $('save').disabled = false; }
+  }
+  $('save').onclick = save;
+
+  for (const id of ['platform', 'locale', 'zoom']) $(id).addEventListener('input', () => { render(); inspect(); });
+  addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+  render();
+  const initialSlide = Math.max(0, Math.min(set.slides.length - 1, Number(q.get('slide') || 1) - 1));
+  if (set.layout === 'campaign') {
+    const vp = $('viewport');
+    $('zoom').value = Math.min(.5, Math.max(.05, Math.min((vp.clientWidth - 80) / geo.W, (innerHeight - 140) / geo.H)));
+    render();
+  }
+  $('viewport').scrollLeft = initialSlide * geo.W * Number($('zoom').value);
+  } catch(error) { showError(error); }
+</script>
+</body>
+</html>

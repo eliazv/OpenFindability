@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Render slide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=block">
+<link rel="stylesheet" href="/engine/engine.css">
+
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #fff; }
+  #stage { position: relative; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script type="module">
+  // /store/studio/render.html?set=scadenzario&platform=ios&locale=it&slide=1
+  import { buildPanorama, whenReady, checkLayout } from '/engine/engine.js';
+  import { loadSession, showError } from '/engine/session.js';
+  try {
+  const {q,set} = await loadSession();
+  const platform = q.get('platform') || Object.keys(set.platforms)[0];
+  const locale = q.get('locale') || set.locales[0];
+  const index = Math.max(1, Number(q.get('slide') || 1)) - 1;
+  const { root, slideW, slideH } = buildPanorama(set, { platform, locale });
+  const stage = document.getElementById('stage');
+  stage.style.width = `${slideW}px`;
+  stage.style.height = `${slideH}px`;
+  const check = q.get('check') === '1';
+  if (check) {
+    stage.style.width = root.style.width;
+  } else {
+    root.style.transform = `translateX(${-index * slideW}px)`;
+  }
+  stage.appendChild(root);
+  await whenReady(root);
+  if (check) {
+    const pre = document.createElement('pre');
+    pre.id = 'report';
+    pre.textContent = JSON.stringify(checkLayout(root, set, platform));
+    document.body.appendChild(pre);
+  }
+  document.body.dataset.ready = '1';
+  } catch (error) { showError(error); }
+</script>
+</body>
+</html>

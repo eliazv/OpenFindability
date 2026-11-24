@@ -86,7 +86,10 @@
     "report": "tsx scripts/report.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
-    "db:migrate-json": "tsx scripts/migrate-json-to-sqlite.ts"
+    "db:migrate-json": "tsx scripts/migrate-json-to-sqlite.ts",
+    "studio": "node studio/serve.mjs",
+    "studio:export": "node studio/export.mjs",
+    "test:studio": "node --test tests/studio.test.mjs"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.6-r.1",

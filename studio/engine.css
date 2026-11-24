@@ -1,0 +1,195 @@
+/* Store screenshot studio — components.
+   Units: every slide sets --u = 1% of its width, so layouts scale between
+   App Store (1320x2868) and Google Play (1080x1920). Component internals use
+   container query units (cqw) so they scale with their own width. */
+
+:root {
+  --ink: #111111;
+  --ink-2: #2b2b2b;
+  --muted: #6b6a66;
+  --line: #ebe9e3;
+  --cream: #faf9f6;
+  --mark: #fde9a6;
+  --red: #d93a2f;
+  --amber: #b7791f;
+  --amber-bg: #fdf3dc;
+  --green: #1f9d55;
+  --serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+/* ---------- panorama & slides ---------- */
+
+.pano {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.slide {
+  position: relative;
+  flex: none;
+  overflow: visible;
+}
+
+.headline {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  text-align: center;
+  z-index: 50;
+}
+
+.headline h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: calc(var(--u) * 8.6);
+  line-height: 1.04;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+.headline h1 em {
+  font-style: normal;
+  background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 92%, transparent 92%);
+  padding: 0 .06em;
+}
+
+.headline p {
+  margin: calc(var(--u) * 2.4) auto 0;
+  max-width: 88%;
+  font-size: calc(var(--u) * 3.6);
+  line-height: 1.35;
+  color: var(--muted);
+  text-wrap: balance;
+}
+
+/* ---------- elements ---------- */
+
+.el {
+  position: absolute;
+  transform-origin: center top;
+  container-type: inline-size;
+}
+
+.el img { display: block; max-width: 100%; }
+
+/* Phone frame */
+.phone {
+  aspect-ratio: 1 / 2.165;
+  border-radius: 14.5cqw;
+  background: #0d0d0d;
+  padding: 2.6cqw;
+  box-shadow:
+    0 0 0 0.5cqw #2a2a2a inset,
+    0 4cqw 9cqw -3cqw rgba(17, 17, 17, .35),
+    0 1cqw 2cqw rgba(17, 17, 17, .12);
+}
+
+.phone .screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 12.2cqw;
+  overflow: hidden;
+  background: var(--screen-bg, #f6f6f4);
+}
+
+.phone .screen img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  object-position: top;
+}
+
+.phone .island {
+  position: absolute;
+  top: 4.2cqw;
+  left: 50%;
+  width: 30cqw;
+  height: 8.6cqw;
+  transform: translateX(-50%);
+  border-radius: 99px;
+  background: #0d0d0d;
+  z-index: 2;
+}
+
+.phone .statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 15cqw;
+  padding: 3cqw 11cqw 0;
+  font-weight: 600;
+  font-size: 4.6cqw;
+  color: var(--ink);
+  background: var(--screen-bg, #f6f6f4);
+}
+
+/* Review card */
+.review {
+  padding: 6cqw 7cqw;
+  border-radius: 7cqw;
+  background: #fff;
+  border: 0.35cqw solid var(--line);
+  box-shadow: 0 8cqw 16cqw -10cqw rgba(17, 17, 17, .3);
+}
+
+.review .stars { font-size: 6cqw; letter-spacing: .1em; color: #f2b01e; }
+.review blockquote { margin: 2.4cqw 0 0; font-family: var(--serif); font-size: 6.4cqw; line-height: 1.25; }
+.review cite { display: block; margin-top: 2.6cqw; font-style: normal; font-size: 4cqw; color: var(--muted); }
+.review.placeholder { outline: 1.2cqw dashed var(--red); }
+
+/* Big number / stat */
+.stat { text-align: center; }
+.stat b { display: block; font-family: var(--serif); font-weight: 500; font-size: 26cqw; line-height: 1; }
+.stat span { display: block; margin-top: 2cqw; font-size: 6cqw; color: var(--muted); }
+
+/* Free text */
+.el-text { font-family: var(--serif); font-size: 9cqw; line-height: 1.1; text-align: center; }
+
+/* Panel crop: a piece of the app without a phone frame. */
+.panel {
+  border-radius: 6cqw;
+  overflow: hidden;
+  background: #fff;
+  border: 0.35cqw solid var(--line);
+  box-shadow: 0 8cqw 16cqw -10cqw rgba(17, 17, 17, .32);
+}
+
+.panel img { width: 100%; height: auto; }
+
+/* ---------- editor chrome (never rendered in export) ---------- */
+
+.editing .el { cursor: grab; }
+.editing .el:hover { outline: 2px dashed rgba(37, 99, 235, .6); outline-offset: 4px; }
+.editing .el.selected { outline: 3px solid #2563eb; outline-offset: 4px; }
+.editing .slide::after {
+  content: attr(data-index);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 0;
+  border-right: 3px dashed rgba(17, 17, 17, .25);
+  pointer-events: none;
+  z-index: 100;
+}
+
+
+.campaign-backdrop { position:absolute; inset:0; width:100%; height:100%; fill:var(--campaign-accent); pointer-events:none; }
+.campaign-slide { background:transparent; overflow:hidden; }
+.campaign .headline { top:4.2%; left:5%; right:5%; text-align:center; }
+.campaign .headline h1 { font-family:CampaignInter,Inter,sans-serif; color:var(--campaign-ink); font-size:calc(var(--u)*11.7); line-height:1.02; letter-spacing:-.055em; font-weight:800; text-wrap:initial; }
+.campaign .headline h1 em { padding:0; background:none; color:inherit; }
+.campaign-blue .headline { text-align:left; left:7%; }
+.campaign .bottom-title .headline { top:84.5%; }
+.campaign.platform-android .bottom-title .headline { top:82.4%; }
+
+.campaign { --campaign-bg:#f1f4ef; --campaign-ink:#263b2c; --campaign-accent:#d8e3d4; background:var(--campaign-bg); }
