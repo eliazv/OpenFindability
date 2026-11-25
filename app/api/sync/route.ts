@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readProjects } from "@/lib/store";
+import {cliErrorMessage} from "@/lib/cli-error";
 import {db} from "@/lib/db/client";
 import {syncProgress,SyncAlreadyRunning} from "@/lib/sync-store";
 import { syncProjects } from "@/lib/sync";
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ results }, { status: failed ? 207 : 200 });
   } catch (error) {
     if(error instanceof SyncAlreadyRunning)return NextResponse.json({error:error.message},{status:409});
-    console.error("OpenFindability sync failed:", error);
+    console.error("OpenFindability sync failed:", cliErrorMessage(error));
     return NextResponse.json({ error: "Sync failed. See the server log for details." }, { status: 500 });
   } finally {
     running = false;

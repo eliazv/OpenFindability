@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
-export function SyncButton({ sidebar = false, projectSlug, source, compact = false }: { sidebar?: boolean; projectSlug?: string; source?: SourceType; compact?: boolean }) {
+export function SyncButton({ sidebar = false, projectSlug, source, compact = false,backfillDays }: { sidebar?: boolean; projectSlug?: string; source?: SourceType; compact?: boolean;backfillDays?:number }) {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const router = useRouter();
@@ -15,11 +15,12 @@ export function SyncButton({ sidebar = false, projectSlug, source, compact = fal
     setBusy(true);
     setFeedback(null);
     try {
+      window.dispatchEvent(new Event("openfindability:sync"));
       const response = await fetch("/api/sync", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSlug, source }),
+        body: JSON.stringify({ projectSlug, source,backfillDays }),
       });
       const payload = await response.json() as { error?: string; results?: Array<{ status: string }> };
       if (!response.ok && response.status !== 207) throw new Error(payload.error ?? "Sincronizzazione non riuscita.");
@@ -34,6 +35,7 @@ export function SyncButton({ sidebar = false, projectSlug, source, compact = fal
       setFeedback(error instanceof Error ? error.message : "Errore di sincronizzazione.");
     } finally {
       setBusy(false);
+      window.dispatchEvent(new Event("openfindability:sync"));
     }
   }
 

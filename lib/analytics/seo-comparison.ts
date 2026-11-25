@@ -18,3 +18,11 @@ export function seoEntity(database:AppDb,id:string,key:string,kind:"page"|"query
  const related=n.prepare(`SELECT ${other} key,sum(clicks) clicks,sum(impressions) impressions,sum(clicks)*1.0/nullif(sum(impressions),0) ctr,sum(avg_position*impressions)*1.0/nullif(sum(impressions),0) position FROM search_queries WHERE project_id=? AND ${kind}=? AND date BETWEEN ? AND ? AND ${grain} GROUP BY ${other} ORDER BY clicks DESC LIMIT 100`).all(id,key,range.from,range.to);
  return {kind,key,range,trend,related};
 }
+
+/** First path component from absolute URLs. Query strings are not a content group. */
+export function seoGroups(database:AppDb,id:string,end:string,days:number){
+ const range=dayRange(end,days),n=getSqliteHandle(database);
+ const groups=n.prepare(`WITH paths AS (SELECT page,clicks,impressions,avg_position,CASE WHEN instr(substr(page,instr(page,'://')+3),'/')>0 THEN substr(substr(page,instr(page,'://')+3),instr(substr(page,instr(page,'://')+3),'/')) ELSE '/' END path FROM page_metrics WHERE project_id=? AND date BETWEEN ? AND ? AND ${grain}), groups AS (SELECT *,substr(path,1,CASE WHEN instr(substr(path,2),'/')>0 THEN instr(substr(path,2),'/')+1 WHEN instr(path,'?')>0 THEN instr(path,'?')-1 ELSE length(path) END) prefix FROM paths) SELECT prefix,count(DISTINCT page) pages,sum(clicks) clicks,sum(impressions) impressions,sum(clicks)*100.0/nullif(sum(impressions),0) ctr,sum(avg_position*impressions)*1.0/nullif(sum(impressions),0) position FROM groups GROUP BY prefix ORDER BY clicks DESC LIMIT 100`).all(id,range.from,range.to) as {prefix:string;pages:number;clicks:number;impressions:number;ctr:number|null;position:number|null}[];
+ const distribution=n.prepare(`WITH q AS (SELECT query,sum(avg_position*impressions)*1.0/nullif(sum(impressions),0) position FROM search_queries WHERE project_id=? AND date BETWEEN ? AND ? AND ${grain} GROUP BY query), bins AS (SELECT CASE WHEN position<=3 THEN 'Top 3' WHEN position<=10 THEN '4–10' WHEN position<=20 THEN '11–20' ELSE '21+' END bucket FROM q WHERE position>0) SELECT bucket,count(*) count FROM bins GROUP BY bucket`).all(id,range.from,range.to) as {bucket:string;count:number}[];
+ return {range,groups,distribution};
+}

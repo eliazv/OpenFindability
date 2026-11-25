@@ -33,13 +33,15 @@ export function measure(rows: Observation[], range: Range, kind: MetricKind = "s
   if(Math.round((Date.parse(previousRange.to)-Date.parse(previousRange.from))/86400000)+1!==expected)throw new Error("Invalid comparison range");
   const relevant = rows.filter(r => inRange(r.date,range)||inRange(r.date,previousRange));
   const valid = relevant.filter(r => r.value !== null && Number.isFinite(r.value));
-  const currencies = new Set(valid.map(r=>r.currency));
-  const invalidCurrency = monetary && (currencies.size > 1 || currencies.has(undefined) || currencies.has(""));
-  const currency = monetary && !invalidCurrency ? valid[0]?.currency : undefined;
+  const currentRows=valid.filter(r=>inRange(r.date,range)),priorRows=valid.filter(r=>inRange(r.date,previousRange));
+  const currencyOf=(items:Observation[])=>{const values=new Set(items.map(r=>r.currency));return values.size===1&&items[0].currency&&/^[A-Z]{3}$/.test(items[0].currency)?items[0].currency:undefined;};
+  const currency=monetary?currencyOf(currentRows):undefined;
+  const invalidCurrency=monetary&&currentRows.length>0&&!currency;
+  const invalidPrevious=monetary&&priorRows.length>0&&(!currency||currencyOf(priorRows)!==currency);
   const map = new Map(valid.map(r=>[r.date,r.value!]));
   const points = Array.from({length:expected},(_,i)=>{
     const date=shiftDay(range.from,i), previousDate=shiftDay(previousRange.from,i);
-    return {date,previousDate,current:invalidCurrency?null:map.get(date)??null,previous:invalidCurrency?null:map.get(previousDate)??null};
+    return {date,previousDate,current:invalidCurrency?null:map.get(date)??null,previous:invalidCurrency||invalidPrevious?null:map.get(previousDate)??null};
   });
   const current=points.flatMap(p=>p.current===null?[]:[p.current]), previous=points.flatMap(p=>p.previous===null?[]:[p.previous]);
   const aggregate=(a:number[])=>!a.length?null:kind==="snapshot"?a.at(-1)!:a.reduce((s,v)=>s+v,0);
@@ -48,7 +50,7 @@ export function measure(rows: Observation[], range: Range, kind: MetricKind = "s
   const comparable=kind==="sum"?current.length===expected&&previous.length===expected:
     points.at(-1)?.current!==null&&points.at(-1)?.previous!==null;
   const delta=comparable&&value!==null&&prior!==null?value-prior:null;
-  return {value,previous:prior,delta,deltaPercent:delta!==null&&prior!==null&&prior!==0?delta/Math.abs(prior)*100:null,range,previousRange,observed:current.length,expected,previousObserved:previous.length,currency,warning:invalidCurrency?"Valute miste o mancanti: totale non disponibile.":undefined,points};
+  return {value,previous:prior,delta,deltaPercent:delta!==null&&prior!==null&&prior!==0?delta/Math.abs(prior)*100:null,range,previousRange,observed:current.length,expected,previousObserved:previous.length,currency,warning:invalidCurrency?"Valute miste o mancanti: totale non disponibile.":invalidPrevious?"Valuta precedente non confrontabile.":undefined,points};
 }
 export function formatMetric(value: number|null|undefined, unit: "count"|"currency"|"percent"|"decimal" = "count", currency?:string, precision?:number): string {
   if(value==null||!Number.isFinite(value)) return "—";

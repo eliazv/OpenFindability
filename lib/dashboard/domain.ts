@@ -1,10 +1,10 @@
 import type { AppData } from "@/lib/types";
-import {dayRange,latestDay,measure,type Observation} from "./metrics";
+import {dayRange,comparisonWindow,latestDay,measure,type Observation} from "./metrics";
 import type { MetricSpec } from "./read-model";
 
-export function observationModel(spec:MetricSpec,rows:Observation[],days:number){
- const end=latestDay(rows)??new Date().toISOString().slice(0,10);
- return {spec,latest:latestDay(rows.filter(r=>r.value!==null)),result:measure(rows,dayRange(end,days),"snapshot")};
+export function observationModel(spec:MetricSpec,rows:Observation[],days:number,endOverride?:string,comparison:"previous"|"year"="previous"){
+ const end=endOverride??latestDay(rows)??new Date().toISOString().slice(0,10);
+ return {spec,latest:latestDay(rows.filter(r=>r.value!==null)),result:measure(rows,dayRange(end,days),"snapshot",false,comparisonWindow(dayRange(end,days),comparison))};
 }
 export function landingGroups(rows:NonNullable<AppData["ga4LandingMetrics"]>){
  const map=new Map<string,{key:string;host:string;landing:string;channel:string;device:string;sourceMedium:string;timeZone:string|null;sessions:number;keyEvents:number;weighted:number;quality:Set<string>}>();

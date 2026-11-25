@@ -7,9 +7,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createDb } from "@/lib/db/client";
-import {projectAnalytics,portfolioAnalytics,growthSignals,advertisingBreakdown} from "@/lib/analytics/growth-intelligence";
+import {projectAnalytics,portfolioAnalytics,growthSignals,advertisingBreakdown,releaseImpact} from "@/lib/analytics/growth-intelligence";
 import {qualityRows} from "@/lib/analytics/data-quality";
-import {seoChanges,seoEntity} from "@/lib/analytics/seo-comparison";
+import {seoChanges,seoEntity,seoGroups} from "@/lib/analytics/seo-comparison";
 import {openOpportunities} from "@/lib/dashboard/read-model";
 import { readDataWith, writeDataWith, readProjectsWith, readDashboardDataWith } from "@/lib/store";
 import { syncGscProject } from "@/lib/connectors/gsc";
@@ -721,7 +721,7 @@ server.tool("get_revenue_breakdown","Cached AdMob format/source breakdown. Separ
 server.tool("get_action_plan","Cached ranked signals and open opportunities; no automatic actions.",{slug:z.string(),days:windowDays},async({slug,days})=>{const p=findProject(await readProjects(),slug);if(!p)return resultText({error:"Project not found"});return resultText(projectAnalytics(readDashboardDataWith(mcpDb,"growth",p.slug),p,days));});
 
 server.tool("record_intervention","Record a local intervention only after the user explicitly requests it. No store publishing.",{slug:z.string(),date:z.string(),title:z.string(),kind:z.string(),url:z.string().optional(),reference:z.string().optional(),notes:z.string().optional()},async({slug,...input})=>{const p=growthProject(mcpDb,slug);const item=makeIntervention(p,input);saveIntervention(mcpDb,item);return resultText(item);});
-server.tool("get_release_impact","Compare recorded release interventions, descriptive rather than causal.",{slug:z.string(),start:z.string(),end:z.string()},async({slug,start,end})=>{const d=readGrowthEvidenceWith(mcpDb,slug,start,end);const report=growthEvidenceSnapshot(d,slug,start,end,100);return resultText({...report,interventions:report.interventions.filter(i=>d.projectInterventions.some(r=>r.kind==="release"&&r.id===i.intervention.id))});});
+server.tool("get_release_impact","Compare recorded release interventions, descriptive rather than causal.",{slug:z.string(),start:z.string(),end:z.string()},async({slug,start,end})=>{const d=readGrowthEvidenceWith(mcpDb,slug,start,end);const report=growthEvidenceSnapshot(d,slug,start,end,100);const data=readDashboardDataWith(mcpDb,"growth",slug);return resultText({...report,interventions:report.interventions.filter(i=>i.intervention.kind==="release").map(i=>({...i,mobile:releaseImpact(data,i.intervention.projectId,i.intervention.date,28)}))});});
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
