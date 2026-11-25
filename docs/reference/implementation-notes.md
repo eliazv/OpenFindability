@@ -213,3 +213,8 @@ Dashboardcn Sparkline, DeltaBadge and BarList are adapted locally under `compone
 The collapsed rail is 56px with 36px centered icon-only buttons, explicit hidden labels, accessible names and tooltips; long project lists remain scrollable. Project tabs own the period selection; the selected section is not repeated below. Project sync is a secondary icon action. Store Studio has its own sidebar entry. KPIs with actual data are immediately visible; the chart switches client-side via native history state without fetching the server again, while a compact SVG sparkline avoids a Recharts instance per KPI. Chart data is available through CSV rather than a visible duplicate table. No full-page build/runtime visual verification in this revision.
 
 Dashboard-only projections omit raw payloads except where intervention evidence still needs them; source-status views use one latest row per relevant project/source, acquisition bounds GA4 landing rows to the requested period, portfolio/overview read open opportunities and latest run per status. GSC detail SQL preserves true daily grain/version filtering and uses parameter-bound substring search, whitelisted sort, 25 rows/page, top 10 clicks and top 200 impressions. No schema migrations or writes to the DB were added. Tests are offline. See the follow-up guide for validation scope.
+
+
+### Sidebar and growth diagnostics (2026-11-25)
+
+See [navigation, public store artwork and diagnostics](../guide/2026-11-25-sidebar-artwork-growth-diagnostics.md). The local-only sidebar settings migration preserves existing project preferences; artwork is cached by exact public store identity and never downloaded on render. Provider failures do not change analytics results.

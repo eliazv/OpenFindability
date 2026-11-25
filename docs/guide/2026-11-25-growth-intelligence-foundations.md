@@ -35,3 +35,8 @@ Aggiunti test Node per transazioni, lock, copertura, preferenze, confronto SEO, 
 - Gli alert sono euristiche deterministiche, non un modello predittivo. I dati RevenueCat sono snapshot, non ricavi giornalieri.
 - Restano da completare: armonizzazione di ogni report/CLI legacy, baseline CTR specifica per sito, branded/non-branded e clustering avanzato, analisi semantica delle recensioni, opportunità per conversioni, ricavi/costi e breakdown abbonamenti per prodotto se autorizzati e disponibili, rilevazione automatica della data di pubblicazione effettiva, report schedulati. Non attivare automazioni periodiche senza una scelta esplicita di frequenza.
 - Export GSC completo calcolato localmente; non è uno streaming end-to-end. Le altre tabelle esportano i risultati filtrati fino a 5000 righe, oltre quella soglia la pagina corrente.
+
+
+## Continuazione
+
+Vedi [Sidebar, artwork e diagnostica growth](2026-11-25-sidebar-artwork-growth-diagnostics.md) per la seconda fase, le nuove analisi e i limiti aggiornati.
