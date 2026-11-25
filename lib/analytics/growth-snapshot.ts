@@ -1,5 +1,6 @@
-import type { AppData, MetricSnapshot } from "@/lib/types";
+import type { AppData } from "@/lib/types";
 import { getAdmobRevenueRows } from "@/lib/insights";
+import { METRICS, projectMetric, openOpportunities, type MetricSpec } from "@/lib/dashboard/read-model";
 
 type Dated = { date: string };
 function recent<T extends Dated>(rows: T[], days: number) {
@@ -32,22 +33,20 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
   const ios = recent(data.ascAnalyticsMetrics.filter((row) => row.projectId === projectId && row.date >= "2025-09-21"), days);
   const vitals = latest(data.playVitalsMetrics.filter((row) => row.projectId === projectId));
   const subscription = latest(snapshots.filter((row) => row.source === "revenuecat"));
-  const searches = search.rows as MetricSnapshot[];
-  const clicks = total(searches, "clicks");
-  const impressions = total(searches, "impressions");
-  const avgPosition = impressions && impressions > 0
-    ? searches.reduce((sum, row) => sum + (row.avgPosition ?? 0) * (row.impressions ?? 0), 0) / impressions
-    : null;
+  const value = (spec: MetricSpec) => projectMetric(data, projectId, spec, days).result.value;
+  const clicks = value(METRICS.clicks);
+  const impressions = value(METRICS.impressions);
+  const avgPosition = value(METRICS.position);
+  const ctr = value(METRICS.ctr);
+  const ads = projectMetric(data, projectId, METRICS.ads, days).result;
   const adCurrencies = [...new Set(ad.rows.map((row) => row.currency ?? "unknown"))];
-  const canSumAdRevenue = adCurrencies.length === 1 && adCurrencies[0] !== "unknown";
   const lastRunBySource = new Map<string, (typeof data.connectorRuns)[number]>();
   for (const run of data.connectorRuns.filter((row) => row.projectId === projectId)) {
     const previous = lastRunBySource.get(run.source);
     if (!previous || run.finishedAt > previous.finishedAt) lastRunBySource.set(run.source, run);
   }
 
-  const topOpportunities = data.opportunities
-    .filter((row) => row.projectId === projectId && row.status === "open" && (row.rawJson as {active?:boolean}|undefined)?.active !== false)
+  const topOpportunities = openOpportunities(data, projectId)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
     .map((row) => ({ type: row.type, title: row.title, score: row.score, severity: row.severity }));
@@ -59,16 +58,16 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
     seo: {
       latestDataDate: search.latestDataDate, observedDays: search.observedDays,
       clicks, impressions,
-      ctr: impressions && impressions > 0 && clicks !== null ? clicks / impressions : null,
+      ctr: ctr === null ? null : ctr / 100,
       avgPosition,
     },
     web: {
       latestDataDate: web.latestDataDate, observedDays: web.observedDays,
-      visitors: total(web.rows, "visitors"), pageviews: total(web.rows, "pageviews"),
+      visitors: value(METRICS.visitors), pageviews: value(METRICS.umamiViews),
     },
     ga4: {
       latestDataDate: ga4.latestDataDate, observedDays: ga4.observedDays,
-      summedDailyActiveUsers: total(ga4.rows, "visitors"), pageviews: total(ga4.rows, "pageviews"),
+      summedDailyActiveUsers: value(METRICS.gaUsers), pageviews: value(METRICS.gaViews),
       sessions: ga4.rows.reduce<number | null>((sum, row) => {
         const v = row.sessions ?? (row.rawJson as { sessions?: number } | undefined)?.sessions;
         return typeof v === "number" ? (sum ?? 0) + v : sum;
@@ -77,8 +76,8 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
     },
     advertising: {
       latestDataDate: ad.latestDataDate, observedDays: ad.observedDays,
-      estimatedRevenue: canSumAdRevenue ? total(ad.rows, "revenue") : null,
-      currency: canSumAdRevenue ? adCurrencies[0] : null,
+      estimatedRevenue: ads.value,
+      currency: ads.currency ?? null,
       warning: adCurrencies.length > 1 ? "Multiple currencies: do not sum without FX conversion" : adCurrencies.includes("unknown") ? "Currency unavailable: revenue cannot be safely summed" : undefined,
     },
     subscriptions: subscription ? {
@@ -90,14 +89,14 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
     } : null,
     android: {
       latestDataDate: playInstalls.latestDataDate, observedDays: playInstalls.observedDays,
-      deviceInstalls: total(playInstalls.rows, "installs"),
-      deviceUninstalls: total(playInstalls.rows, "uninstalls"),
+      deviceInstalls: value(METRICS.deviceInstalls),
+      deviceUninstalls: value(METRICS.deviceUninstalls),
       activeDeviceInstalls: latest(playInstalls.rows)?.activeDeviceInstalls ?? null,
       latestVitals: vitals ? { date: vitals.date, crashRate: vitals.crashRate ?? null, anrRate: vitals.anrRate ?? null } : null,
     },
     ios: {
       latestDataDate: ios.latestDataDate, observedDays: ios.observedDays,
-      downloads: total(ios.rows, "downloads"),
+      downloads: value(METRICS.downloads),
       retentionDay1: latest(ios.rows)?.retentionDay1 ?? null,
     },
     topOpportunities,

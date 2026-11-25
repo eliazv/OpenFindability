@@ -1,11 +1,11 @@
 import {eq} from "drizzle-orm";
 import {getSqliteHandle,type AppDb} from "@/lib/db/client";
 import {projectDashboardPreferences as t,projects} from "@/lib/db/schema";
-import {METRICS,projectMetric} from "@/lib/dashboard/read-model";
+import {METRICS,projectMetric,type MetricSpec} from "@/lib/dashboard/read-model";
 import type {AppData,Project} from "@/lib/types";
 export type Preferences=typeof t.$inferSelect;
 export const metricOptions=Object.values(METRICS).map(s=>({id:s.source+":"+s.key,label:s.label,unit:s.unit,goalAllowed:!("lowerBetter" in s&&s.lowerBetter)}));
-export function metricById(id:string){return Object.values(METRICS).find(s=>s.source+":"+s.key===id);}
+export function metricById(id:string):MetricSpec|undefined{return Object.values(METRICS).find(s=>s.source+":"+s.key===id);}
 export function readPreferences(database:AppDb,projectId?:string){return database.select().from(t).where(projectId?eq(t.projectId,projectId):undefined).all();}
 export function savePreferences(database:AppDb,id:string,input:unknown){
  if(!input||typeof input!=="object"||Array.isArray(input))throw new Error("Invalid preferences");
