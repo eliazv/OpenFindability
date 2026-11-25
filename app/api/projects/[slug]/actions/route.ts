@@ -1,3 +1,4 @@
+import {localRequestError} from "@/lib/dashboard/local-request";
 import {NextResponse} from "next/server";
 import {db,getSqliteHandle} from "@/lib/db/client";
 import {opportunities} from "@/lib/db/schema";
@@ -7,8 +8,7 @@ import {makeIntervention} from "@/lib/analytics/interventions";
 import {savePreferences} from "@/lib/dashboard/preferences";
 export const runtime="nodejs";
 export async function POST(request:Request,{params}:{params:Promise<{slug:string}>}){
- const url=new URL(request.url);
- if(!["localhost","127.0.0.1","[::1]"].includes(url.hostname)||request.headers.get("origin")!==url.origin)return NextResponse.json({error:"Local only"},{status:403});
+ const denied=localRequestError(request,true);if(denied)return NextResponse.json({error:denied},{status:403});
  try{
   const {slug}=await params,p=growthProject(db,slug),body=await request.json();
   if(!body||typeof body!=="object")throw new Error("Invalid request");

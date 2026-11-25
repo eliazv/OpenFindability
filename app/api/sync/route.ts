@@ -1,3 +1,4 @@
+import {localRequestError} from "@/lib/dashboard/local-request";
 import { NextResponse } from "next/server";
 import { readProjects } from "@/lib/store";
 import {cliErrorMessage} from "@/lib/cli-error";
@@ -18,19 +19,13 @@ let running = false;
 
 // Reading this URL must NEVER start a write or consume provider quotas.
 export async function GET(request:Request) {
- const url=new URL(request.url);if(!["localhost","127.0.0.1","[::1]"].includes(url.hostname))return NextResponse.json({error:"Local only"},{status:403});
+ const denied=localRequestError(request);if(denied)return NextResponse.json({error:denied},{status:403});
  return NextResponse.json({progress:syncProgress(db)},{headers:{"Cache-Control":"no-store"}});
 }
 
 export async function POST(request: Request) {
-  const url = new URL(request.url);
-  const origin = request.headers.get("origin");
-  // This application currently has no sign-in/session system. Until one
-  // exists, remote deployments cannot invoke the mutating endpoint at all.
-  const localHost = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-  if (!localHost || origin !== url.origin) {
-    return NextResponse.json({ error: "Sync is restricted to same-origin localhost." }, { status: 403 });
-  }
+  const denied=localRequestError(request,true);
+  if(denied)return NextResponse.json({error:denied},{status:403});
   const body = await request.json().catch(() => null) as { source?: unknown; projectSlug?: unknown; backfillDays?:unknown } | null;
   if (body === null || typeof body !== "object" || Array.isArray(body) || (body.source !== undefined && (typeof body.source !== "string" || !allowedSources.includes(body.source as SourceType)))) {
     return NextResponse.json({ error: "Invalid source." }, { status: 400 });

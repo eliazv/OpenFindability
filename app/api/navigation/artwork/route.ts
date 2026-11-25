@@ -1,11 +1,11 @@
+import {localRequestError} from "@/lib/dashboard/local-request";
 import {NextResponse} from "next/server";
 import {readProjects} from "@/lib/store";
 import {refreshStoreArtwork,storeIdentities} from "@/lib/dashboard/store-artwork";
 export const runtime="nodejs";
 let busy=false;
 export async function POST(request:Request){
- const url=new URL(request.url);
- if(!["localhost","127.0.0.1","[::1]"].includes(url.hostname)||request.headers.get("origin")!==url.origin)return NextResponse.json({error:"Local only"},{status:403});
+ const denied=localRequestError(request,true);if(denied)return NextResponse.json({error:denied},{status:403});
  if(busy)return NextResponse.json({error:"Aggiornamento icone già in corso."},{status:409});
  const body=await request.json().catch(()=>null);
  if(!body||typeof body!=="object"||(body.slug!==undefined&&typeof body.slug!=="string"))return NextResponse.json({error:"Richiesta non valida."},{status:400});
