@@ -9,8 +9,9 @@ type RevenueCatOverviewMetrics = {
 function metricValue(
   payload: RevenueCatOverviewMetrics,
   id: string,
-): number {
-  return payload.metrics?.find((m) => m.id === id)?.value ?? 0;
+): number | undefined {
+  const value=payload.metrics?.find((m)=>m.id===id)?.value;
+  return typeof value==="number"&&Number.isFinite(value)?value:undefined;
 }
 
 export async function syncRevenueCatProject(project: Project, date: string): Promise<{
@@ -38,7 +39,7 @@ export async function syncRevenueCatProject(project: Project, date: string): Pro
   });
 
   if (!response.ok) {
-    throw new Error(`RevenueCat request failed for ${project.name}: ${response.status} ${await response.text()}`);
+    throw new Error(`RevenueCat request failed for ${project.name}: HTTP ${response.status}`);
   }
 
   const payload = (await response.json()) as RevenueCatOverviewMetrics;
@@ -48,7 +49,7 @@ export async function syncRevenueCatProject(project: Project, date: string): Pro
     result: {
       source: "revenuecat",
       projectId: project.id,
-      status: "success",
+      status: payload.metrics?.some(m=>typeof m.value==="number") ? "success" : "no_data",
       message: `Imported RevenueCat overview metrics (snapshot ${date}).`,
       inserted: { snapshots: 1, queries: 0, pages: 0 },
     },

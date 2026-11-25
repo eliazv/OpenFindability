@@ -62,13 +62,13 @@ export async function syncProjects(options:SyncOptions={}):Promise<SyncResult[]>
   for(const {p,source} of jobs){
    lock.progress(p.slug,source,results.length);const started=nowIso();
    let result:SyncResult;
-   try{const s=await fetchSource(p,source,requested??incrementalWindow(db,p,source));result=s.result;persist.commitSync(db,runRecord(result,started),s.apply);}
+   try{const s=await fetchSource(p,source,requested??incrementalWindow(db,p,source));result=s.result;persist.commitSync(db,runRecord(result,started),result.status==="failed"||result.status==="skipped"?()=>{}:s.apply);}
    catch(error){result={source,projectId:p.id,status:"failed",message:cliErrorMessage(error),inserted:{snapshots:0,queries:0,pages:0}};persist.commitSync(db,runRecord(result,started),()=>{});}
    results.push(result);
    if(source==="gsc"&&result.status==="success"){try{refreshSeoOpportunities(db,p.id);}catch(error){console.error("Opportunity refresh failed:",cliErrorMessage(error));}}
   }
   // Public icon lookups are best-effort and cached; do not change analytics result.
-  if(!options.source||["asc_analytics","play_console","play_stats"].includes(options.source))for(const p of projects)await refreshStoreArtwork(p).catch(()=>{});
+  if(!options.source||["asc_analytics","play_console","play_stats"].includes(options.source)){for(let i=0;i<projects.length;i+=3)await Promise.all(projects.slice(i,i+3).map(p=>refreshStoreArtwork(p).catch(()=>{})));}
   return results;
  }finally{lock.release();}
 }

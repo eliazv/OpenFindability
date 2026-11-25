@@ -84,6 +84,7 @@
     "project:update": "tsx scripts/update-project.ts",
     "research:aso": "tsx scripts/aso-research.ts",
     "report": "tsx scripts/report.ts",
+    "report:portfolio": "tsx scripts/portfolio-report.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:migrate-json": "tsx scripts/migrate-json-to-sqlite.ts",

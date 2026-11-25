@@ -7,6 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createDb } from "@/lib/db/client";
+import {buildPortfolioReport} from "@/lib/analytics/portfolio-report";
 import {queryDiagnostics} from "@/lib/analytics/growth-diagnostics-store";
 import {conversionSignals,reviewThemes} from "@/lib/analytics/growth-diagnostics";
 import {projectAnalytics,portfolioAnalytics,growthSignals,advertisingBreakdown,releaseImpact} from "@/lib/analytics/growth-intelligence";
@@ -727,6 +728,7 @@ server.tool("get_release_impact","Compare recorded release interventions, descri
 server.tool("get_seo_diagnostics","Cached site-specific CTR peer comparisons, explicit brand terms and overlapping lexical clusters. No causal claims.",{slug:z.string(),days:windowDays,brandTerms:z.string().max(400).default("")},async({slug,days,brandTerms})=>{const p=growthProject(mcpDb,slug);const data=readDashboardDataWith(mcpDb,"growth",p.slug);const end=data.metricSnapshots.filter(r=>r.source==="gsc").map(r=>r.date).sort().at(-1);return resultText(end?queryDiagnostics(mcpDb,p.id,end,days,brandTerms):null);});
 server.tool("get_conversion_opportunities","Cached GA4 landing comparisons within equivalent observed contexts. Descriptive only.",{slug:z.string(),days:windowDays},async({slug,days})=>{const data=readDashboardDataWith(mcpDb,"acquisition",slug,days);return resultText(conversionSignals(data.ga4LandingMetrics??[]));});
 server.tool("get_review_themes","Recurring lexical themes and low-rating counts from cached Play reviews; not sentiment or causal analysis.",{slug:z.string(),days:windowDays},async({slug,days})=>{const data=readDashboardDataWith(mcpDb,"store",slug);const end=data.appReviews.map(r=>r.date).sort().at(-1);const start=end?new Date(Date.parse(end)-(days-1)*86400000).toISOString().slice(0,10):"";return resultText(reviewThemes(data.appReviews.filter(r=>r.date>=start)));});
+server.tool("get_portfolio_report","Build a Markdown portfolio report from local cached dashboard metrics, open opportunities and sanitized sync status.",{days:windowDays},async({days})=>({content:[{type:"text",text:buildPortfolioReport(readDashboardDataWith(mcpDb,"growth"),days)}]}));
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
