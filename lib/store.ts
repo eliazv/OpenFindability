@@ -547,7 +547,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
 
   const playInstallStats = (["portfolio","overview","acquisition","store","settings","data","growth","interventions"].includes(scope) ? database.select(playInstallStatsColumns).from(playInstallStatsTable).where(and(projectId ? eq(playInstallStatsTable.projectId, projectId) : undefined, statusOnly ? sql`${playInstallStatsTable.id} IN (SELECT id FROM play_install_stats ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined)).all().map(denull) as PlayInstallStat[] : []);
 
-  const ascAnalyticsMetrics = (["portfolio","overview","acquisition","store","settings","data"].includes(scope) ? database.select(ascAnalyticsMetricsColumns).from(ascAnalyticsMetricsTable).where(and(projectId ? eq(ascAnalyticsMetricsTable.projectId, projectId) : undefined, statusOnly ? sql`${ascAnalyticsMetricsTable.id} IN (SELECT id FROM asc_analytics_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined))
+  const ascAnalyticsMetrics = (["portfolio","overview","acquisition","store","settings","data","growth","interventions"].includes(scope) ? database.select(ascAnalyticsMetricsColumns).from(ascAnalyticsMetricsTable).where(and(projectId ? eq(ascAnalyticsMetricsTable.projectId, projectId) : undefined, statusOnly ? sql`${ascAnalyticsMetricsTable.id} IN (SELECT id FROM asc_analytics_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined))
     .all()
     .map(denull) as AscAnalyticsMetric[] : []);
 

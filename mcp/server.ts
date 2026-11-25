@@ -7,6 +7,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createDb } from "@/lib/db/client";
+import {queryDiagnostics} from "@/lib/analytics/growth-diagnostics-store";
+import {conversionSignals,reviewThemes} from "@/lib/analytics/growth-diagnostics";
 import {projectAnalytics,portfolioAnalytics,growthSignals,advertisingBreakdown,releaseImpact} from "@/lib/analytics/growth-intelligence";
 import {qualityRows} from "@/lib/analytics/data-quality";
 import {seoChanges,seoEntity,seoGroups} from "@/lib/analytics/seo-comparison";
@@ -722,6 +724,9 @@ server.tool("get_action_plan","Cached ranked signals and open opportunities; no 
 
 server.tool("record_intervention","Record a local intervention only after the user explicitly requests it. No store publishing.",{slug:z.string(),date:z.string(),title:z.string(),kind:z.string(),url:z.string().optional(),reference:z.string().optional(),notes:z.string().optional()},async({slug,...input})=>{const p=growthProject(mcpDb,slug);const item=makeIntervention(p,input);saveIntervention(mcpDb,item);return resultText(item);});
 server.tool("get_release_impact","Compare recorded release interventions, descriptive rather than causal.",{slug:z.string(),start:z.string(),end:z.string()},async({slug,start,end})=>{const d=readGrowthEvidenceWith(mcpDb,slug,start,end);const report=growthEvidenceSnapshot(d,slug,start,end,100);const data=readDashboardDataWith(mcpDb,"growth",slug);return resultText({...report,interventions:report.interventions.filter(i=>i.intervention.kind==="release").map(i=>({...i,mobile:releaseImpact(data,i.intervention.projectId,i.intervention.date,28)}))});});
+server.tool("get_seo_diagnostics","Cached site-specific CTR peer comparisons, explicit brand terms and overlapping lexical clusters. No causal claims.",{slug:z.string(),days:windowDays,brandTerms:z.string().max(400).default("")},async({slug,days,brandTerms})=>{const p=growthProject(mcpDb,slug);const data=readDashboardDataWith(mcpDb,"growth",p.slug);const end=data.metricSnapshots.filter(r=>r.source==="gsc").map(r=>r.date).sort().at(-1);return resultText(end?queryDiagnostics(mcpDb,p.id,end,days,brandTerms):null);});
+server.tool("get_conversion_opportunities","Cached GA4 landing comparisons within equivalent observed contexts. Descriptive only.",{slug:z.string(),days:windowDays},async({slug,days})=>{const data=readDashboardDataWith(mcpDb,"acquisition",slug,days);return resultText(conversionSignals(data.ga4LandingMetrics??[]));});
+server.tool("get_review_themes","Recurring lexical themes and low-rating counts from cached Play reviews; not sentiment or causal analysis.",{slug:z.string(),days:windowDays},async({slug,days})=>{const data=readDashboardDataWith(mcpDb,"store",slug);const end=data.appReviews.map(r=>r.date).sort().at(-1);const start=end?new Date(Date.parse(end)-(days-1)*86400000).toISOString().slice(0,10):"";return resultText(reviewThemes(data.appReviews.filter(r=>r.date>=start)));});
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
