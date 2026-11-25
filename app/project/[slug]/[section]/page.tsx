@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readDashboardData, readGscDetailAggregates, type DashboardScope, type GscDetailAggregate } from "@/lib/store";
+import { readDashboardData, readGscExplorer, type DashboardScope, type GscDetailAggregate } from "@/lib/store";
 import { getLatestGscIndexInspections } from "@/lib/insights";
 import { METRICS,projectMetric,sourceRows,availableMetrics,needsAttention,syncStatus } from "@/lib/dashboard/read-model";
 import { parseDays,dayRange,inRange,latestDay,type Range } from "@/lib/dashboard/metrics";
@@ -24,14 +24,16 @@ export default async function Section({params,searchParams}:{params:Promise<{slu
  const byProject=<T extends {projectId?:string}>(rows:T[])=>rows.filter(r=>r.projectId===id);
  const windowFor=<T extends {date:string}>(rows:T[]):Range=>dayRange(latestDay(rows)??new Date().toISOString().slice(0,10),days);
  const within=<T extends {date:string}>(rows:T[],range=windowFor(rows))=>rows.filter(r=>inRange(r.date,range));
- const table=(title:string,columns:string[],rows:Row[],scope:string,note?:string,visibleColumns?:number[],defaultSort?:string)=><Explorer key={scope} title={title} columns={columns} rows={rows} scope={scope} params={query} note={note} visibleColumns={visibleColumns} defaultSort={defaultSort}/>;
+ const table=(title:string,columns:string[],rows:Row[],scope:string,note?:string,visibleColumns?:number[],defaultSort?:string,pageData?:{total:number;page:number})=><Explorer key={scope} title={title} columns={columns} rows={rows} scope={scope} params={query} note={note} visibleColumns={visibleColumns} defaultSort={defaultSort} pageData={pageData}/>;
  const advanced=(title:string,count:number,child:React.ReactNode,scope:string)=>count>0?<Disclosure title={title} count={count} open={Object.keys(query).some(k=>k.startsWith(scope+"_")||(scope==="experiments"&&k.startsWith("treatments_")))}>{child}</Disclosure>:null;
  const annotations=byProject(data.projectInterventions??[]).map(r=>({date:r.date,title:r.title}));
  const charts=(specs:MetricSpec[],scope="metric")=><MetricPanel models={availableMetrics(data,p,specs).map(spec=>projectMetric(data,id,spec,days))} params={query} scope={scope} annotations={annotations}/>;
  let content:React.ReactNode;
  if(section==="acquisition"){
   const gsc=byProject(data.metricSnapshots).filter(r=>r.source==="gsc"),range=windowFor(gsc);
-  const {queries,pages,hasRows}=await readGscDetailAggregates(id,range.from,range.to);
+  const str=(k:string)=>typeof query[k]==="string"?query[k] as string:undefined;
+  const input=(scope:string)=>({search:str(scope+"_q"),sort:str(scope+"_sort"),page:str(scope+"_page")});
+  const {queries,pages,hasRows}=await readGscExplorer(id,range.from,range.to,input("queries"),input("pages"));
   const queryConfigured=!!p.gscProperty||hasRows;
   const gscRows=(rows:GscDetailAggregate[])=>rows.map(r=>({id:r.key,cells:[r.key,r.clicks,r.impressions,r.impressions>0?r.ctr*100:null,r.impressions>0?r.avgPosition:null]}));
   const landing=within(byProject(data.ga4LandingMetrics??[]));
@@ -40,9 +42,9 @@ export default async function Section({params,searchParams}:{params:Promise<{slu
   const webMetrics=[METRICS.clicks,METRICS.visitors,METRICS.sessions,METRICS.impressions,METRICS.ctr,METRICS.position,METRICS.gaUsers,METRICS.gaViews,METRICS.umamiViews,METRICS.gaEvents];
   const appMetrics=[METRICS.downloads,METRICS.installs,METRICS.deviceInstalls,METRICS.uninstalls,METRICS.events,METRICS.deviceUninstalls,METRICS.uninstallEvents,METRICS.devices];
   content=<>{charts(p.type==="web"?webMetrics:p.type==="app"?[...appMetrics,...webMetrics]:[METRICS.clicks,...appMetrics,...webMetrics.filter(m=>m!==METRICS.clicks)])}{p.type!=="app"||queryConfigured||landing.length>0||geo.length>0?<>
-  {queries.length>0&&<div className="grid gap-4 xl:grid-cols-2"><Card><CardHeader><CardTitle>Query con più click</CardTitle></CardHeader><CardContent><BarList data={[...queries].sort((a,b)=>b.clicks-a.clicks).slice(0,10).map(r=>({name:r.key,value:r.clicks}))}/></CardContent></Card><SeoScatter data={queries.filter(r=>r.impressions>0&&r.avgPosition>0).slice(0,200).map(r=>({name:r.key,position:r.avgPosition,ctr:r.ctr*100,impressions:r.impressions}))}/></div>}
-  {queryConfigured&&table("Query Google",["Query","Click","Impression","CTR %","Posizione"],gscRows(queries),"queries",range.from+" – "+range.to+" · estratto GSC",undefined,"1:desc")}
-  {queryConfigured&&table("Pagine Google",["URL","Click","Impression","CTR %","Posizione"],gscRows(pages),"pages","Estratto GSC",undefined,"1:desc")}
+  {queries.topClicks.length>0&&<div className="grid gap-4 xl:grid-cols-2"><Card><CardHeader><CardTitle>Query con più click</CardTitle></CardHeader><CardContent><BarList data={queries.topClicks.map(r=>({name:r.key,value:r.clicks}))}/></CardContent></Card><SeoScatter data={queries.topImpressions.filter(r=>r.impressions>0&&r.avgPosition>0).slice(0,200).map(r=>({name:r.key,position:r.avgPosition,ctr:r.ctr*100,impressions:r.impressions}))}/></div>}
+  {queryConfigured&&table("Query Google",["Query","Click","Impression","CTR %","Posizione"],gscRows(queries.rows),"queries",range.from+" – "+range.to+" · estratto GSC",undefined,"1:desc",queries)}
+  {queryConfigured&&table("Pagine Google",["URL","Click","Impression","CTR %","Posizione"],gscRows(pages.rows),"pages","Estratto GSC",undefined,"1:desc",pages)}
   {advanced("Segmenti GSC",byProject(data.gscDimensionBreakdowns).length,table("Segmenti GSC",["Dimensione","Valore","Da","A","Click","Impression","CTR %","Posizione"],byProject(data.gscDimensionBreakdowns).sort((a,b)=>b.rangeEnd.localeCompare(a.rangeEnd)).map(r=>({id:r.id,cells:[r.dimension,r.key,r.rangeStart,r.rangeEnd,r.clicks,r.impressions,r.ctr*100,r.avgPosition]})),"segments","Finestre sovrapposte: non sommare.",[0,1,3,4,5,6,7]),"segments")}
   {landingSummary.length>0&&table("Landing e conversioni",["Host","Landing","Canale","Source / medium","Device","Fuso","Sessioni","Key events","Session key event rate %","Qualità"],landingSummary.map(r=>({id:r.key,cells:[r.host,r.landing,r.channel,r.sourceMedium,r.device,r.timeZone,r.sessions,r.keyEvents,r.rate,r.quality]})),"landing-summary","Combinazioni GA4; possibili sovrapposizioni tra host.",[1,2,6,7,8])}
   {advanced("Dati giornalieri GA4",landing.length,table("Landing GA4",["Data","Host","Landing","Canale","Dispositivo","Sessioni","Eventi chiave","Qualità","Source / medium","Fuso","Sessioni con coinvolgimento","Tasso sessioni con evento chiave (%)"],landing.map(r=>({id:r.id,cells:[r.date,r.hostname,r.landingPage,r.channel,r.device,r.sessions,r.keyEvents,r.quality,r.sourceMedium,r.timeZone,r.engagedSessions,r.sessionKeyEventRate*100]})),"landing",undefined,[0,2,3,5,6,7]),"landing")}
