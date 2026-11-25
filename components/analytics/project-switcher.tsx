@@ -1,12 +1,32 @@
 "use client";
-import {useState,useEffect} from "react";
-import Link from "next/link";
-import {Search} from "lucide-react";
-import {Sheet,SheetContent,SheetDescription,SheetHeader,SheetTitle,SheetTrigger} from "@/components/ui/sheet";
-type ProjectItem={slug:string;name:string;hidden?:boolean};
-export function ProjectSwitcher({projects}:{projects:ProjectItem[]}){
- const [open,setOpen]=useState(false),[q,setQ]=useState("");
- useEffect(()=>{const onKey=(e:KeyboardEvent)=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();setOpen(x=>!x);}};window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey);},[]);
- const items=[{name:"Panoramica",href:"/"},{name:"Strumenti",href:"/tools"},{name:"Centro dati",href:"/data"},...projects.filter(p=>!p.hidden||q.trim()).flatMap(p=>[{name:p.name+(p.hidden?" · nascosto":""),href:"/project/"+p.slug},...["acquisition","revenue","opportunities","interventions","settings"].map((section,i)=>({name:p.name+" · "+["Acquisizione","Ricavi","Opportunità","Interventi","Integrazioni"][i],href:"/project/"+p.slug+"/"+section}))])].filter(p=>p.name.toLocaleLowerCase("it").includes(q.toLocaleLowerCase("it")));
- return <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><button type="button" className="flex items-center gap-2 text-xs text-muted-foreground border rounded-md px-2 py-1.5"><Search className="size-4"/><span className="hidden sm:inline">Cerca progetto o strumento</span><kbd className="hidden md:inline">Ctrl K</kbd></button></SheetTrigger><SheetContent side="top" className="mx-auto max-w-xl rounded-b-xl"><SheetHeader><SheetTitle>Vai a…</SheetTitle><SheetDescription>Progetti e strumenti della dashboard</SheetDescription></SheetHeader><div className="px-4 pb-4"><input className="border rounded-md w-full p-2 text-sm" aria-label="Cerca destinazione" value={q} onChange={e=>setQ(e.target.value)} placeholder="Nome progetto o strumento" autoFocus/><nav className="max-h-[50vh] overflow-auto mt-2">{items.map(p=><Link key={p.href} href={p.href} prefetch={false} onClick={()=>{setOpen(false);setQ("");}} className="block rounded-md px-3 py-2 text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring">{p.name}</Link>)}{!items.length&&<p className="p-2 text-xs text-muted-foreground">Nessun risultato.</p>}</nav></div></SheetContent></Sheet>;
+import {useMemo,useRef,useState,type KeyboardEvent} from "react";
+import {useRouter} from "next/navigation";
+import {ArrowRight,ChartNoAxesCombined,Database,Search,Wrench} from "lucide-react";
+import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from "@/components/ui/dialog";
+import {Input} from "@/components/ui/input";
+import {ProjectAvatar} from "./project-avatar";
+import {searchDestinations} from "@/lib/dashboard/navigation-search";
+import type {SidebarProject} from "./sidebar-editor";
+const groupNames={global:"Generale",projects:"Progetti",sections:"Sezioni progetto"};
+export function ProjectSwitcher({projects,open,onOpenChange,onRestoreFocus}:{projects:SidebarProject[];open:boolean;onOpenChange:(open:boolean)=>void;onRestoreFocus:()=>void}){
+ return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="gap-0 overflow-hidden p-0 max-w-xl" onCloseAutoFocus={e=>{e.preventDefault();onRestoreFocus();}}><DialogHeader className="sr-only"><DialogTitle>Cerca in OpenFindability</DialogTitle><DialogDescription>Cerca progetti, sezioni o strumenti. Usa le frecce per navigare.</DialogDescription></DialogHeader>
+ <SearchResults projects={projects} close={()=>onOpenChange(false)}/>
+ </DialogContent></Dialog>;
+}
+function SearchResults({projects,close}:{projects:SidebarProject[];close:()=>void}){
+ const router=useRouter(),[q,Q]=useState(""),[selected,S]=useState(0),input=useRef<HTMLInputElement>(null);
+ const items=useMemo(()=>searchDestinations(projects,q),[projects,q]),bySlug=useMemo(()=>new Map(projects.map(p=>[p.slug,p])),[projects]);
+ const active=Math.min(selected,Math.max(0,items.length-1));
+ const refs=useRef<(HTMLButtonElement|null)[]>([]);
+ function select(index:number){const item=items[index];if(!item)return;close();router.push(item.href);}
+ function step(index:number){if(!items.length)return;const next=(index+items.length)%items.length;S(next);refs.current[next]?.scrollIntoView({block:"nearest"});}
+ function keys(e:KeyboardEvent<HTMLInputElement>){if(e.nativeEvent.isComposing)return;if(e.key==="ArrowDown"){e.preventDefault();step(active+1);}else if(e.key==="ArrowUp"){e.preventDefault();step(active-1);}else if(e.key==="Enter"&&items.length){e.preventDefault();select(active);}}
+ return <>
+ <div className="flex items-center gap-3 border-b px-4 py-3 pr-12"><Search className="size-5 shrink-0 text-muted-foreground"/><Input ref={input} value={q} onChange={e=>{Q(e.target.value);S(0);}} onKeyDown={keys} autoFocus aria-label="Cerca destinazione" placeholder="Cerca progetti, pagine e strumenti…" className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"/><kbd className="hidden sm:inline text-[10px] text-muted-foreground">ESC</kbd></div>
+ <div className="max-h-[min(55vh,420px)] overflow-y-auto p-2" aria-label="Risultati di ricerca">
+ {(["global","projects","sections"] as const).map(group=>{const rows=items.map((item,index)=>({item,index})).filter(x=>x.item.group===group);if(!rows.length)return null;return <section key={group} aria-label={groupNames[group]} className="mb-2 last:mb-0"><p className="px-2 py-1 text-xs font-medium text-muted-foreground">{groupNames[group]}</p>{rows.map(({item,index})=>{const p=item.slug?bySlug.get(item.slug):undefined;const Icon=item.kind==="data"?Database:item.kind==="tools"?Wrench:ChartNoAxesCombined;return <button type="button" key={item.href} ref={node=>{refs.current[index]=node;}} onMouseEnter={()=>S(index)} onFocus={()=>S(index)} onClick={()=>select(index)} className={"flex w-full min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring "+(index===active?"bg-accent text-accent-foreground":"hover:bg-muted")} >
+ {p?<ProjectAvatar name={p.name} icon={p.icon} websiteUrl={p.websiteUrl} type={p.type} className="size-6"/>:<Icon className="size-4 mx-1 text-muted-foreground"/>}<span className="min-w-0 flex-1 truncate">{item.name}</span>{item.hidden&&<span className="text-[10px] text-muted-foreground">Nascosto</span>}{index===active&&<ArrowRight className="size-4 shrink-0 opacity-60"/>}</button>})}</section>})}
+ {!items.length&&<p className="p-6 text-center text-sm text-muted-foreground">Nessun risultato.</p>}
+ </div><div className="flex flex-wrap gap-4 border-t px-4 py-2 text-xs text-muted-foreground"><span>↑ ↓ Naviga</span><span>Invio per aprire</span><span>Esc per chiudere</span></div>
+ </>;
 }

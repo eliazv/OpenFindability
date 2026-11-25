@@ -7,11 +7,8 @@ import "./globals.css";
 import { cookies } from "next/headers";
 import { projectIcon } from "@/lib/dashboard/project-icon";
 import { readProjects } from "@/lib/store";
-import {SyncProgress} from "@/components/analytics/sync-progress";
-import { ThemeToggle } from "@/components/analytics/theme-toggle";
-import { ProjectSwitcher } from "@/components/analytics/project-switcher";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {DashboardShell} from "@/components/analytics/dashboard-shell";
+import {SidebarProvider} from "@/components/ui/sidebar";
 
 export const metadata: Metadata = {
   title: "OpenFindability",
@@ -29,16 +26,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="it" className={dark ? "dark" : undefined}>
       <body>
         <SidebarProvider defaultOpen={cookieStore.get("sidebar_state")?.value !== "false"}>
-          <AppSidebar projects={projects} />
-          <SidebarInset className="min-w-0">
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-              <SidebarTrigger />
-              
-              <div className="ml-auto flex gap-2 items-center"><ProjectSwitcher projects={projects.map(({slug,name,hidden})=>({slug,name,hidden}))}/><ThemeToggle initialDark={dark}/></div>
-            </header>
-            <SyncProgress/>
-            {children}
-          </SidebarInset>
+          <DashboardShell projects={projects} initialDark={dark}>{children}</DashboardShell>
         </SidebarProvider>
       </body>
     </html>
