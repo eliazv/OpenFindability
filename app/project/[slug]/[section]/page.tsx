@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
-import { readDashboardData, type DashboardScope } from "@/lib/store";
+import { readDashboardData, readGscDetailAggregates, type DashboardScope, type GscDetailAggregate } from "@/lib/store";
 import { getLatestGscIndexInspections } from "@/lib/insights";
-import { aggregatePagesByUrl,aggregateQueriesByText } from "@/lib/report";
 import { METRICS,projectMetric,sourceRows,availableMetrics,needsAttention,syncStatus } from "@/lib/dashboard/read-model";
 import { parseDays,dayRange,inRange,latestDay,type Range } from "@/lib/dashboard/metrics";
 import {CalendarRevenue} from "@/components/analytics/calendar-revenue";
@@ -32,9 +31,9 @@ export default async function Section({params,searchParams}:{params:Promise<{slu
  let content:React.ReactNode;
  if(section==="acquisition"){
   const gsc=byProject(data.metricSnapshots).filter(r=>r.source==="gsc"),range=windowFor(gsc);
-  const queries=aggregateQueriesByText(within(byProject(data.searchQueries),range)),pages=aggregatePagesByUrl(within(byProject(data.pageMetrics),range));
-  const queryConfigured=!!p.gscProperty||byProject(data.searchQueries).length>0||byProject(data.pageMetrics).length>0;
-  const gscRows=(rows:ReturnType<typeof aggregateQueriesByText>)=>rows.map(r=>({id:r.key,cells:[r.key,r.clicks,r.impressions,r.impressions>0?r.ctr*100:null,r.impressions>0?r.avgPosition:null]}));
+  const {queries,pages,hasRows}=await readGscDetailAggregates(id,range.from,range.to);
+  const queryConfigured=!!p.gscProperty||hasRows;
+  const gscRows=(rows:GscDetailAggregate[])=>rows.map(r=>({id:r.key,cells:[r.key,r.clicks,r.impressions,r.impressions>0?r.ctr*100:null,r.impressions>0?r.avgPosition:null]}));
   const landing=within(byProject(data.ga4LandingMetrics??[]));
   const landingSummary=landingGroups(landing);
   const geo=byProject(data.seoGeoObservations??[]).sort((a,b)=>b.windowEnd.localeCompare(a.windowEnd));

@@ -1,5 +1,5 @@
 import { db, getSqliteHandle, type AppDb } from "@/lib/db/client";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import {
   ga4LandingMetrics as ga4LandingMetricsTable,
   webPerformanceMetrics as webPerformanceMetricsTable,
@@ -473,8 +473,10 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
   // Unknown slugs must never fall through to a global read.
   const projectId = slug ? projects[0]?.id ?? "__dashboard_missing_project__" : undefined;
   const metricSnapshots = (["portfolio","overview","acquisition","store","revenue","health","settings","data","interventions"].includes(scope) ? database.select().from(metricSnapshotsTable).where(projectId ? eq(metricSnapshotsTable.projectId, projectId) : undefined).all().map(denull) as MetricSnapshot[] : []);
-  const searchQueries = (["acquisition"].includes(scope) ? database.select().from(searchQueriesTable).where(projectId ? eq(searchQueriesTable.projectId, projectId) : undefined).all().map(denull) as SearchQueryMetric[] : []);
-  const pageMetrics = (["acquisition","interventions"].includes(scope) ? database.select().from(pageMetricsTable).where(projectId ? eq(pageMetricsTable.projectId, projectId) : undefined).all().map(denull) as PageMetric[] : []);
+  // GSC detail tables hold hundreds of thousands of rows with large rawJson: never load them whole.
+  // Acquisition reads SQL aggregates via readGscDetailAggregates(); interventions only need target URLs around their dates.
+  const searchQueries: SearchQueryMetric[] = [];
+  const pageMetrics = (scope === "interventions" && slug ? readInterventionPageMetrics(database, projectId!) : []);
   const opportunities = (["portfolio","overview","opportunities"].includes(scope) ? database.select().from(opportunitiesTable).where(projectId ? eq(opportunitiesTable.projectId, projectId) : undefined).all().map(denull) as Opportunity[] : []);
   const connectorRuns = (["portfolio","overview","settings","data"].includes(scope) ? database.select().from(connectorRunsTable).where(projectId ? eq(connectorRunsTable.projectId, projectId) : undefined).all().map(denull) as ConnectorRun[] : []);
 
@@ -576,3 +578,34 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
  })();
 }
 export async function readDashboardData(scope: DashboardScope, slug?: string): Promise<AppData> {return readDashboardDataWith(db,scope,slug);}
+
+const DAILY_GSC_DETAIL = `json_extract(raw_json,'$._openfindability.grain')='day' AND json_extract(raw_json,'$._openfindability.version')=2`;
+
+/** Page rows for intervention targets only, within the widest comparison window (90 days each side). */
+function readInterventionPageMetrics(database: AppDb, projectId: string): PageMetric[] {
+  const interventions = database.select().from(projectInterventionsTable).where(eq(projectInterventionsTable.projectId, projectId)).all().filter((r) => r.targetUrl);
+  if (!interventions.length) return [];
+  const shift = (date: string, n: number) => new Date(Date.parse(date) + n * 86400000).toISOString().slice(0, 10);
+  const dates = interventions.map((r) => r.date).sort();
+  const prefixes = [...new Set(interventions.map((r) => { const u = new URL(r.targetUrl!); return u.origin + u.pathname; }))];
+  return database.select().from(pageMetricsTable).where(and(
+    eq(pageMetricsTable.projectId, projectId),
+    gte(pageMetricsTable.date, shift(dates[0], -90)),
+    lte(pageMetricsTable.date, shift(dates.at(-1)!, 90)),
+    inArray(pageMetricsTable.page, prefixes),
+  )).all().map(denull) as PageMetric[];
+}
+
+export type GscDetailAggregate = { key: string; clicks: number; impressions: number; ctr: number; avgPosition: number };
+/** Daily-grain GSC query/page totals for one project and window, aggregated in SQLite. */
+export function readGscDetailAggregatesWith(database: AppDb, projectId: string, from: string, to: string) {
+  const sqlite = getSqliteHandle(database);
+  const aggregate = (table: "search_queries" | "page_metrics", column: "query" | "page") => (sqlite.prepare(`
+    SELECT ${column} AS key, SUM(clicks) AS clicks, SUM(impressions) AS impressions, SUM(avg_position*impressions) AS weighted
+    FROM ${table} WHERE project_id=? AND date>=? AND date<=? AND ${DAILY_GSC_DETAIL}
+    GROUP BY ${column} ORDER BY impressions DESC`).all(projectId, from, to) as { key: string; clicks: number; impressions: number; weighted: number }[])
+    .map(({ key, clicks, impressions, weighted }): GscDetailAggregate => ({ key, clicks, impressions, ctr: impressions > 0 ? clicks / impressions : 0, avgPosition: impressions > 0 ? weighted / impressions : 0 }));
+  const hasRows = (sqlite.prepare("SELECT EXISTS(SELECT 1 FROM search_queries WHERE project_id=?) OR EXISTS(SELECT 1 FROM page_metrics WHERE project_id=?) AS v").get(projectId, projectId) as { v: number }).v === 1;
+  return { queries: aggregate("search_queries", "query"), pages: aggregate("page_metrics", "page"), hasRows };
+}
+export async function readGscDetailAggregates(projectId: string, from: string, to: string) { return readGscDetailAggregatesWith(db, projectId, from, to); }
