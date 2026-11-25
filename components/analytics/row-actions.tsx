@@ -8,5 +8,5 @@ export function RowDetail({columns,row}:{columns:string[];row:Row}){
 }
 export function CsvButton({title,columns,rows}:{title:string;columns:string[];rows:Row[]}){
  function download(){const blob=new Blob(["\ufeff",csvText(columns,rows.map(r=>r.cells))],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=title.replace(/[^a-z0-9]+/gi,"-")+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- return <button className="inline-flex size-8 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted disabled:opacity-40" type="button" title="Esporta pagina CSV" aria-label="Esporta pagina CSV" onClick={download} disabled={!rows.length}><Download className="size-4"/></button>;
+ return <button className="inline-flex size-8 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted disabled:opacity-40" type="button" title="Esporta risultati CSV" aria-label="Esporta risultati CSV" onClick={download} disabled={!rows.length}><Download className="size-4"/></button>;
 }

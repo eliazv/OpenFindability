@@ -654,4 +654,21 @@ export function readGscExplorerWith(database:AppDb,projectId:string,from:string,
  const hasRows=(sqlite.prepare("SELECT EXISTS(SELECT 1 FROM search_queries WHERE project_id=?) OR EXISTS(SELECT 1 FROM page_metrics WHERE project_id=?) AS v").get(projectId,projectId) as {v:number}).v===1;
  return {queries,pages,hasRows};
 }
-export async function readGscExplorer(projectId:string,from:string,to:string,queryInput:GscExplorerInput,pageInput:GscExplorerInput){return readGscExplorerWith(db,projectId,from,to,queryInput,pageInput);}
+const explorerCache=new Map<string,ReturnType<typeof readGscExplorerWith>>();
+let explorerRevision=-1;
+export async function readGscExplorer(projectId:string,from:string,to:string,queryInput:GscExplorerInput,pageInput:GscExplorerInput){
+ const native=getSqliteHandle(db);
+ return native.transaction(()=>{
+  const revision=storeRevision(db);if(revision!==explorerRevision){explorerCache.clear();explorerRevision=revision;}
+  const key=JSON.stringify([projectId,from,to,queryInput,pageInput]),cached=explorerCache.get(key);if(cached)return cached;
+  const value=readGscExplorerWith(db,projectId,from,to,queryInput,pageInput);
+  if(explorerCache.size>=32)explorerCache.delete(explorerCache.keys().next().value!);explorerCache.set(key,value);return value;
+ })();
+}
+export function iterateGscExport(database:AppDb,id:string,from:string,to:string,kind:"page"|"query",input:GscExplorerInput){
+ const n=getSqliteHandle(database),table=kind==="page"?"page_metrics":"search_queries",key=kind==="page"?"page":"query";
+ const [idx,dir]=(input.sort??"1:desc").split(":");
+ const column=/^[0-4]$/.test(idx)?["key COLLATE NOCASE","clicks","impressions","ctr","position"][Number(idx)]:"clicks",direction=dir==="asc"?"ASC":"DESC";
+ return n.prepare(`SELECT ${key} key,sum(clicks) clicks,sum(impressions) impressions,sum(clicks)*100.0/nullif(sum(impressions),0) ctr,sum(avg_position*impressions)*1.0/nullif(sum(impressions),0) position FROM ${table} WHERE project_id=? AND date BETWEEN ? AND ? AND ${DAILY_GSC_DETAIL} AND instr(lower(${key}),lower(?))>0 GROUP BY ${key} ORDER BY (${column} IS NULL),${column} ${direction},key`).iterate(id,from,to,(input.search??"").trim().slice(0,200)) as Iterable<{key:string;clicks:number;impressions:number;ctr:number|null;position:number|null}>;
+}
+

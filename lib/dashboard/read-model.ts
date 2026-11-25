@@ -67,7 +67,7 @@ export function projectMetric(data:AppData,id:string,spec:MetricSpec,days:number
 }
 export function openOpportunities(data:AppData,id?:string){
   const severity={high:3,medium:2,low:1};
-  return data.opportunities.filter(r=>r.status==="open"&&(r.rawJson as {active?:boolean}|undefined)?.active!==false&&(!id||r.projectId===id)).sort((a,b)=>severity[b.severity]-severity[a.severity]||b.score-a.score||b.detectedAt.localeCompare(a.detectedAt));
+  return data.opportunities.filter(r=>r.status==="open"&&((r.rawJson as {active?:boolean}|undefined)?.active!==false||["planned","working","verify"].includes((r.rawJson as {workflow?:string}|undefined)?.workflow??""))&&(!id||r.projectId===id)).sort((a,b)=>severity[b.severity]-severity[a.severity]||b.score-a.score||b.detectedAt.localeCompare(a.detectedAt));
 }
 export function configuredSources(p:Project):SourceType[]{
  const flags:Partial<Record<SourceType,boolean>>={gsc:!!p.gscProperty,ga4:!!p.ga4PropertyId,ga4_landing:!!(p.ga4PropertyId&&p.websiteUrl),umami:!!p.umamiWebsiteId,bing_webmaster:!!p.bingSiteUrl,cloudflare_ai:!!p.cloudflareZoneId,clarity:!!(p.clarityProjectId&&p.clarityTokenEnv),play_console:!!p.playConsolePackageName,play_stats:!!p.playConsolePackageName,play_vitals:!!p.playConsolePackageName,asc_analytics:!!p.appStoreTrackId,aso:!!p.asoKeywords?.length,revenuecat:!!p.revenueCatProjectId,admob:!!(p.admobAppId||p.admobAppIdIos),adsense:!!p.adsenseSiteDomain};
