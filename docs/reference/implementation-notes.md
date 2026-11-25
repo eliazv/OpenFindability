@@ -228,3 +228,8 @@ Use `localRequestError` for local dashboard routes; compare browser-facing Host 
 ### Sidebar-first application shell
 
 The client DashboardShell coordinates global settings, search and project organization independently of the mobile drawer. Desktop has no global header; mobile retains a compact navigation opener. Project sections are shared by tabs and search. Data/Tools retain their routes, linked from settings rather than permanent sidebar entries. See [sidebar-first settings](../guide/2026-11-25-sidebar-first-settings.md).
+
+
+### Dialog layering and website artwork
+
+Dialog/sheet overlays and panels use explicit stacking in globals.css. No global header, mobile navigation uses a floating opener. Website favicon discovery reads declared icon links on the configured public site's homepage, with bounded same-site DNS-pinned requests and a local cache; no per-domain hardcoding. See [modal and website icon fixes](../guide/2026-11-25-modal-and-website-icon-fixes.md).

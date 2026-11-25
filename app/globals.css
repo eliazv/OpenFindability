@@ -159,6 +159,10 @@
   background: var(--background);
   color: var(--foreground);
 }
+[data-slot="sheet-content"][data-mobile="true"], [data-slot="sidebar"][data-mobile="true"] {
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
+}
 [data-slot="dialog-content"][data-dialog-kind="search"] {
   width: min(36rem, calc(100% - 2rem));
 }
