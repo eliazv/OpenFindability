@@ -15,7 +15,7 @@ import { syncAdsenseProject } from "@/lib/connectors/adsense";
 import { syncPlayVitalsProject } from "@/lib/connectors/play-vitals";
 import { syncPlayInstallStatsProject } from "@/lib/connectors/play-gcs-stats";
 import { syncAscAnalyticsProject } from "@/lib/connectors/appstoreconnect-analytics";
-import {refreshStoreArtwork} from "@/lib/dashboard/store-artwork";
+import {refreshProjectArtwork} from "@/lib/dashboard/project-artwork";
 import {db} from "@/lib/db/client";
 import {readProjects} from "@/lib/store";
 import * as persist from "@/lib/sync-store";
@@ -68,7 +68,7 @@ export async function syncProjects(options:SyncOptions={}):Promise<SyncResult[]>
    if(source==="gsc"&&result.status==="success"){try{refreshSeoOpportunities(db,p.id);}catch(error){console.error("Opportunity refresh failed:",cliErrorMessage(error));}}
   }
   // Public icon lookups are best-effort and cached; do not change analytics result.
-  if(!options.source||["asc_analytics","play_console","play_stats"].includes(options.source)){for(let i=0;i<projects.length;i+=3)await Promise.all(projects.slice(i,i+3).map(p=>refreshStoreArtwork(p).catch(()=>{})));}
+  if(!options.source||["asc_analytics","play_console","play_stats"].includes(options.source)){for(let i=0;i<projects.length;i+=3)await Promise.all(projects.slice(i,i+3).map(p=>refreshProjectArtwork(p).catch(()=>{})));}
   return results;
  }finally{lock.release();}
 }
