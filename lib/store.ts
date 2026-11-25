@@ -466,7 +466,7 @@ export async function updateData(mutator: (data: AppData) => AppData | void): Pr
 
 /** Read-only dashboard projection; deliberately never registered as a writable snapshot. */
 export type DashboardScope = "portfolio"|"overview"|"acquisition"|"store"|"revenue"|"health"|"opportunities"|"interventions"|"settings"|"data"|"growth";
-export function readDashboardDataWith(database: AppDb, scope: DashboardScope, slug?: string, days=365): AppData {
+export function readDashboardDataWith(database: AppDb, scope: DashboardScope, slug?: string, days=365, window?:{from:string;to:string}): AppData {
  return getSqliteHandle(database).transaction(() => {
   const projects = database.select().from(projectsTable).where(slug ? eq(projectsTable.slug, slug) : undefined).all().map(denull) as Project[];
   // Unknown slugs must never fall through to a global read.
@@ -492,7 +492,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
   const {rawJson: _seoGeoObservationsRaw, ...seoGeoObservationsColumns} = getTableColumns(seoGeoObservationsTable);
   const onlyFreshness = scope === "portfolio" || scope === "overview" || scope === "settings" || scope === "data";
   const statusOnly = scope === "settings" || scope === "data";
-  const boundedDays = [7,28,90,365].includes(days) ? days : 365;
+  const boundedDays=Number.isSafeInteger(days)&&days>=1&&days<=365?days:365;
   const metricSnapshots = (["portfolio","overview","acquisition","store","revenue","health","settings","data","interventions","growth"].includes(scope) ? database.select(scope === "interventions" ? getTableColumns(metricSnapshotsTable) : { ...metricSnapshotsColumns, rawJson: sql<unknown>`NULL` }).from(metricSnapshotsTable).where(and(projectId ? eq(metricSnapshotsTable.projectId, projectId) : undefined, statusOnly ? sql`${metricSnapshotsTable.id} IN (SELECT id FROM metric_snapshots ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id, source HAVING max(date) IS NOT NULL)` : undefined)).all().map(denull) as MetricSnapshot[] : []);
   // GSC detail tables hold hundreds of thousands of rows with large rawJson: never load them whole.
   // Acquisition reads bounded SQL results via readGscExplorer(); interventions only need target URLs around their dates.
@@ -552,7 +552,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
     .map(denull) as AscAnalyticsMetric[] : []);
 
   const snapshot: AppData = {
-    ga4LandingMetrics: (["portfolio","overview","acquisition","settings","data","interventions"].includes(scope) ? database.select(scope === "interventions" ? getTableColumns(ga4LandingMetricsTable) : { ...ga4LandingMetricsColumns, rawJson: sql<unknown>`NULL` }).from(ga4LandingMetricsTable).where(and(projectId ? eq(ga4LandingMetricsTable.projectId, projectId) : undefined, onlyFreshness ? sql`${ga4LandingMetricsTable.id} IN (SELECT id FROM ga4_landing_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined, scope==="acquisition"&&projectId ? sql`${ga4LandingMetricsTable.date} >= date((SELECT max(date) FROM ga4_landing_metrics WHERE project_id=${projectId}), ${"-"+(boundedDays-1)+" days"})` : undefined)).all() : []),
+    ga4LandingMetrics: (["portfolio","overview","acquisition","settings","data","interventions"].includes(scope) ? database.select(scope === "interventions" ? getTableColumns(ga4LandingMetricsTable) : { ...ga4LandingMetricsColumns, rawJson: sql<unknown>`NULL` }).from(ga4LandingMetricsTable).where(and(projectId ? eq(ga4LandingMetricsTable.projectId, projectId) : undefined, onlyFreshness ? sql`${ga4LandingMetricsTable.id} IN (SELECT id FROM ga4_landing_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined, scope==="acquisition"&&window?and(gte(ga4LandingMetricsTable.date,window.from),lte(ga4LandingMetricsTable.date,window.to)):scope==="acquisition"&&projectId ? sql`${ga4LandingMetricsTable.date} >= date((SELECT max(date) FROM ga4_landing_metrics WHERE project_id=${projectId}), ${"-"+(boundedDays-1)+" days"})` : undefined)).all() : []),
     webPerformanceMetrics: (["health","settings","data","portfolio","overview"].includes(scope) ? database.select({ ...webPerformanceMetricsColumns, rawJson: sql<unknown>`NULL` }).from(webPerformanceMetricsTable).where(and(projectId ? eq(webPerformanceMetricsTable.projectId, projectId) : undefined, onlyFreshness ? sql`${webPerformanceMetricsTable.id} IN (SELECT id FROM web_performance_metrics WHERE status='available' ${projectId?sql`AND project_id=${projectId}`:sql``} GROUP BY project_id, source HAVING max(date) IS NOT NULL)` : undefined)).all() : []),
     projectInterventions: (["overview","acquisition","store","revenue","health","interventions"].includes(scope) ? database.select().from(projectInterventionsTable).where(projectId ? eq(projectInterventionsTable.projectId, projectId) : undefined).all() : []),
     seoGeoObservations: (["portfolio","overview","acquisition","settings","data"].includes(scope) ? database.select({ ...seoGeoObservationsColumns, rawJson: sql<unknown>`NULL` }).from(seoGeoObservationsTable).where(and(projectId ? eq(seoGeoObservationsTable.projectId, projectId) : undefined, onlyFreshness ? sql`${seoGeoObservationsTable.id} IN (SELECT id FROM seo_geo_observations ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id, source HAVING max(window_end) IS NOT NULL)` : undefined)).all() as NonNullable<AppData["seoGeoObservations"]> : []),
@@ -580,7 +580,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
   return snapshot;
  })();
 }
-export async function readDashboardData(scope: DashboardScope, slug?: string, days=365): Promise<AppData> {return readDashboardDataWith(db,scope,slug,days);}
+export async function readDashboardData(scope: DashboardScope, slug?: string, days=365,window?:{from:string;to:string}): Promise<AppData> {return readDashboardDataWith(db,scope,slug,days,window);}
 
 const DAILY_GSC_DETAIL = `json_extract(raw_json,'$._openfindability.grain')='day' AND json_extract(raw_json,'$._openfindability.version')=2`;
 

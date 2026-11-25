@@ -8,11 +8,11 @@ import { notFound } from "next/navigation";
 import { readDashboardData, readGscExplorer, type DashboardScope, type GscDetailAggregate } from "@/lib/store";
 import { getLatestGscIndexInspections } from "@/lib/insights";
 import { METRICS,projectMetric,sourceRows,availableMetrics,needsAttention,syncStatus } from "@/lib/dashboard/read-model";
-import { parseDays,dayRange,inRange,latestDay,type Range } from "@/lib/dashboard/metrics";
+import { parseDays,parseDashboardPeriod,dayRange,inRange,latestDay,type Range } from "@/lib/dashboard/metrics";
 import {CalendarRevenue} from "@/components/analytics/calendar-revenue";
 import {MetricPanel} from "@/components/analytics/metric-panel";
 import {Disclosure} from "@/components/analytics/disclosure";
-import { Explorer,type Params,type Row } from "@/components/analytics/explorer";
+import { Explorer,queryHref,type Params,type Row } from "@/components/analytics/explorer";
 import {SourceIcon} from "@/components/analytics/source-icon";
 import { SyncButton } from "@/components/sync-button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
@@ -26,16 +26,16 @@ import type { MetricSpec } from "@/lib/dashboard/read-model";
 const labels:Record<string,string>={acquisition:"Acquisizione",store:"Store",revenue:"Ricavi",health:"Salute",opportunities:"Opportunità",interventions:"Interventi",settings:"Integrazioni"};
 export default async function Section({params,searchParams}:{params:Promise<{slug:string;section:string}>;searchParams:Promise<Params>}){
  const [{slug,section},query]=await Promise.all([params,searchParams]);if(!Object.hasOwn(labels,section))notFound();
- const requestedDays=parseDays(query.days);
- const data=await readDashboardData(section as DashboardScope,slug,requestedDays),p=data.projects.find(p=>p.slug===slug);if(!p||section==="store"&&p.type==="web")notFound();
+ const period=parseDashboardPeriod(section==="interventions"?{days:query.days}:query),requestedDays=period.days;
+ const data=await readDashboardData(section as DashboardScope,slug,requestedDays,period.from&&period.end?{from:period.from,to:period.end}:undefined),p=data.projects.find(p=>p.slug===slug);if(!p||section==="store"&&p.type==="web")notFound();
  const days=section==="interventions"?Math.min(requestedDays,90):requestedDays,id=p.id;
  const byProject=<T extends {projectId?:string}>(rows:T[])=>rows.filter(r=>r.projectId===id);
- const windowFor=<T extends {date:string}>(rows:T[]):Range=>dayRange(latestDay(rows)??new Date().toISOString().slice(0,10),days);
+ const windowFor=<T extends {date:string}>(rows:T[]):Range=>dayRange(period.end??latestDay(rows)??new Date().toISOString().slice(0,10),days);
  const within=<T extends {date:string}>(rows:T[],range=windowFor(rows))=>rows.filter(r=>inRange(r.date,range));
  const table=(title:string,columns:string[],rows:Row[],scope:string,note?:string,visibleColumns?:number[],defaultSort?:string,pageData?:{total:number;page:number})=><Explorer key={scope} title={title} columns={columns} rows={rows} scope={scope} params={query} note={note} visibleColumns={visibleColumns} defaultSort={defaultSort} pageData={pageData} hideTitle={["segments","landing","geo","ranks","keyword-history","metadata","experiments","mediation","all-index","sitemaps","perf","vitals","intervention-coverage"].includes(scope)}/>;
  const advanced=(title:string,count:number,child:React.ReactNode,scope:string)=>count>0?<Disclosure title={title} count={count} open={Object.keys(query).some(k=>k.startsWith(scope+"_")||(scope==="experiments"&&k.startsWith("treatments_")))}>{child}</Disclosure>:null;
  const annotations=byProject(data.projectInterventions??[]).map(r=>({date:r.date,title:r.title}));
- const charts=(specs:MetricSpec[],scope="metric")=><MetricPanel models={availableMetrics(data,p,specs).map(spec=>projectMetric(data,id,spec,days))} params={query} scope={scope} annotations={annotations}/>;
+ const charts=(specs:MetricSpec[],scope="metric")=><MetricPanel models={availableMetrics(data,p,specs).map(spec=>projectMetric(data,id,spec,days,period.end,period.comparison))} params={query} scope={scope} annotations={annotations}/>;
  let content:React.ReactNode;
  if(section==="acquisition"){
   const gsc=byProject(data.metricSnapshots).filter(r=>r.source==="gsc"),range=windowFor(gsc);
@@ -43,19 +43,19 @@ export default async function Section({params,searchParams}:{params:Promise<{slu
   const input=(scope:string)=>({search:str(scope+"_q"),sort:str(scope+"_sort"),page:str(scope+"_page")});
   const {queries,pages,hasRows}=await readGscExplorer(id,range.from,range.to,input("queries"),input("pages"));
   const queryConfigured=!!p.gscProperty||hasRows;
-  const comparison=query.compare==="year"?"year":"previous";
+  const comparison=period.comparison;
   const changes=queryConfigured?seoChanges(db,id,range.to,days,"page",40,comparison):null;
   const queryChanges=queryConfigured?seoChanges(db,id,range.to,days,"query",40,comparison):null;
-  const entity=typeof query.entity==="string"&&query.entity.length<=2048?seoEntity(db,id,query.entity,query.kind==="query"?"query":"page",range.to,days):null;
-  const gscRows=(rows:GscDetailAggregate[],kind:"query"|"page")=>rows.map(r=>({id:r.key,href:"?days="+days+"&kind="+kind+"&entity="+encodeURIComponent(r.key),cells:[r.key,r.clicks,r.impressions,r.impressions>0?r.ctr*100:null,r.impressions>0?r.avgPosition:null]}));
+  const entity=typeof query.entity==="string"&&query.entity.length>0&&query.entity.length<=2048?seoEntity(db,id,query.entity,query.kind==="query"?"query":"page",range.to,days):null;
+  const gscRows=(rows:GscDetailAggregate[],kind:"query"|"page")=>rows.map(r=>({id:r.key,href:queryHref(query,{kind,entity:r.key}),cells:[r.key,r.clicks,r.impressions,r.impressions>0?r.ctr*100:null,r.impressions>0?r.avgPosition:null]}));
   const landing=within(byProject(data.ga4LandingMetrics??[]));
   const landingSummary=landingGroups(landing);
   const geo=byProject(data.seoGeoObservations??[]).sort((a,b)=>b.windowEnd.localeCompare(a.windowEnd));
   const webMetrics=[METRICS.clicks,METRICS.visitors,METRICS.sessions,METRICS.impressions,METRICS.ctr,METRICS.position,METRICS.gaUsers,METRICS.gaViews,METRICS.umamiViews,METRICS.gaEvents];
   const appMetrics=[METRICS.downloads,METRICS.installs,METRICS.deviceInstalls,METRICS.uninstalls,METRICS.events,METRICS.deviceUninstalls,METRICS.uninstallEvents,METRICS.devices];
   content=<>{charts(p.type==="web"?webMetrics:p.type==="app"?[...appMetrics,...webMetrics]:[METRICS.clicks,...appMetrics,...webMetrics.filter(m=>m!==METRICS.clicks)])}{p.type!=="app"||queryConfigured||landing.length>0||geo.length>0?<>
-  {changes&&changes.rows.length>0&&<div className="space-y-2"><div className="flex items-center justify-between"><h3 className="text-sm font-medium">Confronto GSC</h3><div className="flex gap-2 text-xs"><Link className={comparison==="previous"?"font-semibold":"text-muted-foreground"} href={"?days="+days+"&compare=previous"}>Periodo precedente</Link><Link className={comparison==="year"?"font-semibold":"text-muted-foreground"} href={"?days="+days+"&compare=year"}>52 settimane fa</Link></div></div>{!changes.complete&&<p className="text-xs text-muted-foreground">Copertura incompleta: variazioni indicative.</p>}{table("Pagine in crescita e calo",["URL","Click","Precedenti","Δ click","Δ %","Posizione","Pos. precedente"],changes.rows.map(r=>({id:r.key,cells:[r.key,r.current,r.previous,r.delta,r.percent,r.currentPosition,r.previousPosition],href:"?days="+days+"&entity="+encodeURIComponent(r.key)+"&kind=page"})),"page-changes",undefined,[0,1,3,4,5])}{queryChanges&&table("Query in crescita e calo",["Query","Click","Precedenti","Δ click","Δ %"],queryChanges.rows.map(r=>({id:r.key,cells:[r.key,r.current,r.previous,r.delta,r.percent],href:"?days="+days+"&entity="+encodeURIComponent(r.key)+"&kind=query"})),"query-changes")}</div>}
-  {entity&&<Card className="gap-2 py-3"><CardHeader><CardTitle className="text-base break-all">{entity.key}</CardTitle><Link className="text-xs underline" href={"?days="+days}>Chiudi dettaglio</Link></CardHeader><CardContent>{table("Storico giornaliero",["Data","Click","Impression","CTR","Posizione"],(entity.trend as {date:string;clicks:number;impressions:number;ctr:number;position:number}[]).map(r=>({id:r.date,cells:[r.date,r.clicks,r.impressions,r.ctr*100,r.position]})),"entity-trend")}{table(entity.kind==="page"?"Query associate":"Pagine associate",["Nome","Click","Impression","CTR","Posizione"],(entity.related as {key:string;clicks:number;impressions:number;ctr:number;position:number}[]).map(r=>({id:r.key,cells:[r.key,r.clicks,r.impressions,r.ctr*100,r.position]})),"entity-related")}</CardContent></Card>}
+  {changes&&changes.rows.length>0&&<div className="space-y-2"><div className="flex items-center justify-between"><h3 className="text-sm font-medium">Confronto GSC</h3><div className="flex gap-2 text-xs"><Link className={comparison==="previous"?"font-semibold":"text-muted-foreground"} href={queryHref(query,{compare:"previous"})}>Periodo precedente</Link><Link className={comparison==="year"?"font-semibold":"text-muted-foreground"} href={queryHref(query,{compare:"year"})}>52 settimane fa</Link></div></div>{!changes.complete&&<p className="text-xs text-muted-foreground">Copertura incompleta: variazioni indicative.</p>}{table("Pagine in crescita e calo",["URL","Click","Precedenti","Δ click","Δ %","Posizione","Pos. precedente"],changes.rows.map(r=>({id:r.key,cells:[r.key,r.current,r.previous,r.delta,r.percent,r.currentPosition,r.previousPosition],href:queryHref(query,{entity:r.key,kind:"page"})})),"page-changes",undefined,[0,1,3,4,5])}{queryChanges&&table("Query in crescita e calo",["Query","Click","Precedenti","Δ click","Δ %"],queryChanges.rows.map(r=>({id:r.key,cells:[r.key,r.current,r.previous,r.delta,r.percent],href:queryHref(query,{entity:r.key,kind:"query"})})),"query-changes")}</div>}
+  {entity&&<Card className="gap-2 py-3"><CardHeader><CardTitle className="text-base break-all">{entity.key}</CardTitle><Link className="text-xs underline" href={queryHref(query,{entity:"",kind:""})}>Chiudi dettaglio</Link></CardHeader><CardContent>{table("Storico giornaliero",["Data","Click","Impression","CTR","Posizione"],(entity.trend as {date:string;clicks:number;impressions:number;ctr:number;position:number}[]).map(r=>({id:r.date,cells:[r.date,r.clicks,r.impressions,r.ctr==null?null:r.ctr*100,r.position]})),"entity-trend")}{table(entity.kind==="page"?"Query associate":"Pagine associate",["Nome","Click","Impression","CTR","Posizione"],(entity.related as {key:string;clicks:number;impressions:number;ctr:number;position:number}[]).map(r=>({id:r.key,cells:[r.key,r.clicks,r.impressions,r.ctr*100,r.position]})),"entity-related")}</CardContent></Card>}
   {queries.topClicks.length>0&&<div className="grid gap-4 xl:grid-cols-2"><Card><CardHeader><CardTitle>Query con più click</CardTitle></CardHeader><CardContent><BarList data={queries.topClicks.map(r=>({name:r.key,value:r.clicks}))}/></CardContent></Card><SeoScatter data={queries.topImpressions.filter(r=>r.impressions>0&&r.avgPosition>0).slice(0,200).map(r=>({name:r.key,position:r.avgPosition,ctr:r.ctr*100,impressions:r.impressions}))}/></div>}
   {queryConfigured&&table("Query Google",["Query","Click","Impression","CTR %","Posizione"],gscRows(queries.rows,"query"),"queries",range.from+" – "+range.to+" · estratto GSC",undefined,"1:desc",queries)}
   {queryConfigured&&table("Pagine Google",["URL","Click","Impression","CTR %","Posizione"],gscRows(pages.rows,"page"),"pages","Estratto GSC",undefined,"1:desc",pages)}

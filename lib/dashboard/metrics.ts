@@ -26,10 +26,11 @@ export function snapshotObservations(rows: MetricSnapshot[], key: keyof MetricSn
   for (const row of rows) if (!map.has(row.date) || map.get(row.date)!.createdAt < row.createdAt) map.set(row.date,row);
   return [...map.values()].map(row => ({ date:row.date, value: typeof row[key] === "number" ? row[key] as number : null, currency:row.currency }));
 }
-export function measure(rows: Observation[], range: Range, kind: MetricKind = "sum", monetary = false): MetricResult {
+export function measure(rows: Observation[], range: Range, kind: MetricKind = "sum", monetary = false, previousOverride?:Range): MetricResult {
   const expected = Math.round((Date.parse(range.to)-Date.parse(range.from))/86400000)+1;
   if (!Number.isInteger(expected) || expected < 1 || expected > 366) throw new Error("Invalid metric range");
-  const previousRange = dayRange(shiftDay(range.from,-1),expected);
+  const previousRange = previousOverride??dayRange(shiftDay(range.from,-1),expected);
+  if(Math.round((Date.parse(previousRange.to)-Date.parse(previousRange.from))/86400000)+1!==expected)throw new Error("Invalid comparison range");
   const relevant = rows.filter(r => inRange(r.date,range)||inRange(r.date,previousRange));
   const valid = relevant.filter(r => r.value !== null && Number.isFinite(r.value));
   const currencies = new Set(valid.map(r=>r.currency));
@@ -55,9 +56,9 @@ export function formatMetric(value: number|null|undefined, unit: "count"|"curren
   return value.toLocaleString("it-IT",{maximumFractionDigits:precision??(unit==="count"?0:2)})+(unit==="percent"?"%":"");
 }
 
-export function measureRatio(rows:{date:string;numerator:number|null;denominator:number|null}[],range:Range,scale=1):MetricResult {
- const valid=rows.filter(r=>r.numerator!==null&&r.denominator!==null&&Number.isFinite(r.numerator)&&Number.isFinite(r.denominator)&&r.denominator>=0);
- const model=measure(valid.map(r=>({date:r.date,value:r.denominator!>0?r.numerator!/r.denominator!*scale:null})),range);
+export function measureRatio(rows:{date:string;numerator:number|null;denominator:number|null}[],range:Range,scale=1,previousOverride?:Range):MetricResult {
+ const valid=rows.filter(r=>r.numerator!==null&&r.denominator!==null&&Number.isFinite(r.numerator)&&Number.isFinite(r.denominator)&&r.denominator>=0&&(r.denominator!==0||r.numerator===0));
+ const model=measure(valid.map(r=>({date:r.date,value:r.denominator!>0?r.numerator!/r.denominator!*scale:null})),range,"sum",false,previousOverride);
  const aggregate=(window:Range)=>{
   const subset=valid.filter(r=>inRange(r.date,window));
   const denominator=subset.reduce((s,r)=>s+r.denominator!,0);
@@ -66,4 +67,19 @@ export function measureRatio(rows:{date:string;numerator:number|null;denominator
  const current=aggregate(range),previous=aggregate(model.previousRange);
  const delta=current.observed===model.expected&&previous.observed===model.expected&&current.value!==null&&previous.value!==null?current.value-previous.value:null;
  return {...model,value:current.value,previous:previous.value,observed:current.observed,previousObserved:previous.observed,delta,deltaPercent:delta!==null&&previous.value!==null&&previous.value!==0?delta/Math.abs(previous.value)*100:null};
+}
+
+export type DashboardPeriod={days:number;end?:string;from?:string;comparison:"previous"|"year"};
+export function parseDashboardPeriod(params:Record<string,string|string[]|undefined>,today=new Date().toISOString().slice(0,10)):DashboardPeriod{
+ const comparison=params.compare==="year"?"year":"previous";
+ const from=params.from,to=params.to;
+ if(validDay(from)&&validDay(to)&&from<=to&&to<=today){
+  const days=Math.round((Date.parse(to)-Date.parse(from))/86400000)+1;
+  if(days>=1&&days<=365)return {days,from,end:to,comparison};
+ }
+ return {days:parseDays(params.days),comparison};
+}
+export function comparisonWindow(range:Range,comparison:"previous"|"year"){
+ const days=Math.round((Date.parse(range.to)-Date.parse(range.from))/86400000)+1;
+ return dayRange(shiftDay(range.to,comparison==="year"?-364:-days),days);
 }

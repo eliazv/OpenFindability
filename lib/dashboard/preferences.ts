@@ -4,7 +4,7 @@ import {projectDashboardPreferences as t,projects} from "@/lib/db/schema";
 import {METRICS,projectMetric} from "@/lib/dashboard/read-model";
 import type {AppData,Project} from "@/lib/types";
 export type Preferences=typeof t.$inferSelect;
-export const metricOptions=Object.values(METRICS).map(s=>({id:s.source+":"+s.key,label:s.label,unit:s.unit}));
+export const metricOptions=Object.values(METRICS).map(s=>({id:s.source+":"+s.key,label:s.label,unit:s.unit,goalAllowed:!("lowerBetter" in s&&s.lowerBetter)}));
 export function metricById(id:string){return Object.values(METRICS).find(s=>s.source+":"+s.key===id);}
 export function readPreferences(database:AppDb,projectId?:string){return database.select().from(t).where(projectId?eq(t.projectId,projectId):undefined).all();}
 export function savePreferences(database:AppDb,id:string,input:unknown){
@@ -12,7 +12,7 @@ export function savePreferences(database:AppDb,id:string,input:unknown){
  const p=input as Record<string,unknown>;
  if(typeof p.favorite!=="boolean"||typeof p.archived!=="boolean"||!Array.isArray(p.primaryMetrics)||p.primaryMetrics.length>4||p.primaryMetrics.some(v=>typeof v!=="string"||!metricById(v)))throw new Error("Invalid project preferences");
  const metric=typeof p.goalMetric==="string"&&p.goalMetric?metricById(p.goalMetric):undefined;
- if(p.goalMetric&&!metric)throw new Error("Invalid goal metric");
+ if(p.goalMetric&&(!metric||("lowerBetter" in metric&&metric.lowerBetter)))throw new Error("Invalid goal metric");
  const target=p.goalTarget;
  if(metric&&(typeof target!=="number"||!Number.isFinite(target)||target<=0))throw new Error("Invalid goal target");
  const currency=metric?.unit==="currency"&&typeof p.goalCurrency==="string"&&/^[A-Z]{3}$/.test(p.goalCurrency)?p.goalCurrency:null;

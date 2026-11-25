@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dayRange, measure, measureRatio, parseDays, validDay } from "../lib/dashboard/metrics";
+import { dayRange, measure, measureRatio, parseDays, validDay, parseDashboardPeriod, comparisonWindow } from "../lib/dashboard/metrics";
 test("missing remains null, zero remains a real measurement",()=>{
   const m=measure([{date:"2026-11-02",value:0}],dayRange("2026-11-03",3));
   assert.equal(m.value,0);assert.equal(m.observed,1);assert.equal(m.points[0].current,null);assert.equal(m.points[1].current,0);assert.equal(m.delta,null);
@@ -23,3 +23,5 @@ test("ratio aggregates weighted by denominator rather than average of daily rati
  const m=measureRatio([{date:"2026-11-01",numerator:1,denominator:10},{date:"2026-11-02",numerator:10,denominator:1000}],dayRange("2026-11-02",2),100);
  assert.ok(Math.abs(m.value!-11/1010*100)<1e-10);assert.equal(m.observed,2);
 });
+
+test("custom range and year comparison preserve equal weekdays and reject future dates",()=>{const p=parseDashboardPeriod({from:"2026-10-01",to:"2026-10-31",compare:"year"},"2026-11-25");assert.equal(p.days,31);assert.equal(p.end,"2026-10-31");assert.equal(comparisonWindow(dayRange(p.end!,p.days),"year").to,"2025-11-01");assert.equal(parseDashboardPeriod({from:"2026-11-01",to:"2026-12-01"},"2026-11-25").days,28);});

@@ -1,5 +1,5 @@
 import type { AppData, Project, SourceType } from "@/lib/types";
-import { dayRange, latestDay, measure, measureRatio, snapshotObservations, type Observation } from "./metrics";
+import { dayRange, comparisonWindow, latestDay, measure, measureRatio, snapshotObservations, type Observation } from "./metrics";
 import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
 
 export type MetricSpec = { source: SourceType; key: string; label: string; unit: "count"|"currency"|"percent"|"decimal"; kind?: "snapshot" | "ratio"; lowerBetter?: boolean; precision?: number };
@@ -53,17 +53,17 @@ export function metricObservations(data:AppData,id:string,spec:MetricSpec):Obser
   }
   return snapshotObservations(rows,spec.key as keyof typeof rows[number]);
 }
-export function projectMetric(data:AppData,id:string,spec:MetricSpec,days:number,end?:string){
+export function projectMetric(data:AppData,id:string,spec:MetricSpec,days:number,end?:string,comparison:"previous"|"year"="previous"){
   const observations=metricObservations(data,id,spec);
-  const latest=latestDay(observations);
+  const latest=latestDay(observations.filter(o=>o.value!==null&&Number.isFinite(o.value)))??latestDay(observations);
   const range=dayRange(end??latest??new Date().toISOString().slice(0,10),days);
   if(spec.kind==="ratio"){
     const rows=data.metricSnapshots.filter(r=>r.projectId===id&&r.source===spec.source);
     const dedup=new Map<string,typeof rows[number]>();
     for(const row of rows)if(!dedup.has(row.date)||dedup.get(row.date)!.createdAt<row.createdAt)dedup.set(row.date,row);
-    return {spec,latest,result:measureRatio([...dedup.values()].map(r=>({date:r.date,denominator:r.impressions??null,numerator:spec.key==="ctr"?r.clicks??null:r.avgPosition!==undefined&&r.impressions!==undefined?r.avgPosition*r.impressions:null})),range,spec.key==="ctr"?100:1)};
+    return {spec,latest,result:measureRatio([...dedup.values()].map(r=>({date:r.date,denominator:r.impressions??null,numerator:spec.key==="ctr"?r.clicks??null:r.avgPosition!==undefined&&r.impressions!==undefined?r.avgPosition*r.impressions:null})),range,spec.key==="ctr"?100:1,comparisonWindow(range,comparison))};
   }
-  return {spec,latest,result:measure(observations,range,spec.kind??"sum",spec.unit==="currency")};
+  return {spec,latest,result:measure(observations,range,spec.kind??"sum",spec.unit==="currency",comparisonWindow(range,comparison))};
 }
 export function openOpportunities(data:AppData,id?:string){
   const severity={high:3,medium:2,low:1};
@@ -94,13 +94,14 @@ export function availableMetrics(data:AppData,p:Project,specs:readonly MetricSpe
  const configured=new Set(configuredSources(p));
  return specs.filter(s=>configured.has(s.source)||metricObservations(data,p.id,s).some(o=>o.value!==null&&Number.isFinite(o.value))||(s.kind==="ratio"&&data.metricSnapshots.some(r=>r.projectId===p.id&&r.source===s.source&&r.impressions!==undefined)));
 }
-export function overviewMetrics(data:AppData,p:Project,days:number){
+export function overviewMetrics(data:AppData,p:Project,days:number,end?:string,comparison:"previous"|"year"="previous",preferred:string[]=[]){
  const web=[METRICS.clicks,METRICS.visitors,METRICS.adsense,METRICS.impressions,METRICS.sessions,METRICS.ctr,METRICS.position,METRICS.gaViews,METRICS.umamiViews,METRICS.gaUsers];
  const hasUserInstalls=metricObservations(data,p.id,METRICS.installs).some(o=>o.value!==null);
  const app=[METRICS.ads,METRICS.mrr,METRICS.downloads,METRICS.installs,...(!hasUserInstalls?[METRICS.deviceInstalls]:[]),METRICS.subscribers,METRICS.rating,METRICS.devices,...(hasUserInstalls?[METRICS.deviceInstalls]:[])];
  const order=p.type==="web"?web:p.type==="app"?app:[METRICS.clicks,METRICS.ads,METRICS.mrr,METRICS.downloads,METRICS.installs,...web,...app];
- const unique=[...new Map(order.map(s=>[s.source+":"+s.key,s])).values()];
- const models=availableMetrics(data,p,unique).map(s=>projectMetric(data,p.id,s,days));
+ const preferredSpecs=Object.values(METRICS).filter(s=>preferred.includes(s.source+":"+s.key));
+ const unique=[...new Map([...preferredSpecs,...order].map(s=>[s.source+":"+s.key,s])).values()];
+ const models=availableMetrics(data,p,unique).map(s=>projectMetric(data,p.id,s,days,end,comparison));
  return [...models.filter(m=>m.result.value!==null),...models.filter(m=>m.result.value===null)];
 }
 export function needsAttention(s:ReturnType<typeof sourceRows>[number]){

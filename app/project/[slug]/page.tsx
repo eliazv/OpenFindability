@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readDashboardData } from "@/lib/store";
 import { overviewMetrics,openOpportunities,sourceRows,needsAttention,syncStatus } from "@/lib/dashboard/read-model";
-import { parseDays } from "@/lib/dashboard/metrics";
+import { parseDashboardPeriod } from "@/lib/dashboard/metrics";
 import { MetricPanel } from "@/components/analytics/metric-panel";
 import { type Params } from "@/components/analytics/explorer";
 import { Card,CardHeader,CardTitle,CardContent } from "@/components/ui/card";
@@ -13,10 +13,10 @@ import { Card,CardHeader,CardTitle,CardContent } from "@/components/ui/card";
 export default async function ProjectPage({params,searchParams}:{params:Promise<{slug:string}>;searchParams:Promise<Params>}){
  const [{slug},query]=await Promise.all([params,searchParams]);
  const data=await readDashboardData("overview",slug),p=data.projects.find(p=>p.slug===slug);if(!p)notFound();
- const days=parseDays(query.days),prefs=readPreferences(db,p.id)[0],cards=orderModels(overviewMetrics(data,p,days),prefs),opp=openOpportunities(data,p.id);
+ const period=parseDashboardPeriod(query),days=period.days,prefs=readPreferences(db,p.id)[0],cards=orderModels(overviewMetrics(data,p,days,period.end,period.comparison,prefs?.primaryMetrics),prefs),opp=openOpportunities(data,p.id);
  const goal=goalProgress(data,p,prefs);
  const issues=sourceRows(data,p).filter(needsAttention);
- const link=(section:string)=>"/project/"+slug+"/"+section+"?days="+days;
+ const link=(section:string)=>"/project/"+slug+"/"+section+"?"+new URLSearchParams({days:String(period.from?28:days),...(period.from?{from:period.from,to:period.end!}:{}),compare:period.comparison}).toString();
  return <div className="space-y-4">
 
  <MetricPanel models={cards} params={query} annotations={(data.projectInterventions??[]).filter(r=>r.projectId===p.id).map(r=>({date:r.date,title:r.title}))}/>

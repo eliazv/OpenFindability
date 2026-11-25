@@ -9,11 +9,11 @@ const signals:{spec:MetricSpec;min:number;pct:number;absolute?:number}[]=[
  {spec:METRICS.ads,min:5,pct:25},{spec:METRICS.adsense,min:5,pct:25},{spec:METRICS.mrr,min:5,pct:20},{spec:METRICS.subscribers,min:10,pct:20},
  {spec:METRICS.ctr,min:0,pct:20,absolute:.5},{spec:METRICS.position,min:1,pct:15,absolute:2},
 ];
-export function growthSignals(data:AppData,days=28){
+export function growthSignals(data:AppData,days=28,end?:string,comparison:"previous"|"year"="previous"){
  return data.projects.flatMap(p=>signals.flatMap(({spec,min,pct,absolute})=>{
-  const {result:m}=projectMetric(data,p.id,spec,days);
+  const {result:m}=projectMetric(data,p.id,spec,days,end,comparison);
   if(m.value===null||m.previous===null||m.delta===null||m.deltaPercent===null||Math.max(m.value,m.previous)<min||Math.abs(m.deltaPercent)<pct||absolute!==undefined&&Math.abs(m.delta)<absolute)return [];
-  if(spec.kind==="ratio"){const impressions=projectMetric(data,p.id,METRICS.impressions,days).result;if(impressions.observed!==impressions.expected||impressions.previousObserved!==impressions.expected||Math.min(impressions.value??0,impressions.previous??0)<500)return [];}
+  if(spec.kind==="ratio"){const impressions=projectMetric(data,p.id,METRICS.impressions,days,end,comparison).result;if(impressions.observed!==impressions.expected||impressions.previousObserved!==impressions.expected||Math.min(impressions.value??0,impressions.previous??0)<500)return [];}
   const improved=spec.lowerBetter?m.delta<0:m.delta>0;
   return [{id:p.id+":"+spec.source+":"+spec.key,project:p.name,slug:p.slug,source:spec.source,metric:spec.label,value:m.value,previous:m.previous,delta:m.delta,percent:m.deltaPercent,unit:spec.unit,currency:m.currency,improved,range:m.range,score:Math.min(100,Math.abs(m.deltaPercent)),label:formatMetric(m.value,spec.unit,m.currency,spec.precision)}];
  })).sort((a,b)=>Number(a.improved)-Number(b.improved)||b.score-a.score);
