@@ -1,3 +1,4 @@
+import {cachedStoreArtwork} from "./store-artwork";
 import { cache } from "react";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
@@ -34,4 +35,4 @@ const resolveLocalIcon=cache(async (slug:string,flutterProjectPath?:string):Prom
   return await image(root,path.resolve(path.dirname(config),value.icon));
  }catch{return undefined;}
 });
-export function projectIcon(project:Pick<Project,"slug"|"flutterProjectPath">){return resolveLocalIcon(project.slug,project.flutterProjectPath);}
+export async function projectIcon(project:Pick<Project,"slug"|"flutterProjectPath"|"appStoreTrackId"|"playConsolePackageName">){return await resolveLocalIcon(project.slug,project.flutterProjectPath)??await cachedStoreArtwork(project);}
