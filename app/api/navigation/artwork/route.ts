@@ -12,7 +12,7 @@ export async function POST(request:Request){
  busy=true;try{
   const projects=(await readProjects()).filter(p=>(!body.slug||p.slug===body.slug)&&storeIdentities(p).length);
   const results:{slug:string;status:string}[]=[];
-  for(let i=0;i<projects.length;i+=3){results.push(...await Promise.all(projects.slice(i,i+3).map(async p=>({slug:p.slug,status:await refreshStoreArtwork(p,{force:!!body.slug}).catch(()=>"unavailable")}))));}
+  for(let i=0;i<projects.length;i+=3){results.push(...await Promise.all(projects.slice(i,i+3).map(async p=>({slug:p.slug,status:await refreshStoreArtwork(p,{force:!!body.slug||body.force===true}).catch(()=>"unavailable")}))));}
   return NextResponse.json({results});
  }catch{return NextResponse.json({error:"Aggiornamento icone non riuscito."},{status:500});}finally{busy=false;}
 }

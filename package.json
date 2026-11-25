@@ -91,10 +91,13 @@
     "studio": "node studio/serve.mjs",
     "studio:export": "node studio/export.mjs",
     "test:studio": "node --test tests/studio.test.mjs",
-    "test:dashboard-analytics": "tsx --test tests/dashboard-metrics.test.ts tests/dashboard-csv.test.ts tests/dashboard-store.test.ts tests/dashboard-favicon.test.ts tests/growth-foundations.test.ts tests/sidebar-navigation.test.ts tests/store-artwork.test.ts tests/growth-diagnostics.test.ts",
+    "test:dashboard-analytics": "tsx --test tests/dashboard-metrics.test.ts tests/dashboard-csv.test.ts tests/dashboard-store.test.ts tests/dashboard-favicon.test.ts tests/growth-foundations.test.ts tests/sidebar-navigation.test.ts tests/store-artwork.test.ts tests/growth-diagnostics.test.ts tests/local-request.test.ts",
     "test:dashboard": "node --test tests/dashboard-launch.test.mjs"
   },
   "dependencies": {
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/sortable": "10.0.0",
+    "@dnd-kit/utilities": "3.2.2",
     "@duckdb/node-api": "1.5.6-r.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@radix-ui/react-dialog": "^1.1.17",

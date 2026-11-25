@@ -1,4 +1,8 @@
 "use client";
+import {SortableList} from "@/components/ui/sortable-list";
+import {Button} from "@/components/ui/button";
+import {X} from "lucide-react";
+import {SourceIcon} from "./source-icon";
 import {useState} from "react";
 import {useRouter} from "next/navigation";
 import {Card,CardContent,CardHeader,CardTitle} from "@/components/ui/card";
@@ -17,7 +21,7 @@ export function PreferenceEditor({slug,prefs,options}:{slug:string;prefs?:Prefer
  const option=options.find(o=>o.id===goal);
  return <Card className="gap-3 py-4"><CardHeader><CardTitle>Preferenze progetto</CardTitle></CardHeader><CardContent><form className="space-y-3" onSubmit={async e=>{e.preventDefault();S(await a.submit({action:"preferences",preferences:{favorite,archived,primaryMetrics:metrics,goalMetric:goal,goalTarget:Number(target),goalCurrency:currency}}));}}>
  <div className="flex flex-wrap gap-4 text-sm"><label className="flex gap-2"><input type="checkbox" checked={favorite} onChange={e=>F(e.target.checked)}/>Preferito</label><label className="flex gap-2"><input type="checkbox" checked={archived} onChange={e=>A(e.target.checked)}/>Archiviato nella home</label></div>
- <fieldset><legend className="text-sm font-medium mb-2">Metriche principali (max 4)</legend><div className="grid gap-2 sm:grid-cols-2">{options.map(o=><label key={o.id} className="flex gap-2 text-xs"><input type="checkbox" checked={metrics.includes(o.id)} disabled={!metrics.includes(o.id)&&metrics.length>=4} onChange={e=>M(old=>e.target.checked?[...old,o.id]:old.filter(x=>x!==o.id))}/>{o.label}</label>)}</div></fieldset>
+ <fieldset><legend className="text-sm font-medium mb-2">Metriche principali (max 4)</legend><div className="grid gap-2 sm:grid-cols-2">{options.map(o=><label key={o.id} className="flex gap-2 text-xs"><input type="checkbox" checked={metrics.includes(o.id)} disabled={!metrics.includes(o.id)&&metrics.length>=4} onChange={e=>M(old=>e.target.checked?[...old,o.id]:old.filter(x=>x!==o.id))}/>{o.label}</label>)}</div>{metrics.length>0&&<div className="mt-3 space-y-1"><p className="text-xs text-muted-foreground">Ordine delle metriche selezionate</p><SortableList items={metrics.map(id=>({id,name:options.find(o=>o.id===id)?.label??id}))} onChange={items=>M(items.map(i=>i.id))} disabled={a.busy} renderItem={item=><><SourceIcon source={item.id.split(":")[0]}/><span className="min-w-0 flex-1 truncate text-xs">{item.name}</span><Button type="button" variant="ghost" size="icon" className="size-7" disabled={a.busy} aria-label={"Rimuovi "+item.name} onClick={()=>M(old=>old.filter(id=>id!==item.id))}><X className="size-3"/></Button></>}/></div>}</fieldset>
  <div className="grid gap-2 sm:grid-cols-3"><label className="text-xs">Obiettivo<select className={input} value={goal} onChange={e=>G(e.target.value)}><option value="">Nessuno</option>{options.filter(o=>o.goalAllowed!==false).map(o=><option key={o.id} value={o.id}>{o.label}</option>)}</select></label>{goal&&<label className="text-xs">Valore target<input className={input} type="number" min="0.000001" step="any" required value={target} onChange={e=>T(e.target.value)}/></label>}{option?.unit==="currency"&&<label className="text-xs">Valuta<input className={input} maxLength={3} pattern="[A-Z]{3}" value={currency} onChange={e=>C(e.target.value.toUpperCase())}/></label>}</div>
  <button disabled={a.busy} className={button}>Salva</button>{a.error&&<p role="alert" className="text-xs text-destructive">{a.error}</p>}{saved&&!a.error&&<span className="ml-2 text-xs text-muted-foreground">Salvato</span>}</form></CardContent></Card>;
 }
