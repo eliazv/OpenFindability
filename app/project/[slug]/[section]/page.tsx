@@ -19,12 +19,13 @@ import type { MetricSpec } from "@/lib/dashboard/read-model";
 const labels:Record<string,string>={acquisition:"Acquisizione",store:"Store",revenue:"Ricavi",health:"Salute",opportunities:"Opportunità",interventions:"Interventi",settings:"Integrazioni"};
 export default async function Section({params,searchParams}:{params:Promise<{slug:string;section:string}>;searchParams:Promise<Params>}){
  const [{slug,section},query]=await Promise.all([params,searchParams]);if(!Object.hasOwn(labels,section))notFound();
- const data=await readDashboardData(section as DashboardScope,slug),p=data.projects.find(p=>p.slug===slug);if(!p||section==="store"&&p.type==="web")notFound();
- const days=section==="interventions"?Math.min(parseDays(query.days),90):parseDays(query.days),id=p.id;
+ const requestedDays=parseDays(query.days);
+ const data=await readDashboardData(section as DashboardScope,slug,requestedDays),p=data.projects.find(p=>p.slug===slug);if(!p||section==="store"&&p.type==="web")notFound();
+ const days=section==="interventions"?Math.min(requestedDays,90):requestedDays,id=p.id;
  const byProject=<T extends {projectId?:string}>(rows:T[])=>rows.filter(r=>r.projectId===id);
  const windowFor=<T extends {date:string}>(rows:T[]):Range=>dayRange(latestDay(rows)??new Date().toISOString().slice(0,10),days);
  const within=<T extends {date:string}>(rows:T[],range=windowFor(rows))=>rows.filter(r=>inRange(r.date,range));
- const table=(title:string,columns:string[],rows:Row[],scope:string,note?:string,visibleColumns?:number[],defaultSort?:string,pageData?:{total:number;page:number})=><Explorer key={scope} title={title} columns={columns} rows={rows} scope={scope} params={query} note={note} visibleColumns={visibleColumns} defaultSort={defaultSort} pageData={pageData}/>;
+ const table=(title:string,columns:string[],rows:Row[],scope:string,note?:string,visibleColumns?:number[],defaultSort?:string,pageData?:{total:number;page:number})=><Explorer key={scope} title={title} columns={columns} rows={rows} scope={scope} params={query} note={note} visibleColumns={visibleColumns} defaultSort={defaultSort} pageData={pageData} hideTitle={["segments","landing","geo","ranks","keyword-history","metadata","experiments","mediation","all-index","sitemaps","perf","vitals","intervention-coverage"].includes(scope)}/>;
  const advanced=(title:string,count:number,child:React.ReactNode,scope:string)=>count>0?<Disclosure title={title} count={count} open={Object.keys(query).some(k=>k.startsWith(scope+"_")||(scope==="experiments"&&k.startsWith("treatments_")))}>{child}</Disclosure>:null;
  const annotations=byProject(data.projectInterventions??[]).map(r=>({date:r.date,title:r.title}));
  const charts=(specs:MetricSpec[],scope="metric")=><MetricPanel models={availableMetrics(data,p,specs).map(spec=>projectMetric(data,id,spec,days))} params={query} scope={scope} annotations={annotations}/>;

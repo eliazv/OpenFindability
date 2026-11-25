@@ -1,3 +1,4 @@
+import {linkedWebsite} from "@/lib/dashboard/favicon";
 import type { Metadata } from "next";
 import "./globals.css";
 import { cookies } from "next/headers";
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const projects = await Promise.all((await readProjects()).map(async (p) => ({ id:p.id, slug:p.slug, name:p.name, type:p.type, websiteUrl:p.websiteUrl, icon:await projectIcon(p) })));
+  const projects = await Promise.all((await readProjects()).map(async (p) => ({ id:p.id, slug:p.slug, name:p.name, type:p.type, websiteUrl:linkedWebsite(p), icon:await projectIcon(p) })));
   const cookieStore = await cookies();
   const dark = cookieStore.get("dashboard_theme")?.value === "dark";
 

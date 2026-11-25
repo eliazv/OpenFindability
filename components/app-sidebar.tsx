@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import {usePathname} from "next/navigation";
-import {Database,LayoutDashboard,Wrench,PanelsTopLeft,ChartNoAxesCombined} from "lucide-react";
+import {Database,Wrench,PanelsTopLeft,ChartNoAxesCombined} from "lucide-react";
 import {ProjectAvatar} from "@/components/analytics/project-avatar";
 import type {Project} from "@/lib/types";
 import {Sidebar,SidebarContent,SidebarFooter,SidebarGroup,SidebarGroupContent,SidebarGroupLabel,SidebarHeader,SidebarMenu,SidebarMenuButton,SidebarMenuItem,SidebarRail} from "@/components/ui/sidebar";

@@ -24,7 +24,9 @@ const resolveLocalIcon=cache(async (slug:string,flutterProjectPath?:string):Prom
  }
  if(!project.flutterProjectPath)return;
  try{
-  const root=await realpath(project.flutterProjectPath),config=await realpath(path.join(root,"store","studio","studio.config.json"));
+  const root=await realpath(project.flutterProjectPath);
+  for(const relative of ["android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png","android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png","ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png"]){const result=await image(root,path.join(root,relative));if(result)return result;}
+  const config=await realpath(path.join(root,"store","studio","studio.config.json"));
   if(!inside(root,config))return;
   const info=await stat(config);if(!info.isFile()||info.size>64*1024)return;
   const value=JSON.parse(await readFile(config,"utf8")) as {icon?:unknown};
