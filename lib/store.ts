@@ -410,9 +410,8 @@ export async function writeData(data: AppData): Promise<void> {
 }
 
 /** Only the projects table: avoids loading the whole store for CLI lookups. */
-export async function readProjects(): Promise<Project[]> {
-  return db.select().from(projectsTable).all().map(denull) as Project[];
-}
+export function readProjectsWith(database:AppDb):Project[]{return database.select().from(projectsTable).all().map(denull) as Project[];}
+export async function readProjects(): Promise<Project[]> {return readProjectsWith(db);}
 
 export type ProjectUpdates = Partial<Omit<Project, "id" | "slug" | "createdAt" | "updatedAt">>;
 
@@ -466,7 +465,7 @@ export async function updateData(mutator: (data: AppData) => AppData | void): Pr
 }
 
 /** Read-only dashboard projection; deliberately never registered as a writable snapshot. */
-export type DashboardScope = "portfolio"|"overview"|"acquisition"|"store"|"revenue"|"health"|"opportunities"|"interventions"|"settings"|"data";
+export type DashboardScope = "portfolio"|"overview"|"acquisition"|"store"|"revenue"|"health"|"opportunities"|"interventions"|"settings"|"data"|"growth";
 export function readDashboardDataWith(database: AppDb, scope: DashboardScope, slug?: string, days=365): AppData {
  return getSqliteHandle(database).transaction(() => {
   const projects = database.select().from(projectsTable).where(slug ? eq(projectsTable.slug, slug) : undefined).all().map(denull) as Project[];
@@ -494,13 +493,13 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
   const onlyFreshness = scope === "portfolio" || scope === "overview" || scope === "settings" || scope === "data";
   const statusOnly = scope === "settings" || scope === "data";
   const boundedDays = [7,28,90,365].includes(days) ? days : 365;
-  const metricSnapshots = (["portfolio","overview","acquisition","store","revenue","health","settings","data","interventions"].includes(scope) ? database.select(scope === "interventions" ? getTableColumns(metricSnapshotsTable) : { ...metricSnapshotsColumns, rawJson: sql<unknown>`NULL` }).from(metricSnapshotsTable).where(and(projectId ? eq(metricSnapshotsTable.projectId, projectId) : undefined, statusOnly ? sql`${metricSnapshotsTable.id} IN (SELECT id FROM metric_snapshots ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id, source HAVING max(date) IS NOT NULL)` : undefined)).all().map(denull) as MetricSnapshot[] : []);
+  const metricSnapshots = (["portfolio","overview","acquisition","store","revenue","health","settings","data","interventions","growth"].includes(scope) ? database.select(scope === "interventions" ? getTableColumns(metricSnapshotsTable) : { ...metricSnapshotsColumns, rawJson: sql<unknown>`NULL` }).from(metricSnapshotsTable).where(and(projectId ? eq(metricSnapshotsTable.projectId, projectId) : undefined, statusOnly ? sql`${metricSnapshotsTable.id} IN (SELECT id FROM metric_snapshots ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id, source HAVING max(date) IS NOT NULL)` : undefined)).all().map(denull) as MetricSnapshot[] : []);
   // GSC detail tables hold hundreds of thousands of rows with large rawJson: never load them whole.
   // Acquisition reads bounded SQL results via readGscExplorer(); interventions only need target URLs around their dates.
   const searchQueries: SearchQueryMetric[] = [];
   const pageMetrics = (scope === "interventions" && slug ? readInterventionPageMetrics(database, projectId!) : []);
-  const opportunities = (["portfolio","overview","opportunities"].includes(scope) ? database.select().from(opportunitiesTable).where(and(projectId ? eq(opportunitiesTable.projectId, projectId) : undefined, scope==="portfolio"||scope==="overview"?eq(opportunitiesTable.status,"open"):undefined)).all().map(denull) as Opportunity[] : []);
-  const connectorRuns = (["portfolio","overview","settings","data"].includes(scope) ? database.select().from(connectorRunsTable).where(and(projectId ? eq(connectorRunsTable.projectId, projectId) : undefined, scope==="portfolio"||scope==="overview"?sql`${connectorRunsTable.id} IN (SELECT id FROM connector_runs ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id, source, status HAVING max(finished_at) IS NOT NULL)`:undefined)).all().map(denull) as ConnectorRun[] : []);
+  const opportunities = (["portfolio","overview","opportunities","growth"].includes(scope) ? database.select().from(opportunitiesTable).where(and(projectId ? eq(opportunitiesTable.projectId, projectId) : undefined, scope==="portfolio"||scope==="overview"?eq(opportunitiesTable.status,"open"):undefined)).all().map(denull) as Opportunity[] : []);
+  const connectorRuns = (["portfolio","overview","settings","data","growth"].includes(scope) ? database.select().from(connectorRunsTable).where(and(projectId ? eq(connectorRunsTable.projectId, projectId) : undefined, scope==="portfolio"||scope==="overview"?sql`${connectorRunsTable.id} IN (SELECT id FROM connector_runs ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id, source, status HAVING max(finished_at) IS NOT NULL)`:undefined)).all().map(denull) as ConnectorRun[] : []);
 
   const appReviews = (["store"].includes(scope) ? database.select(appReviewsColumns).from(appReviewsTable).where(projectId ? eq(appReviewsTable.projectId, projectId) : undefined)
     .all()
@@ -530,7 +529,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
     .all()
     .map(denull) as GscIndexInspection[] : []);
 
-  const admobMediationMetrics = (["portfolio","overview","revenue","settings","data"].includes(scope) ? database.select(admobMediationMetricsColumns).from(admobMediationMetricsTable).where(and(projectId ? eq(admobMediationMetricsTable.projectId, projectId) : undefined, statusOnly ? sql`${admobMediationMetricsTable.id} IN (SELECT id FROM admob_mediation_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined))
+  const admobMediationMetrics = (["portfolio","overview","revenue","settings","data","growth"].includes(scope) ? database.select(admobMediationMetricsColumns).from(admobMediationMetricsTable).where(and(projectId ? eq(admobMediationMetricsTable.projectId, projectId) : undefined, statusOnly ? sql`${admobMediationMetricsTable.id} IN (SELECT id FROM admob_mediation_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined))
     .all()
     .map(denull) as AdmobMediationMetric[] : []);
 
@@ -544,9 +543,9 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
     .all()
     .map(denull) as AscExperimentTreatment[] : []);
 
-  const playVitalsMetrics = (["portfolio","overview","health","settings","data"].includes(scope) ? database.select(playVitalsMetricsColumns).from(playVitalsMetricsTable).where(and(projectId ? eq(playVitalsMetricsTable.projectId, projectId) : undefined, onlyFreshness ? sql`${playVitalsMetricsTable.id} IN (SELECT id FROM play_vitals_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined)).all().map(denull) as PlayVitalsMetric[] : []);
+  const playVitalsMetrics = (["portfolio","overview","health","settings","data","growth"].includes(scope) ? database.select(playVitalsMetricsColumns).from(playVitalsMetricsTable).where(and(projectId ? eq(playVitalsMetricsTable.projectId, projectId) : undefined, onlyFreshness ? sql`${playVitalsMetricsTable.id} IN (SELECT id FROM play_vitals_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined)).all().map(denull) as PlayVitalsMetric[] : []);
 
-  const playInstallStats = (["portfolio","overview","acquisition","store","settings","data"].includes(scope) ? database.select(playInstallStatsColumns).from(playInstallStatsTable).where(and(projectId ? eq(playInstallStatsTable.projectId, projectId) : undefined, statusOnly ? sql`${playInstallStatsTable.id} IN (SELECT id FROM play_install_stats ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined)).all().map(denull) as PlayInstallStat[] : []);
+  const playInstallStats = (["portfolio","overview","acquisition","store","settings","data","growth"].includes(scope) ? database.select(playInstallStatsColumns).from(playInstallStatsTable).where(and(projectId ? eq(playInstallStatsTable.projectId, projectId) : undefined, statusOnly ? sql`${playInstallStatsTable.id} IN (SELECT id FROM play_install_stats ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined)).all().map(denull) as PlayInstallStat[] : []);
 
   const ascAnalyticsMetrics = (["portfolio","overview","acquisition","store","settings","data"].includes(scope) ? database.select(ascAnalyticsMetricsColumns).from(ascAnalyticsMetricsTable).where(and(projectId ? eq(ascAnalyticsMetricsTable.projectId, projectId) : undefined, statusOnly ? sql`${ascAnalyticsMetricsTable.id} IN (SELECT id FROM asc_analytics_metrics ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id HAVING max(date) IS NOT NULL)` : undefined))
     .all()

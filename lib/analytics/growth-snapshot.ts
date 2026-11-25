@@ -25,11 +25,11 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
   if (!project) throw new Error("Unknown OpenFindability project.");
   const snapshots = data.metricSnapshots.filter((row) => row.projectId === projectId);
   const search = recent(snapshots.filter((row) => row.source === "gsc"), days);
-  const web = recent(snapshots.filter((row) => row.source === "umami"), days);
+  const web = recent(snapshots.filter((row) => row.source === "umami" && row.date >= "2026-08-08"), days);
   const ga4 = recent(snapshots.filter((row) => row.source === "ga4"), days);
   const ad = recent(getAdmobRevenueRows(data, projectId), days);
   const playInstalls = recent(data.playInstallStats.filter((row) => row.projectId === projectId), days);
-  const ios = recent(data.ascAnalyticsMetrics.filter((row) => row.projectId === projectId), days);
+  const ios = recent(data.ascAnalyticsMetrics.filter((row) => row.projectId === projectId && row.date >= "2025-09-21"), days);
   const vitals = latest(data.playVitalsMetrics.filter((row) => row.projectId === projectId));
   const subscription = latest(snapshots.filter((row) => row.source === "revenuecat"));
   const searches = search.rows as MetricSnapshot[];
@@ -47,7 +47,7 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
   }
 
   const topOpportunities = data.opportunities
-    .filter((row) => row.projectId === projectId && row.status === "open")
+    .filter((row) => row.projectId === projectId && row.status === "open" && (row.rawJson as {active?:boolean}|undefined)?.active !== false)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
     .map((row) => ({ type: row.type, title: row.title, score: row.score, severity: row.severity }));
@@ -70,7 +70,7 @@ export function getGrowthSnapshot(data: AppData, projectId: string, days: 7 | 28
       latestDataDate: ga4.latestDataDate, observedDays: ga4.observedDays,
       summedDailyActiveUsers: total(ga4.rows, "visitors"), pageviews: total(ga4.rows, "pageviews"),
       sessions: ga4.rows.reduce<number | null>((sum, row) => {
-        const v = (row.rawJson as { sessions?: number } | undefined)?.sessions;
+        const v = row.sessions ?? (row.rawJson as { sessions?: number } | undefined)?.sessions;
         return typeof v === "number" ? (sum ?? 0) + v : sum;
       }, null),
       note: "Sum of daily active users is user-days, NOT distinct active users across the whole window; do not combine it with Umami.",

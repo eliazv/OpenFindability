@@ -7,7 +7,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createDb } from "@/lib/db/client";
-import { readDataWith, writeDataWith } from "@/lib/store";
+import {projectAnalytics,portfolioAnalytics,growthSignals,advertisingBreakdown} from "@/lib/analytics/growth-intelligence";
+import {qualityRows} from "@/lib/analytics/data-quality";
+import {seoChanges,seoEntity} from "@/lib/analytics/seo-comparison";
+import {openOpportunities} from "@/lib/dashboard/read-model";
+import { readDataWith, writeDataWith, readProjectsWith, readDashboardDataWith } from "@/lib/store";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncUmamiProject } from "@/lib/connectors/umami";
 import { syncPlayConsoleProject } from "@/lib/connectors/play-console";
@@ -37,7 +41,7 @@ if (saFile && !isAbsolute(saFile)) {
 const mcpDb = createDb(join(projectRoot, "data", "openfindability.db"), join(projectRoot, "drizzle"));
 
 async function readProjects(): Promise<Project[]> {
-  return readDataWith(mcpDb).projects;
+  return readProjectsWith(mcpDb);
 }
 
 async function readStoredData(): Promise<AppData> {
@@ -87,8 +91,8 @@ const server = new McpServer({
 server.tool("get_seo_geo_snapshot", "Read stored Bing SEO, Cloudflare crawler and Clarity UX observations with coverage. Crawler requests are not citations; Clarity windows overlap.",
   { slug: z.string(), limit: z.number().int().min(1).max(500).default(100) },
   async ({ slug, limit }) => {
-    const data = await readStoredData();
-    const project = findProject(data.projects, slug);
+    const project = findProject(await readProjects(), slug);
+    const data = readDashboardDataWith(mcpDb,"acquisition",project?.slug??"__missing__");
     if (!project) return { content: [{ type: "text", text: "Project not found." }], isError: true };
     return { content: [{ type: "text", text: JSON.stringify(seoGeoSnapshot(project, data.seoGeoObservations ?? [], limit)) }] };
   });
@@ -119,12 +123,12 @@ server.tool(
     days: z.union([z.literal(7), z.literal(28), z.literal(90)]).default(28).describe("Source-relative metric window in days (7, 28 or 90)"),
   },
   async ({ slug, days }) => {
-    const data = await readStoredData();
-    const project = findProject(data.projects, slug);
+    const project = findProject(await readProjects(), slug);
+    const data = readDashboardDataWith(mcpDb,"growth",project?.slug??"__missing__");
     if (!project) {
       return { content: [{ type: "text", text: `Project "${slug}" not found.` }] };
     }
-    const snapshot = getGrowthSnapshot(data, project.id, days);
+    const snapshot = {...getGrowthSnapshot(data, project.id, days),canonical:projectAnalytics(data,project,days)};
     return { content: [{ type: "text", text: JSON.stringify(snapshot, null, 2) }] };
   },
 );
@@ -226,7 +230,7 @@ server.tool(
 
 server.tool(
   "get_opportunities",
-  "Get SEO opportunities for a project from the local JSON store (NOT live — computed during last 'pnpm sync'). Returns: { count, opportunities: [{ type, title, severity (low|medium|high), score, description }] }. Types include: low_ctr_query, striking_distance_query, page_two_query, zero_click_query, declining_page, query_cannibalization. Filter by severity if needed.",
+  "Get SEO opportunities for a project from the local SQLite store (NOT live — computed during last 'pnpm sync'). Returns: { count, opportunities: [{ type, title, severity (low|medium|high), score, description }] }. Types include: low_ctr_query, striking_distance_query, page_two_query, zero_click_query, declining_page, query_cannibalization. Filter by severity if needed.",
   {
     slug: z.string().describe("Project slug (use list_projects to see options)"),
     severity: z
@@ -235,15 +239,13 @@ server.tool(
       .describe("Filter by severity (default: all)"),
   },
   async ({ slug, severity }) => {
-    const data = await readStoredData();
-    const project = findProject(data.projects, slug);
+    const project = findProject(await readProjects(), slug);
+    const data = readDashboardDataWith(mcpDb,"opportunities",project?.slug??"__missing__");
     if (!project) {
       return { content: [{ type: "text", text: `Project "${slug}" not found. Use list_projects to see options.` }] };
     }
 
-    let opps = data.opportunities.filter(
-      (o) => o.projectId === project.id && o.status === "open",
-    );
+    let opps = openOpportunities(data,project.id);
     if (severity !== "all") {
       opps = opps.filter((o) => o.severity === severity);
     }
@@ -514,8 +516,8 @@ server.tool(
     days: z.number().int().min(1).max(90).default(30).describe("GSC date range in days (default 30)"),
   },
   async ({ slug, days }) => {
-    const data = await readStoredData();
-    const project = findProject(data.projects, slug);
+    const project = findProject(await readProjects(), slug);
+    const data = readDashboardDataWith(mcpDb,"opportunities",project?.slug??"__missing__");
     if (!project) {
       return { content: [{ type: "text", text: `Project "${slug}" not found. Use list_projects to see options.` }] };
     }
@@ -584,7 +586,7 @@ server.tool(
       summary.playConsole = null;
     }
 
-    const opps = data.opportunities.filter((o) => o.projectId === project.id && o.status === "open");
+    const opps = openOpportunities(data,project.id);
     summary.opportunities = {
       total: opps.length,
       high: opps.filter((o) => o.severity === "high").length,
@@ -706,6 +708,16 @@ server.tool(
 server.tool("get_growth_evidence", "Read cached GA4 landing/channel conversions, latest CrUX/Lighthouse measurements and intervention comparisons. No live API calls or writes. Missing data stays unknown; lab and field measurements remain separate.",
   {slug:z.string(),start:z.string().describe("YYYY-MM-DD"),end:z.string().describe("YYYY-MM-DD"),limit:z.number().int().min(1).max(200).default(50)},
   async ({slug,start,end,limit})=>({content:[{type:"text",text:JSON.stringify(growthEvidenceSnapshot(readGrowthEvidenceWith(mcpDb,slug,start,end),slug,start,end,limit),null,2)}]}));
+
+
+const resultText=(value:unknown)=>({content:[{type:"text" as const,text:JSON.stringify(value,null,2)}]});
+const windowDays=z.union([z.literal(7),z.literal(28),z.literal(90),z.literal(365)]).default(28);
+server.tool("get_portfolio_summary","Cached dashboard portfolio metrics and coverage. No live API calls.",{days:windowDays},async({days})=>resultText(portfolioAnalytics(readDashboardDataWith(mcpDb,"growth"),days)));
+server.tool("get_anomalies","Material period-over-period signals with matching coverage, not causal attribution.",{days:windowDays},async({days})=>resultText(growthSignals(readDashboardDataWith(mcpDb,"growth"),days)));
+server.tool("get_data_quality","Observed dates and potential gaps for daily sources; missing rows are unknown.",{slug:z.string().optional()},async({slug})=>resultText(qualityRows(mcpDb,readProjectsWith(mcpDb).filter(p=>!slug||p.slug===slug))));
+server.tool("get_top_gainers_losers","Cached GSC page or query changes; only entities present in both extracts.",{slug:z.string(),days:windowDays,kind:z.enum(["page","query"]).default("page"),comparison:z.enum(["previous","year"]).default("previous")},async({slug,days,kind,comparison})=>{const p=findProject(await readProjects(),slug);if(!p)return resultText({error:"Project not found"});const data=readDashboardDataWith(mcpDb,"growth",p.slug);const end=data.metricSnapshots.filter(r=>r.source==="gsc").map(r=>r.date).sort().at(-1);return resultText(end?seoChanges(mcpDb,p.id,end,days,kind,40,comparison):null);});
+server.tool("get_revenue_breakdown","Cached AdMob format/source breakdown. Separate currencies; weighted eCPM and match rate.",{slug:z.string(),days:windowDays},async({slug,days})=>{const p=findProject(await readProjects(),slug);if(!p)return resultText({error:"Project not found"});const data=readDashboardDataWith(mcpDb,"revenue",p.slug);const end=data.admobMediationMetrics.map(r=>r.date).sort().at(-1);const start=end?new Date(Date.parse(end)-(days-1)*86400000).toISOString().slice(0,10):"";const rows=data.admobMediationMetrics.filter(r=>r.date>=start&&(!end||r.date<=end));return resultText({start,end,format:advertisingBreakdown(rows),source:advertisingBreakdown(rows,"source")});});
+server.tool("get_action_plan","Cached ranked signals and open opportunities; no automatic actions.",{slug:z.string(),days:windowDays},async({slug,days})=>{const p=findProject(await readProjects(),slug);if(!p)return resultText({error:"Project not found"});return resultText(projectAnalytics(readDashboardDataWith(mcpDb,"growth",p.slug),p,days));});
 
 async function main() {
   const transport = new StdioServerTransport();
