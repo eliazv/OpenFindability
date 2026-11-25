@@ -1,7 +1,6 @@
 "use client";
 import {useCallback,useEffect,useRef,useState,type ReactNode} from "react";
-import Link from "next/link";
-import {ChartNoAxesCombined,Menu,Search} from "lucide-react";
+import {PanelLeftOpen} from "lucide-react";
 import {AppSidebar} from "@/components/app-sidebar";
 import {SidebarInset,useSidebar} from "@/components/ui/sidebar";
 import {Button} from "@/components/ui/button";
@@ -24,8 +23,10 @@ export function DashboardShell({projects,initialDark,children}:{projects:Sidebar
  useEffect(()=>{function settings(){open("settings");}window.addEventListener("openfindability:settings",settings);return()=>window.removeEventListener("openfindability:settings",settings);},[open]);
  return <>
  <AppSidebar projects={projects} onSearch={()=>open("search")} onSettings={()=>open("settings")} onOrganize={()=>open("organize")}/>
- <SidebarInset className="min-w-0">
-  <div className="flex items-center gap-2 border-b px-3 py-2 md:hidden"><Button type="button" variant="ghost" size="icon" ref={mobileMenu} onClick={()=>setOpenMobile(true)} aria-label="Apri navigazione" aria-expanded={openMobile}><Menu className="size-5"/></Button><Link href="/" className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold"><ChartNoAxesCombined className="size-5 shrink-0"/><span className="truncate">OpenFindability</span></Link><Button type="button" variant="ghost" size="icon" onClick={()=>open("search")} aria-label="Cerca"><Search className="size-5"/></Button></div>
+ <SidebarInset className="min-w-0 pb-16 md:pb-0">
+  <div className="fixed bottom-4 left-4 z-30 md:hidden" style={{bottom:"max(1rem, env(safe-area-inset-bottom))"}}>
+   <Button type="button" variant="outline" size="icon" ref={mobileMenu} onClick={()=>setOpenMobile(true)} aria-label="Apri navigazione" aria-expanded={openMobile} className="size-11 rounded-full bg-background shadow-md"><PanelLeftOpen className="size-5"/></Button>
+  </div>
   <SyncProgress/>
   {children}
  </SidebarInset>

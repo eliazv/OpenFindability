@@ -130,3 +130,38 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 }
+
+
+/* Radix portals are siblings under body. Explicit stacking and centering
+   keep the panel above its backdrop, independent of generated utilities. */
+[data-slot="dialog-overlay"], [data-slot="sheet-overlay"] {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgb(0 0 0 / 0.5);
+}
+[data-slot="dialog-content"] {
+  position: fixed;
+  z-index: 61;
+  inset: 0;
+  margin: auto;
+  width: min(32rem, calc(100% - 2rem));
+  height: fit-content;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 0.75rem);
+}
+[data-slot="sheet-content"] {
+  z-index: 61;
+  background: var(--background);
+  color: var(--foreground);
+}
+[data-slot="dialog-content"][data-dialog-kind="search"] {
+  width: min(36rem, calc(100% - 2rem));
+}
+[data-slot="dialog-content"][data-dialog-kind="settings"] {
+  width: min(30rem, calc(100% - 2rem));
+}

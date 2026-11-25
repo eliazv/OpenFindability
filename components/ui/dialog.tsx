@@ -10,8 +10,8 @@ const DialogTrigger = DialogPrimitive.Trigger;
 const DialogClose = DialogPrimitive.Close;
 function DialogContent({className,children,...props}:React.ComponentProps<typeof DialogPrimitive.Content>){
  return <DialogPrimitive.Portal>
-  <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50"/>
-  <DialogPrimitive.Content data-slot="dialog-content" className={cn("fixed left-1/2 top-1/2 z-50 grid w-[calc(100%_-_2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border bg-background p-5 shadow-lg outline-none",className)} {...props}>
+  <DialogPrimitive.Overlay data-slot="dialog-overlay"/>
+  <DialogPrimitive.Content data-slot="dialog-content" className={cn("grid gap-4 rounded-xl border bg-background p-5 shadow-lg outline-none",className)} {...props}>
    {children}
    <DialogPrimitive.Close className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"><XIcon className="size-4"/><span className="sr-only">Chiudi</span></DialogPrimitive.Close>
   </DialogPrimitive.Content>

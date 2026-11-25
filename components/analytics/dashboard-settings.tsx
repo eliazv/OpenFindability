@@ -8,7 +8,7 @@ export function DashboardSettings({open,onOpenChange,initialDark,onOrganize,onRe
  const router=useRouter();
  function navigate(href:string){onOpenChange(false);router.push(href);}
  const itemClass="flex w-full items-center gap-3 rounded-lg px-2 py-3 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring outline-none";
- return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent onCloseAutoFocus={e=>{e.preventDefault();onRestoreFocus();}} className="max-w-[480px] gap-4 max-h-[90dvh] overflow-y-auto">
+ return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent data-dialog-kind="settings" onCloseAutoFocus={e=>{e.preventDefault();onRestoreFocus();}} className="gap-4">
  <DialogHeader><DialogTitle>Impostazioni</DialogTitle><DialogDescription>Preferenze e gestione di OpenFindability.</DialogDescription></DialogHeader>
  <section className="space-y-2"><h3 className="text-xs font-medium text-muted-foreground">Aspetto</h3><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm">Tema</span><ThemeSettings initialDark={initialDark}/></div></section>
  <Separator/>
