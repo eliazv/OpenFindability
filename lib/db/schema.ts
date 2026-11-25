@@ -587,7 +587,20 @@ export const projectInterventions = sqliteTable("project_interventions", {
   updatedAt: text("updated_at").notNull(),
 }, t => [index("interventions_project_date").on(t.projectId,t.date)]);
 
+// Deliberately independent of the project FK: the legacy full-snapshot writer
+// replaces project rows. Preferences survive that operation; reads join real projects.
+export const projectDashboardPreferences = sqliteTable("project_dashboard_preferences", {
+ projectId:text("project_id").primaryKey(),
+ favorite:integer("favorite",{mode:"boolean"}).notNull().default(false),
+ archived:integer("archived",{mode:"boolean"}).notNull().default(false),
+ primaryMetrics:text("primary_metrics",{mode:"json"}).$type<string[]>().notNull().default([]),
+ goalMetric:text("goal_metric"),
+ goalTarget:real("goal_target"),
+ goalCurrency:text("goal_currency"),
+ updatedAt:text("updated_at").notNull(),
+});
 export const schema = {
+  projectDashboardPreferences,
   ga4LandingMetrics, webPerformanceMetrics, projectInterventions,
   seoGeoObservations,
   projects,

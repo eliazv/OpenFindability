@@ -21,7 +21,8 @@ import { createId } from "@/lib/id";
 import { getGrowthSnapshot } from "@/lib/analytics/growth-snapshot";
 import { seoGeoSnapshot } from "@/lib/analytics/seo-geo";
 import { growthEvidenceSnapshot } from "@/lib/analytics/growth-evidence";
-import { readGrowthEvidenceWith } from "@/lib/analytics/growth-evidence-store";
+import {makeIntervention} from "@/lib/analytics/interventions";
+import {growthProject,saveIntervention,readGrowthEvidenceWith} from "@/lib/analytics/growth-evidence-store";
 import type { AppData, Project, ProjectType } from "@/lib/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -719,6 +720,8 @@ server.tool("get_top_gainers_losers","Cached GSC page or query changes; only ent
 server.tool("get_revenue_breakdown","Cached AdMob format/source breakdown. Separate currencies; weighted eCPM and match rate.",{slug:z.string(),days:windowDays},async({slug,days})=>{const p=findProject(await readProjects(),slug);if(!p)return resultText({error:"Project not found"});const data=readDashboardDataWith(mcpDb,"revenue",p.slug);const end=data.admobMediationMetrics.map(r=>r.date).sort().at(-1);const start=end?new Date(Date.parse(end)-(days-1)*86400000).toISOString().slice(0,10):"";const rows=data.admobMediationMetrics.filter(r=>r.date>=start&&(!end||r.date<=end));return resultText({start,end,format:advertisingBreakdown(rows),source:advertisingBreakdown(rows,"source")});});
 server.tool("get_action_plan","Cached ranked signals and open opportunities; no automatic actions.",{slug:z.string(),days:windowDays},async({slug,days})=>{const p=findProject(await readProjects(),slug);if(!p)return resultText({error:"Project not found"});return resultText(projectAnalytics(readDashboardDataWith(mcpDb,"growth",p.slug),p,days));});
 
+server.tool("record_intervention","Record a local intervention only after the user explicitly requests it. No store publishing.",{slug:z.string(),date:z.string(),title:z.string(),kind:z.string(),url:z.string().optional(),reference:z.string().optional(),notes:z.string().optional()},async({slug,...input})=>{const p=growthProject(mcpDb,slug);const item=makeIntervention(p,input);saveIntervention(mcpDb,item);return resultText(item);});
+server.tool("get_release_impact","Compare recorded release interventions, descriptive rather than causal.",{slug:z.string(),start:z.string(),end:z.string()},async({slug,start,end})=>{const d=readGrowthEvidenceWith(mcpDb,slug,start,end);const report=growthEvidenceSnapshot(d,slug,start,end,100);return resultText({...report,interventions:report.interventions.filter(i=>d.projectInterventions.some(r=>r.kind==="release"&&r.id===i.intervention.id))});});
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
