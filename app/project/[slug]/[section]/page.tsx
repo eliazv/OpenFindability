@@ -20,7 +20,7 @@ const labels:Record<string,string>={acquisition:"Acquisizione",store:"Store",rev
 export default async function Section({params,searchParams}:{params:Promise<{slug:string;section:string}>;searchParams:Promise<Params>}){
  const [{slug,section},query]=await Promise.all([params,searchParams]);if(!Object.hasOwn(labels,section))notFound();
  const data=await readDashboardData(section as DashboardScope,slug),p=data.projects.find(p=>p.slug===slug);if(!p||section==="store"&&p.type==="web")notFound();
- const days=parseDays(query.days),id=p.id;
+ const days=section==="interventions"?Math.min(parseDays(query.days),90):parseDays(query.days),id=p.id;
  const byProject=<T extends {projectId?:string}>(rows:T[])=>rows.filter(r=>r.projectId===id);
  const windowFor=<T extends {date:string}>(rows:T[]):Range=>dayRange(latestDay(rows)??new Date().toISOString().slice(0,10),days);
  const within=<T extends {date:string}>(rows:T[],range=windowFor(rows))=>rows.filter(r=>inRange(r.date,range));
@@ -63,7 +63,7 @@ export default async function Section({params,searchParams}:{params:Promise<{slu
   {advanced("Storico ricerca keyword",keywordHistory.length,table("Ricerca keyword",["Data","Keyword","Paese","Popolarità","Difficoltà","Score","Competitor","Classificazione"],keywordHistory.map(r=>({id:r.id,cells:[r.date,r.keyword,r.country,r.popularityScore,r.difficultyScore,r.opportunityScore,r.competitorCount,r.classification]})),"keyword-history",undefined,[0,1,2,3,4,5]),"keyword-history")}
   {advanced("Schede App Store",byProject(data.ascMetadataSnapshots).length,table("Schede App Store",["Data","Locale","Tipo","Nome","Sottotitolo","Keyword","Descrizione","Testo promozionale","Novità","Stato versione"],byProject(data.ascMetadataSnapshots).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(r=>({id:r.id,cells:[r.createdAt,r.locale,r.kind,r.name,r.subtitle,r.keywords,r.description,r.promotionalText,r.whatsNew,r.versionState]})),"metadata",undefined,[0,1,2,3,4]),"metadata")}
   {advanced("Esperimenti App Store",byProject(data.ascExperiments).length,<>{table("Esperimenti App Store",["Nome","Stato","Tipo","Data"],byProject(data.ascExperiments).map(r=>({id:r.id,cells:[r.name,r.state,r.elementType,r.createdAt]})),"experiments")}{table("Varianti esperimenti",["Esperimento","Variante","Stato","Data"],data.ascExperimentTreatments.map(r=>({id:r.id,cells:[data.ascExperiments.find(e=>e.id===r.experimentId)?.name??r.experimentId,r.name,r.state,r.createdAt]})),"treatments")}</>,"experiments")}
-  {p.appStoreTrackId&&<p className="text-xs text-muted-foreground">Retention iOS non disponibile.</p>}</>;
+  </>;
  }else if(section==="revenue"){
   const mediation=within(byProject(data.admobMediationMetrics)).sort((a,b)=>b.date.localeCompare(a.date));
   content=<>{charts([METRICS.ads,METRICS.adsense,METRICS.mrr,METRICS.rollingRevenue,METRICS.subscribers,METRICS.trials,METRICS.customers])}
