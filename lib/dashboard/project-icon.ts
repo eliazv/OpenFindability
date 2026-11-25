@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import type { Project } from "@/lib/types";
@@ -15,7 +16,8 @@ async function image(root:string,candidate:string):Promise<string|undefined>{
   return mime?"data:"+mime+";base64,"+bytes.toString("base64"):undefined;
  }catch{return undefined;}
 }
-export async function projectIcon(project:Pick<Project,"slug"|"flutterProjectPath">):Promise<string|undefined>{
+const resolveLocalIcon=cache(async (slug:string,flutterProjectPath?:string):Promise<string|undefined>=>{
+ const project={slug,flutterProjectPath};
  if(/^[a-zA-Z0-9_-]+$/.test(project.slug)){
   const dir=path.join(process.cwd(),"data","project-icons");
   const custom=await image(dir,path.join(dir,project.slug+".png"));if(custom)return custom;
@@ -29,4 +31,5 @@ export async function projectIcon(project:Pick<Project,"slug"|"flutterProjectPat
   if(typeof value.icon!=="string"||path.isAbsolute(value.icon))return;
   return await image(root,path.resolve(path.dirname(config),value.icon));
  }catch{return undefined;}
-}
+});
+export function projectIcon(project:Pick<Project,"slug"|"flutterProjectPath">){return resolveLocalIcon(project.slug,project.flutterProjectPath);}

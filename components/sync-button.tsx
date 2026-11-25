@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
-export function SyncButton({ sidebar = false, projectSlug, source }: { sidebar?: boolean; projectSlug?: string; source?: SourceType }) {
+export function SyncButton({ sidebar = false, projectSlug, source, compact = false }: { sidebar?: boolean; projectSlug?: string; source?: SourceType; compact?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const router = useRouter();
@@ -38,21 +38,22 @@ export function SyncButton({ sidebar = false, projectSlug, source }: { sidebar?:
   }
 
   return (
-    <div className={sidebar ? "w-full px-2" : "inline-flex flex-col gap-1"}>
+    <div className={sidebar ? "w-full px-2" : "relative inline-flex flex-col gap-1"}>
       <button
         type="button"
         disabled={busy}
         onClick={startSync}
         className={sidebar
           ? "flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-accent disabled:opacity-50"
-          : "inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          : compact ? "inline-flex size-9 items-center justify-center rounded-md border hover:bg-muted text-muted-foreground disabled:opacity-50" : "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
         }
-        title="Avvia sincronizzazione manuale (solo localhost)"
+        aria-label={source?"Aggiorna fonte":projectSlug?"Aggiorna progetto":"Sincronizza tutti i progetti"}
+        title={source?"Aggiorna fonte":projectSlug?"Aggiorna progetto":"Sincronizza tutti i progetti"}
       >
         <RefreshCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
-        <span>{busy ? "Sincronizzazione..." : source ? "Aggiorna fonte" : projectSlug ? "Aggiorna progetto" : "Sync manuale"}</span>
+        {!compact&&<span>{busy ? "Sincronizzazione..." : source ? "Aggiorna fonte" : projectSlug ? "Aggiorna progetto" : "Sync manuale"}</span>}
       </button>
-      {feedback && <p role="status" className="mt-1 max-w-xs text-xs text-muted-foreground">{feedback}</p>}
+      {feedback && <p role="status" className={compact?"absolute right-0 top-full z-20 mt-1 w-64 rounded-md border bg-popover p-2 text-xs shadow":"mt-1 max-w-xs text-xs text-muted-foreground"}>{feedback}</p>}
     </div>
   );
 }

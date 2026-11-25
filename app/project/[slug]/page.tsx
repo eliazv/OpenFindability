@@ -4,7 +4,7 @@ import { readDashboardData } from "@/lib/store";
 import { overviewMetrics,openOpportunities,sourceRows,needsAttention,syncStatus } from "@/lib/dashboard/read-model";
 import { parseDays } from "@/lib/dashboard/metrics";
 import { MetricPanel } from "@/components/analytics/metric-panel";
-import { PeriodPicker,type Params } from "@/components/analytics/explorer";
+import { type Params } from "@/components/analytics/explorer";
 import { Card,CardHeader,CardTitle,CardContent } from "@/components/ui/card";
 
 export default async function ProjectPage({params,searchParams}:{params:Promise<{slug:string}>;searchParams:Promise<Params>}){
@@ -14,7 +14,7 @@ export default async function ProjectPage({params,searchParams}:{params:Promise<
  const issues=sourceRows(data,p).filter(needsAttention);
  const link=(section:string)=>"/project/"+slug+"/"+section+"?days="+days;
  return <div className="space-y-4">
- <div className="flex flex-wrap justify-between items-center gap-2"><h2 className="text-lg font-semibold">Panoramica</h2><PeriodPicker params={query}/></div>
+
  <MetricPanel models={cards} params={query} annotations={(data.projectInterventions??[]).filter(r=>r.projectId===p.id).map(r=>({date:r.date,title:r.title}))}/>
  <div className="grid gap-3 lg:grid-cols-2">
  <Card className="gap-3 py-4"><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Opportunità ({opp.length})</CardTitle><Link className="text-xs underline" href={link("opportunities")}>Vedi tutte</Link></CardHeader><CardContent>{opp.length?<ul className="divide-y">{opp.slice(0,5).map(o=><li key={o.id} className="py-2 flex items-start justify-between gap-3 text-sm"><span>{o.title}</span><span className={"shrink-0 text-xs "+(o.severity==="high"?"text-destructive":"text-muted-foreground")}>{o.severity==="high"?"Alta":o.severity==="medium"?"Media":"Bassa"}</span></li>)}</ul>:<p className="text-sm text-muted-foreground">Nessuna opportunità aperta.</p>}</CardContent></Card>

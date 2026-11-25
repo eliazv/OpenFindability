@@ -6,7 +6,7 @@ import { parseDays,dayRange,inRange,latestDay,type Range } from "@/lib/dashboard
 import {CalendarRevenue} from "@/components/analytics/calendar-revenue";
 import {MetricPanel} from "@/components/analytics/metric-panel";
 import {Disclosure} from "@/components/analytics/disclosure";
-import { Explorer,PeriodPicker,type Params,type Row } from "@/components/analytics/explorer";
+import { Explorer,type Params,type Row } from "@/components/analytics/explorer";
 import { SyncButton } from "@/components/sync-button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import {BarList} from "@/components/ui/bar-list";
@@ -93,5 +93,5 @@ export default async function Section({params,searchParams}:{params:Promise<{slu
   content=<><Card><CardHeader><CardTitle>Fonti mappate</CardTitle></CardHeader><CardContent className="divide-y">{rows.map(s=><div key={s.source} className="flex flex-wrap justify-between gap-3 py-3"><div><p className="text-sm font-medium">{s.label}</p><p className="text-xs text-muted-foreground">Ultimo dato: {s.latest??"—"} · ultimo sync: {s.run??"—"} · {syncStatus(s.status)}{s.stale?" · dato in ritardo":""}</p></div>{s.manualAudit?<span className="text-xs text-muted-foreground self-center">Audit manuale</span>:<SyncButton projectSlug={slug} source={s.source}/>}</div>)}{!rows.length&&<p className="text-sm text-muted-foreground">Nessuna integrazione mappata.</p>}</CardContent></Card>
   {table("Cronologia operazioni",["Fonte","Inizio","Fine","Stato"],byProject(data.connectorRuns).sort((a,b)=>b.finishedAt.localeCompare(a.finishedAt)).map(r=>({id:r.id,cells:[r.source,r.startedAt,r.finishedAt,syncStatus(r.status)]})),"runs")}</>;
  }
- return <div className="space-y-4"><div className="flex items-center flex-wrap gap-3 justify-between"><h2 className="text-lg font-semibold">{labels[section]}</h2>{["acquisition","store","revenue","health","interventions"].includes(section)&&<PeriodPicker params={query} options={section==="interventions"?[7,28,90]:undefined}/>}</div>{content}</div>;
+ return <div className="space-y-4">{content}</div>;
 }
