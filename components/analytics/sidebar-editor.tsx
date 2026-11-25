@@ -21,7 +21,7 @@ export function SidebarEditor({projects}:{projects:SidebarProject[]}){
    O(false);router.refresh();
   }catch(e){E(e instanceof Error?e.message:"Salvataggio non riuscito");}finally{B(false);}
  }
- return <Sheet open={open} onOpenChange={change}><SheetTrigger asChild><button type="button" className="inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Organizza sidebar" title="Organizza sidebar"><Settings2 className="size-4"/></button></SheetTrigger>
+ return <Sheet open={open} onOpenChange={change}><SheetTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label="Organizza sidebar" title="Organizza sidebar"><Settings2 className="size-4"/></Button></SheetTrigger>
  <SheetContent side="right" className="flex flex-col gap-0 sm:max-w-lg w-full">
  <SheetHeader><SheetTitle>Organizza sidebar</SheetTitle><SheetDescription>{items.filter(p=>!p.hidden).length} visibili · {items.filter(p=>p.hidden).length} nascosti. I dati e le sincronizzazioni non cambiano.</SheetDescription></SheetHeader>
  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2"><SortableList items={items} onChange={I} disabled={busy} renderItem={(p,i)=><> <ProjectAvatar name={p.name} icon={projects.find(x=>x.id===p.id)?.icon??p.icon} websiteUrl={p.websiteUrl} type={p.type}/>

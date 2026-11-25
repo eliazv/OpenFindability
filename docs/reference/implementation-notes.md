@@ -218,3 +218,8 @@ Dashboard-only projections omit raw payloads except where intervention evidence 
 ### Sidebar and growth diagnostics (2026-11-25)
 
 See [navigation, public store artwork and diagnostics](../guide/2026-11-25-sidebar-artwork-growth-diagnostics.md). The local-only sidebar settings migration preserves existing project preferences; artwork is cached by exact public store identity and never downloaded on render. Provider failures do not change analytics results.
+
+
+### Local dashboard requests and sortable lists
+
+Use `localRequestError` for local dashboard routes; compare browser-facing Host and Origin for mutations, not Next's reconstructed internal URL. Keep the listener loopback-only. Use the shared `components/ui/sortable-list.tsx` (dnd-kit) for vertical reorderable preferences, not native HTML drag/drop. See [403 fix and sortable verification](../guide/2026-11-25-sidebar-http-403-and-sortable.md).
