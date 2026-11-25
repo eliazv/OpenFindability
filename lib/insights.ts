@@ -18,9 +18,12 @@ export function getLatestGscIndexInspections(
 }
 
 export function buildOpportunities(data: AppData): Opportunity[] {
+  const { queries, pages } = recentGscDetails(data, 28);
+  return buildOpportunitiesFromDetails(queries,pages);
+}
+export function buildOpportunitiesFromDetails(recentQueries:SearchQueryMetric[],recentPages:AppData["pageMetrics"]):Opportunity[]{
   const detectedAt = new Date().toISOString();
   const opportunities: Opportunity[] = [];
-  const { queries: recentQueries, pages: recentPages } = recentGscDetails(data, 28);
 
   for (const query of recentQueries) {
     const ctrPercent = query.ctr * 100;

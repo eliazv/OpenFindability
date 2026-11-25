@@ -1,6 +1,4 @@
 import { daysAgo, nowIso } from "@/lib/dates";
-import { buildOpportunities } from "@/lib/insights";
-import { isDailyGscDetail } from "@/lib/gsc-detail";
 import { createId } from "@/lib/id";
 import { syncGscProject } from "@/lib/connectors/gsc";
 import { syncGa4Project } from "@/lib/connectors/ga4";
@@ -17,340 +15,56 @@ import { syncAdsenseProject } from "@/lib/connectors/adsense";
 import { syncPlayVitalsProject } from "@/lib/connectors/play-vitals";
 import { syncPlayInstallStatsProject } from "@/lib/connectors/play-gcs-stats";
 import { syncAscAnalyticsProject } from "@/lib/connectors/appstoreconnect-analytics";
-import { upsertAsoCacheRows } from "@/lib/aso-cache";
-import { readData, writeData } from "@/lib/store";
-import { reconcileGscProjectLinks } from "@/lib/gsc-project-links";
-import { selectSyncProjects } from "@/lib/sync-project-selection";
-import { cliErrorMessage } from "@/lib/cli-error";
-import type {
-  AdmobMediationMetric,
-  AscAnalyticsMetric,
-  ConnectorRun,
-  GscDimensionBreakdown,
-  GscSitemap,
-  MetricSnapshot,
-  PageMetric,
-  PlayInstallStat,
-  PlayVitalsMetric,
-  SearchQueryMetric,
-  SourceType,
-  SyncOptions,
-  SyncResult,
-} from "@/lib/types";
-
-// Re-running a sync the same day must not pile up duplicate rows for the same
-// (project, date[, source]) key, since reports/insights sum these by date.
-function upsertByKey<T>(existing: T[], incoming: T[], keyOf: (item: T) => string): T[] {
-  if (incoming.length === 0) return existing;
-  const keys = new Set(incoming.map(keyOf));
-  return [...existing.filter((item) => !keys.has(keyOf(item))), ...incoming];
+import {db} from "@/lib/db/client";
+import {readProjects} from "@/lib/store";
+import * as persist from "@/lib/sync-store";
+import {selectSyncProjects} from "@/lib/sync-project-selection";
+import {cliErrorMessage} from "@/lib/cli-error";
+import {configuredSources} from "@/lib/dashboard/read-model";
+import {refreshSeoOpportunities} from "@/lib/analytics/opportunity-store";
+import {and,eq,gte,lte} from "drizzle-orm";
+import {seoGeoObservations} from "@/lib/db/schema";
+import type {Project,SourceType,SyncOptions,SyncResult,ConnectorRun} from "@/lib/types";
+const sources:SourceType[]=["ga4_landing","bing_webmaster","cloudflare_ai","clarity","gsc","ga4","umami","play_console","revenuecat","admob","adsense","play_vitals","play_stats","asc_analytics"];
+function runRecord(result:SyncResult,startedAt:string):ConnectorRun{return {id:createId("run"),projectId:result.projectId,source:result.source,status:result.status,startedAt,finishedAt:nowIso(),errorMessage:result.status==="failed"?result.message:undefined,stats:{...result.inserted,message:result.status==="failed"?undefined:result.message}};}
+async function fetchSource(p:Project,source:SourceType,days:number):Promise<{result:SyncResult;apply:()=>void}>{
+ const start=daysAgo(days),end=daysAgo(2),yesterday=daysAgo(1);
+ switch(source){
+ case "ga4_landing":{const s=await syncGa4LandingProject(p,start,end);return {result:s.result,apply:()=>{if(s.replace)persist.replaceLanding(db,p.id,start,end,s.rows);}};}
+ case "gsc":{const s=await syncGscProject(p,start,end);return {result:s.result,apply:()=>{persist.putMetricSnapshots(db,s.snapshots);persist.replaceGscDays(db,p.id,s.snapshots.map(r=>r.date));persist.putSearchQueries(db,s.queries);persist.putPageMetrics(db,s.pages);persist.putGscDimensionBreakdowns(db,s.breakdowns);persist.putGscSitemaps(db,s.sitemaps);}};}
+ case "ga4":{const s=await syncGa4Project(p,start,end);return {result:s.result,apply:()=>persist.putMetricSnapshots(db,s.snapshots)};}
+ case "umami":{const s=await syncUmamiProject(p,start,yesterday);return {result:s.result,apply:()=>persist.putMetricSnapshots(db,s.snapshots)};}
+ case "aso":{const s=await syncAsoProject(p);return {result:s.result,apply:()=>persist.putAso(db,p,s.keywords)};}
+ case "play_console":{const s=await syncPlayConsoleProject(p,start);return {result:s.result,apply:()=>{persist.putAppReviews(db,s.reviews.map(({text,...r})=>({...r,reviewText:text})));persist.putMetricSnapshots(db,s.snapshots);}};}
+ case "revenuecat":{const s=await syncRevenueCatProject(p,daysAgo(0));return {result:s.result,apply:()=>persist.putMetricSnapshots(db,s.snapshots)};}
+ case "admob":{const s=await syncAdmobProject(p,start,yesterday);return {result:s.result,apply:()=>{persist.putMetricSnapshots(db,s.snapshots);persist.putMediation(db,s.mediationMetrics);}};}
+ case "adsense":{const s=await syncAdsenseProject(p,start,yesterday);return {result:s.result,apply:()=>persist.putMetricSnapshots(db,s.snapshots)};}
+ case "play_vitals":{const s=await syncPlayVitalsProject(p,start,daysAgo(5));return {result:s.result,apply:()=>persist.putPlayVitalsMetrics(db,s.metrics)};}
+ case "play_stats":{const s=await syncPlayInstallStatsProject(p,start,yesterday);return {result:s.result,apply:()=>persist.putPlayInstallStats(db,s.stats)};}
+ case "asc_analytics":{const s=await syncAscAnalyticsProject(p,start,yesterday);return {result:s.result,apply:()=>persist.putAscAnalyticsMetrics(db,s.metrics)};}
+ case "bing_webmaster":case "cloudflare_ai":case "clarity":{
+  const s=await(source==="bing_webmaster"?syncBingProject(p,start,yesterday):source==="cloudflare_ai"?syncCloudflareProject(p):syncClarityProject(p));
+  return {result:s.result,apply:()=>{persist.putMetricSnapshots(db,s.snapshots);if("replaceWindow" in s&&s.replaceWindow){const w=s.replaceWindow;db.delete(seoGeoObservations).where(and(eq(seoGeoObservations.projectId,p.id),eq(seoGeoObservations.source,source),eq(seoGeoObservations.kind,w.kind),gte(seoGeoObservations.windowStart,w.start),lte(seoGeoObservations.windowEnd,w.end))).run();}persist.putSeoGeoObservations(db,s.observations);}};
+ }
+ default:throw new Error("Fonte non sincronizzabile.");
+ }
 }
-
-function upsertSnapshots(existing: MetricSnapshot[], incoming: MetricSnapshot[]): MetricSnapshot[] {
-  return upsertByKey(existing, incoming, (snapshot) => `${snapshot.projectId}::${snapshot.source}::${snapshot.date}`);
-}
-
-function upsertQueries(existing: SearchQueryMetric[], incoming: SearchQueryMetric[]): SearchQueryMetric[] {
-  return upsertByKey(
-    existing,
-    incoming,
-    (row) => `${row.projectId}::${row.date}::${row.query}::${row.page ?? ""}`,
-  );
-}
-
-function upsertPages(existing: PageMetric[], incoming: PageMetric[]): PageMetric[] {
-  return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.date}::${row.page}`);
-}
-
-function upsertBreakdowns(existing: GscDimensionBreakdown[], incoming: GscDimensionBreakdown[]): GscDimensionBreakdown[] {
-  return upsertByKey(
-    existing,
-    incoming,
-    (row) => `${row.projectId}::${row.rangeStart}::${row.rangeEnd}::${row.dimension}::${row.key}`,
-  );
-}
-
-function upsertSitemaps(existing: GscSitemap[], incoming: GscSitemap[]): GscSitemap[] {
-  return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.path}`);
-}
-
-function upsertMediationMetrics(
-  existing: AdmobMediationMetric[],
-  incoming: AdmobMediationMetric[],
-): AdmobMediationMetric[] {
-  return upsertByKey(
-    existing,
-    incoming,
-    (row) => `${row.projectId}::${row.date}::${row.adSourceId ?? row.adSourceName}::${row.format ?? ""}`,
-  );
-}
-
-function upsertPlayVitalsMetrics(existing: PlayVitalsMetric[], incoming: PlayVitalsMetric[]): PlayVitalsMetric[] {
-  return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.date}`);
-}
-
-function upsertPlayInstallStats(existing: PlayInstallStat[], incoming: PlayInstallStat[]): PlayInstallStat[] {
-  return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.date}`);
-}
-
-function upsertAscAnalyticsMetrics(existing: AscAnalyticsMetric[], incoming: AscAnalyticsMetric[]): AscAnalyticsMetric[] {
-  return upsertByKey(existing, incoming, (row) => `${row.projectId}::${row.date}`);
-}
-
-export async function syncProjects(options: SyncOptions = {}): Promise<SyncResult[]> {
-  const source = options.source;
-  const backfillDays = options.backfillDays ?? 30;
-  const data = await readData();
-  const projects = selectSyncProjects(data.projects, options.projectSlug);
-  reconcileGscProjectLinks(data, options.projectSlug ? projects[0].id : undefined);
-  const results: SyncResult[] = [];
-  const startedAt = nowIso();
-
-  for (const project of projects) {
-    if (!source || source === "ga4_landing") {
-      try {
-        const start=daysAgo(backfillDays), end=daysAgo(2);
-        const synced=await syncGa4LandingProject(project,start,end);
-        if (synced.replace) data.ga4LandingMetrics = [...(data.ga4LandingMetrics??[]).filter(r=>r.projectId!==project.id || r.date<start || r.date>end),...synced.rows];
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("ga4_landing",project.id,nowIso(),synced.result));
-      } catch(error) {
-        const result=failed("ga4_landing",project.id,error); results.push(result);
-        data.connectorRuns.push(toRun("ga4_landing",project.id,nowIso(),result));
-      }
-    }
-    for (const provider of ["bing_webmaster", "cloudflare_ai", "clarity"] as const) {
-      if (source && source !== provider) continue;
-      try {
-        const synced = await (provider === "bing_webmaster" ? syncBingProject(project, daysAgo(backfillDays), daysAgo(1))
-          : provider === "cloudflare_ai" ? syncCloudflareProject(project) : syncClarityProject(project));
-        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        if ("replaceWindow" in synced && synced.replaceWindow) {
-          const window = synced.replaceWindow;
-          data.seoGeoObservations = (data.seoGeoObservations ?? []).filter(row =>
-            row.projectId !== project.id || row.source !== provider || row.kind !== window.kind || row.windowStart < window.start || row.windowEnd > window.end);
-        }
-        data.seoGeoObservations = upsertByKey(data.seoGeoObservations ?? [], synced.observations, row => row.id);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun(provider, project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed(provider, project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun(provider, project.id, startedAt, result));
-      }
-    }
-    if (!source || source === "gsc") {
-      try {
-        const synced = await syncGscProject(project, daysAgo(backfillDays), daysAgo(2));
-        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        // A successful refetch is an authoritative snapshot of each covered day.
-        // Remove previous *daily* rows for these days first, including keywords
-        // Google no longer returns. Preserve all legacy multi-day aggregates for
-        // audit/migration (they lack the v2 daily grain marker).
-        const coveredDays = new Set(synced.snapshots.map((snapshot) => snapshot.date));
-        const keepUncovered = (row: SearchQueryMetric | PageMetric) =>
-          row.projectId !== project.id || !coveredDays.has(row.date) || !isDailyGscDetail(row);
-        data.searchQueries = upsertQueries(data.searchQueries.filter(keepUncovered), synced.queries);
-        data.pageMetrics = upsertPages(data.pageMetrics.filter(keepUncovered), synced.pages);
-        data.gscDimensionBreakdowns = upsertBreakdowns(data.gscDimensionBreakdowns, synced.breakdowns);
-        data.gscSitemaps = upsertSitemaps(data.gscSitemaps, synced.sitemaps);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("gsc", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("gsc", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("gsc", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "ga4") {
-      try {
-        const synced = await syncGa4Project(project, daysAgo(backfillDays), daysAgo(2));
-        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("ga4", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("ga4", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("ga4", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "umami") {
-      try {
-        const synced = await syncUmamiProject(project, daysAgo(backfillDays), daysAgo(1));
-        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("umami", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("umami", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("umami", project.id, startedAt, result));
-      }
-    }
-
-    // ASO is opt-in only: it is rate-limited (2s/call) and cached per day upstream,
-    // so it must not run as part of a general `pnpm run sync`.
-    if (source === "aso") {
-      try {
-        const synced = await syncAsoProject(project);
-        data.appKeywords.push(...synced.keywords);
-        upsertAsoCacheRows(data, synced.keywords, {
-          projectId: project.id,
-          appId: project.respectAsoAppId ?? project.appStoreTrackId,
-        });
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("aso", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("aso", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("aso", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "play_console") {
-      try {
-        const existingReviewIds = new Set(
-          data.appReviews.filter((r) => r.projectId === project.id).map((r) => r.reviewId),
-        );
-        const synced = await syncPlayConsoleProject(project, daysAgo(backfillDays));
-        const newReviews = synced.reviews.filter((r) => !existingReviewIds.has(r.reviewId));
-        data.appReviews.push(...newReviews);
-        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("play_console", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("play_console", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("play_console", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "revenuecat") {
-      try {
-        const synced = await syncRevenueCatProject(project, daysAgo(0));
-        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("revenuecat", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("revenuecat", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("revenuecat", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "admob") {
-      try {
-        const synced = await syncAdmobProject(project, daysAgo(backfillDays), daysAgo(1));
-        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        data.admobMediationMetrics = upsertMediationMetrics(data.admobMediationMetrics, synced.mediationMetrics);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("admob", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("admob", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("admob", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "adsense") {
-      try {
-        const synced = await syncAdsenseProject(project, daysAgo(backfillDays), daysAgo(1));
-        data.metricSnapshots = upsertSnapshots(data.metricSnapshots, synced.snapshots);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("adsense", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("adsense", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("adsense", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "play_vitals") {
-      try {
-        // Play Developer Reporting API vitals data lags ~5 days behind real-time
-        // (observed: "end_date should be at most the current freshness" errors with daysAgo(1)/(2)).
-        const synced = await syncPlayVitalsProject(project, daysAgo(backfillDays), daysAgo(5));
-        data.playVitalsMetrics = upsertPlayVitalsMetrics(data.playVitalsMetrics, synced.metrics);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("play_vitals", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("play_vitals", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("play_vitals", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "play_stats") {
-      try {
-        const synced = await syncPlayInstallStatsProject(project, daysAgo(backfillDays), daysAgo(1));
-        data.playInstallStats = upsertPlayInstallStats(data.playInstallStats, synced.stats);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("play_stats", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("play_stats", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("play_stats", project.id, startedAt, result));
-      }
-    }
-
-    if (!source || source === "asc_analytics") {
-      try {
-        const synced = await syncAscAnalyticsProject(project, daysAgo(backfillDays), daysAgo(1));
-        data.ascAnalyticsMetrics = upsertAscAnalyticsMetrics(data.ascAnalyticsMetrics, synced.metrics);
-        results.push(synced.result);
-        data.connectorRuns.push(toRun("asc_analytics", project.id, startedAt, synced.result));
-      } catch (error) {
-        const result = failed("asc_analytics", project.id, error);
-        results.push(result);
-        data.connectorRuns.push(toRun("asc_analytics", project.id, startedAt, result));
-      }
-    }
+export async function syncProjects(options:SyncOptions={}):Promise<SyncResult[]>{
+ const all=await readProjects(),projects=selectSyncProjects(all,options.projectSlug);
+ const days=options.backfillDays??30;
+ if(!Number.isSafeInteger(days)||days<1)throw new Error("Invalid backfill days.");
+ const jobs=projects.flatMap(p=>(options.source?[options.source]:sources.filter(s=>configuredSources(p).includes(s))).map(source=>({p,source})));
+ const lock=persist.acquireSync(db,jobs.length),results:SyncResult[]=[];
+ try{
+  persist.reconcileLinks(db,all,options.projectSlug?projects[0].id:undefined);
+  for(const {p,source} of jobs){
+   lock.progress(p.slug,source,results.length);const started=nowIso();
+   let result:SyncResult;
+   try{const s=await fetchSource(p,source,days);result=s.result;persist.commitSync(db,runRecord(result,started),s.apply);}
+   catch(error){result={source,projectId:p.id,status:"failed",message:cliErrorMessage(error),inserted:{snapshots:0,queries:0,pages:0}};persist.commitSync(db,runRecord(result,started),()=>{});}
+   results.push(result);
+   if(source==="gsc"&&result.status==="success"){try{refreshSeoOpportunities(db,p.id);}catch(error){console.error("Opportunity refresh failed:",cliErrorMessage(error));}}
   }
-
-  // Recomputing opportunities must not erase a user's ignored/done decisions.
-  // Match on a stable semantic identity rather than the generated random ID.
-  const prior = new Map(data.opportunities.map((item) => [
-    `${item.projectId}\u0000${item.type}\u0000${item.title}`,
-    item,
-  ] as const));
-  const scopedIds = new Set(projects.map(project => project.id));
-  const opportunityData = options.projectSlug ? { ...data,
-    searchQueries: data.searchQueries.filter(row => scopedIds.has(row.projectId)),
-    pageMetrics: data.pageMetrics.filter(row => scopedIds.has(row.projectId)),
-  } : data;
-  const rebuilt = buildOpportunities(opportunityData).map((item) => {
-    const previous = prior.get(`${item.projectId}\u0000${item.type}\u0000${item.title}`);
-    return previous
-      ? { ...item, id: previous.id, status: previous.status, detectedAt: previous.detectedAt }
-      : item;
-  });
-  data.opportunities = options.projectSlug
-    ? [...data.opportunities.filter(item => !scopedIds.has(item.projectId)), ...rebuilt]
-    : rebuilt;
-  await writeData(data);
   return results;
-}
-
-function failed(source: SourceType, projectId: string, error: unknown): SyncResult {
-  return {
-    source,
-    projectId,
-    status: "failed",
-    message: cliErrorMessage(error),
-    inserted: { snapshots: 0, queries: 0, pages: 0 },
-  };
-}
-
-function toRun(source: SourceType, projectId: string, startedAt: string, result: SyncResult): ConnectorRun {
-  return {
-    id: createId("run"),
-    source,
-    projectId,
-    status: result.status,
-    startedAt,
-    finishedAt: nowIso(),
-    errorMessage: result.status === "failed" ? result.message : undefined,
-    stats: result.inserted,
-  };
+ }finally{lock.release();}
 }

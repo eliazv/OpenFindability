@@ -499,7 +499,7 @@ export function readDashboardDataWith(database: AppDb, scope: DashboardScope, sl
   // Acquisition reads bounded SQL results via readGscExplorer(); interventions only need target URLs around their dates.
   const searchQueries: SearchQueryMetric[] = [];
   const pageMetrics = (scope === "interventions" && slug ? readInterventionPageMetrics(database, projectId!) : []);
-  const opportunities = (["portfolio","overview","opportunities"].includes(scope) ? database.select(opportunitiesColumns).from(opportunitiesTable).where(and(projectId ? eq(opportunitiesTable.projectId, projectId) : undefined, scope==="portfolio"||scope==="overview"?eq(opportunitiesTable.status,"open"):undefined)).all().map(denull) as Opportunity[] : []);
+  const opportunities = (["portfolio","overview","opportunities"].includes(scope) ? database.select().from(opportunitiesTable).where(and(projectId ? eq(opportunitiesTable.projectId, projectId) : undefined, scope==="portfolio"||scope==="overview"?eq(opportunitiesTable.status,"open"):undefined)).all().map(denull) as Opportunity[] : []);
   const connectorRuns = (["portfolio","overview","settings","data"].includes(scope) ? database.select().from(connectorRunsTable).where(and(projectId ? eq(connectorRunsTable.projectId, projectId) : undefined, scope==="portfolio"||scope==="overview"?sql`${connectorRunsTable.id} IN (SELECT id FROM connector_runs ${projectId?sql`WHERE project_id=${projectId}`:sql``} GROUP BY project_id, source, status HAVING max(finished_at) IS NOT NULL)`:undefined)).all().map(denull) as ConnectorRun[] : []);
 
   const appReviews = (["store"].includes(scope) ? database.select(appReviewsColumns).from(appReviewsTable).where(projectId ? eq(appReviewsTable.projectId, projectId) : undefined)
