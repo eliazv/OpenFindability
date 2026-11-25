@@ -21,6 +21,7 @@ import * as persist from "@/lib/sync-store";
 import {selectSyncProjects} from "@/lib/sync-project-selection";
 import {cliErrorMessage} from "@/lib/cli-error";
 import {configuredSources} from "@/lib/dashboard/read-model";
+import {incrementalWindow} from "@/lib/analytics/data-quality";
 import {refreshSeoOpportunities} from "@/lib/analytics/opportunity-store";
 import {and,eq,gte,lte} from "drizzle-orm";
 import {seoGeoObservations} from "@/lib/db/schema";
@@ -51,8 +52,8 @@ async function fetchSource(p:Project,source:SourceType,days:number):Promise<{res
 }
 export async function syncProjects(options:SyncOptions={}):Promise<SyncResult[]>{
  const all=await readProjects(),projects=selectSyncProjects(all,options.projectSlug);
- const days=options.backfillDays??30;
- if(!Number.isSafeInteger(days)||days<1)throw new Error("Invalid backfill days.");
+ const requested=options.backfillDays;
+ if(requested!==undefined&&(!Number.isSafeInteger(requested)||requested<1))throw new Error("Invalid backfill days.");
  const jobs=projects.flatMap(p=>(options.source?[options.source]:sources.filter(s=>configuredSources(p).includes(s))).map(source=>({p,source})));
  const lock=persist.acquireSync(db,jobs.length),results:SyncResult[]=[];
  try{
@@ -60,7 +61,7 @@ export async function syncProjects(options:SyncOptions={}):Promise<SyncResult[]>
   for(const {p,source} of jobs){
    lock.progress(p.slug,source,results.length);const started=nowIso();
    let result:SyncResult;
-   try{const s=await fetchSource(p,source,days);result=s.result;persist.commitSync(db,runRecord(result,started),s.apply);}
+   try{const s=await fetchSource(p,source,requested??incrementalWindow(db,p,source));result=s.result;persist.commitSync(db,runRecord(result,started),s.apply);}
    catch(error){result={source,projectId:p.id,status:"failed",message:cliErrorMessage(error),inserted:{snapshots:0,queries:0,pages:0}};persist.commitSync(db,runRecord(result,started),()=>{});}
    results.push(result);
    if(source==="gsc"&&result.status==="success"){try{refreshSeoOpportunities(db,p.id);}catch(error){console.error("Opportunity refresh failed:",cliErrorMessage(error));}}

@@ -6,6 +6,7 @@ import { formatMetric, type MetricResult } from "@/lib/dashboard/metrics";
 import type { MetricSpec } from "@/lib/dashboard/read-model";
 import { CONNECTOR_CATALOG } from "@/lib/connectors/catalog";
 import { Sparkline } from "@/components/ui/sparkline";
+import {SourceIcon} from "./source-icon";
 import { Download } from "lucide-react";
 import { csvText } from "@/lib/dashboard/csv";
 import { DeltaBadge } from "@/components/ui/delta-badge";
@@ -16,7 +17,7 @@ export function MetricCard({spec,result:m,latest}:Props){
  const sparse=spec.kind==="snapshot";
  const lastValue=m.points.findLast(p=>p.current!==null)?.date;
  const detail=CONNECTOR_CATALOG[spec.source].label+" · "+m.range.from+" – "+m.range.to+" · "+m.observed+"/"+m.expected+" giorni osservati";
- return <Card className="min-w-0 h-full gap-1 py-3 shadow-none"><CardHeader className="px-3 pb-0"><CardTitle className="text-xs font-medium text-muted-foreground">{spec.label}</CardTitle></CardHeader><CardContent className="px-3">
+ return <Card className="min-w-0 h-full gap-1 py-3 shadow-none"><CardHeader className="px-3 pb-0"><CardTitle className="text-xs font-medium text-muted-foreground"><span className="flex items-center gap-1.5"><SourceIcon source={spec.source}/>{spec.label}</span></CardTitle></CardHeader><CardContent className="px-3">
  <div className="text-xl lg:text-2xl font-semibold tabular-nums truncate" title={formatMetric(m.value,spec.unit,m.currency,spec.precision)}>{formatMetric(m.value,spec.unit,m.currency,spec.precision)}</div>
  <div className="flex items-center justify-between gap-2">{m.delta===null?null:spec.kind==="ratio"?<DeltaBadge delta={m.delta} invert={spec.lowerBetter} variant="soft">{m.delta>0?"+":""}{formatMetric(m.delta,"decimal")} {spec.unit==="percent"?"pp":"pos."}</DeltaBadge>:m.deltaPercent===null?<span className="text-xs tabular-nums">{m.delta>0?"+":""}{formatMetric(m.delta,spec.unit,m.currency)}</span>:<DeltaBadge delta={m.deltaPercent/100} invert={spec.lowerBetter} variant="soft"/>}
  {m.observed>1&&<Sparkline data={m.points.map(p=>p.current)} className="w-16 h-7 shrink-0"/>}</div>

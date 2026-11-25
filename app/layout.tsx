@@ -4,6 +4,7 @@ import "./globals.css";
 import { cookies } from "next/headers";
 import { projectIcon } from "@/lib/dashboard/project-icon";
 import { readProjects } from "@/lib/store";
+import {SyncProgress} from "@/components/analytics/sync-progress";
 import { ThemeToggle } from "@/components/analytics/theme-toggle";
 import { ProjectSwitcher } from "@/components/analytics/project-switcher";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -32,6 +33,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               
               <div className="ml-auto flex gap-2 items-center"><ProjectSwitcher projects={projects.map(({slug,name})=>({slug,name}))}/><ThemeToggle initialDark={dark}/></div>
             </header>
+            <SyncProgress/>
             {children}
           </SidebarInset>
         </SidebarProvider>

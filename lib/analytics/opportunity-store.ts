@@ -15,7 +15,7 @@ export function refreshSeoOpportunities(database:AppDb,projectId:string){
  const byKey=new Map(prior.map(r=>[key(r),r]));const detected=buildOpportunitiesFromDetails(queries,pages);
  for(const row of detected){const old=byKey.get(key(row));if(old){database.update(opportunities).set({description:row.description,score:row.score,severity:row.severity,rawJson:{evidence:row.rawJson,active:true,lastSeen:row.detectedAt}}).where(eq(opportunities.id,old.id)).run();}else database.insert(opportunities).values({...row,rawJson:{evidence:row.rawJson,active:true,lastSeen:row.detectedAt}}).run();}
  // Keep history and user's decisions, even when a signal drops out of the shortlist.
- const keys=new Set(detected.map(key));for(const old of prior)if(old.status==="open"&&!keys.has(key(old))&&["low_ctr_query","striking_distance_query","zero_click_query","page_two_query","low_ctr_page","query_cannibalization"].includes(old.type))database.update(opportunities).set({rawJson:{evidence:old.rawJson,active:false}}).where(eq(opportunities.id,old.id)).run();
+ const keys=new Set(detected.map(key));for(const old of prior)if(old.status==="open"&&(old.rawJson as {active?:boolean}|undefined)?.active!==false&&!keys.has(key(old))&&["low_ctr_query","striking_distance_query","zero_click_query","page_two_query","low_ctr_page","query_cannibalization"].includes(old.type))database.update(opportunities).set({rawJson:{evidence:(old.rawJson as {evidence?:unknown}|undefined)?.evidence??old.rawJson,active:false}}).where(eq(opportunities.id,old.id)).run();
  n.prepare("UPDATE _openfindability_store_revision SET revision=revision+1 WHERE id=1").run();
  }).immediate();
 }
