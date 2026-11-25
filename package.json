@@ -90,7 +90,7 @@
     "studio": "node studio/serve.mjs",
     "studio:export": "node studio/export.mjs",
     "test:studio": "node --test tests/studio.test.mjs",
-    "test:dashboard-analytics": "tsx --test tests/dashboard-metrics.test.ts tests/dashboard-csv.test.ts tests/dashboard-store.test.ts tests/dashboard-favicon.test.ts tests/growth-foundations.test.ts",
+    "test:dashboard-analytics": "tsx --test tests/dashboard-metrics.test.ts tests/dashboard-csv.test.ts tests/dashboard-store.test.ts tests/dashboard-favicon.test.ts tests/growth-foundations.test.ts tests/sidebar-navigation.test.ts",
     "test:dashboard": "node --test tests/dashboard-launch.test.mjs"
   },
   "dependencies": {

@@ -593,6 +593,8 @@ export const projectDashboardPreferences = sqliteTable("project_dashboard_prefer
  projectId:text("project_id").primaryKey(),
  favorite:integer("favorite",{mode:"boolean"}).notNull().default(false),
  archived:integer("archived",{mode:"boolean"}).notNull().default(false),
+ sidebarHidden:integer("sidebar_hidden",{mode:"boolean"}),
+ sidebarOrder:integer("sidebar_order"),
  primaryMetrics:text("primary_metrics",{mode:"json"}).$type<string[]>().notNull().default([]),
  goalMetric:text("goal_metric"),
  goalTarget:real("goal_target"),

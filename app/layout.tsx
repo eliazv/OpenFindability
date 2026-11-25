@@ -1,3 +1,6 @@
+import {db} from "@/lib/db/client";
+import {readPreferences} from "@/lib/dashboard/preferences";
+import {navigationItems} from "@/lib/dashboard/navigation";
 import {linkedWebsite} from "@/lib/dashboard/favicon";
 import type { Metadata } from "next";
 import "./globals.css";
@@ -18,7 +21,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const projects = await Promise.all((await readProjects()).map(async (p) => ({ id:p.id, slug:p.slug, name:p.name, type:p.type, websiteUrl:linkedWebsite(p), icon:await projectIcon(p) })));
+  const projects = navigationItems(await Promise.all((await readProjects()).map(async (p) => ({ id:p.id, slug:p.slug, name:p.name, type:p.type, websiteUrl:linkedWebsite(p), icon:await projectIcon(p) }))),readPreferences(db));
   const cookieStore = await cookies();
   const dark = cookieStore.get("dashboard_theme")?.value === "dark";
 
@@ -31,7 +34,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
               <SidebarTrigger />
               
-              <div className="ml-auto flex gap-2 items-center"><ProjectSwitcher projects={projects.map(({slug,name})=>({slug,name}))}/><ThemeToggle initialDark={dark}/></div>
+              <div className="ml-auto flex gap-2 items-center"><ProjectSwitcher projects={projects.map(({slug,name,hidden})=>({slug,name,hidden}))}/><ThemeToggle initialDark={dark}/></div>
             </header>
             <SyncProgress/>
             {children}
