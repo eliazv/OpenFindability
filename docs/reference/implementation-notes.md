@@ -223,3 +223,8 @@ See [navigation, public store artwork and diagnostics](../guide/2026-11-25-sideb
 ### Local dashboard requests and sortable lists
 
 Use `localRequestError` for local dashboard routes; compare browser-facing Host and Origin for mutations, not Next's reconstructed internal URL. Keep the listener loopback-only. Use the shared `components/ui/sortable-list.tsx` (dnd-kit) for vertical reorderable preferences, not native HTML drag/drop. See [403 fix and sortable verification](../guide/2026-11-25-sidebar-http-403-and-sortable.md).
+
+
+### Sidebar-first application shell
+
+The client DashboardShell coordinates global settings, search and project organization independently of the mobile drawer. Desktop has no global header; mobile retains a compact navigation opener. Project sections are shared by tabs and search. Data/Tools retain their routes, linked from settings rather than permanent sidebar entries. See [sidebar-first settings](../guide/2026-11-25-sidebar-first-settings.md).
